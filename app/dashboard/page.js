@@ -174,17 +174,7 @@ const CompactPieChart = () => {
     colorField: 'type',
     radius: 0.8,
     innerRadius: 0.6,
-    label: {
-      type: 'inner',
-      offset: '-50%',
-      content: ({ value }) => value,
-      style: {
-        textAlign: 'center',
-        fontSize: 12,
-        fill: '#fff',
-        fontWeight: 'bold',
-      },
-    },
+    label: false, // Disable labels to avoid the error, use legend instead
     legend: {
       position: 'bottom',
       itemSpacing: 8,
