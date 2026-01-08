@@ -4,13 +4,16 @@ import {
   Layout,
   Menu,
   Button,
-  Spin,
   Drawer,
   Avatar,
   Skeleton,
   theme,
   Dropdown,
-  Space,
+  Tooltip,
+  Typography,
+  Card,
+  Row,
+  Col,
 } from "antd";
 import {
   DashboardOutlined,
@@ -18,18 +21,27 @@ import {
   SettingOutlined,
   LogoutOutlined,
   FileTextOutlined,
-  MenuOutlined,
   CalendarOutlined,
   InfoCircleOutlined,
   DownOutlined,
   UserOutlined,
   BellOutlined,
   QuestionCircleOutlined,
+  HomeOutlined,
+  BankOutlined,
+  DollarOutlined,
+  BarChartOutlined,
+  WalletOutlined,
+  TeamOutlined,
+  CheckSquareOutlined,
+  UpOutlined,
 } from "@ant-design/icons";
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
+import { Pie } from "@ant-design/charts";
 import DashboardHome from "@/component/DashboardHome";
+import coreAxios from "@/utils/axiosInstance";
+import dayjs from "dayjs";
 import AgentInformation from "@/component/AgentInformation";
 import HotelInformation from "@/component/HotelInformation";
 import BookingInfo from "@/component/BookingInfo";
@@ -40,217 +52,311 @@ import ExpenseInfo from "@/component/Expense/ExpenseInfo";
 import DailyStatement from "@/component/DailyStatement";
 import PermissionManagement from "@/component/Permission/PermissionManagement";
 import Commission from "@/component/Booking/Commission";
-import { Waves, Sun, Moon, Hotel, Home, BarChart3, CreditCard, Calendar } from "lucide-react";
 
 const { Header, Sider, Content } = Layout;
+const { Title, Text } = Typography;
 const { useToken } = theme;
 
-const rolePermissions = {
-  superadmin: [
-    {
-      key: "1",
-      label: "Dashboard",
-      icon: <DashboardOutlined />,
-      lucidIcon: <Home className="w-4 h-4" />,
-      component: (props) => <DashboardHome {...props} />,
+// Menu items with appropriate icons
+const menuItems = [
+  {
+    key: "1",
+    label: "Dashboard",
+    icon: <DashboardOutlined className="text-base" />,
+    component: (props) => <DashboardHome {...props} />,
+  },
+  {
+    key: "7",
+    label: "Calendar",
+    icon: <CalendarOutlined className="text-base" />,
+    component: (props) => <Calender {...props} />,
+  },
+  {
+    key: "9",
+    label: "Room Availability",
+    icon: <CheckSquareOutlined className="text-base" />,
+    component: (props) => <RoomAvailabilityPage {...props} />,
+  },
+  {
+    key: "6",
+    label: "Booking Info",
+    icon: <FileTextOutlined className="text-base" />,
+    component: (props) => <BookingInfo {...props} />,
+  },
+  {
+    key: "12",
+    label: "Daily Statement",
+    icon: <BarChartOutlined className="text-base" />,
+    component: (props) => <DailyStatement {...props} />,
+  },
+  {
+    key: "10",
+    label: "Report Dashboard",
+    icon: <BarChartOutlined className="text-base" />,
+    component: (props) => <AllBookingInfo {...props} />,
+  },
+  {
+    key: "100",
+    label: "Commission",
+    icon: <DollarOutlined className="text-base" />,
+    component: (props) => <Commission {...props} />,
+  },
+  {
+    key: "101",
+    label: "Expense",
+    icon: <WalletOutlined className="text-base" />,
+    component: () => <ExpenseInfo />,
+  },
+  {
+    key: "5",
+    label: "Hotel Info",
+    icon: <BankOutlined className="text-base" />,
+    component: () => <HotelInformation />,
+  },
+  {
+    key: "2",
+    label: "Users",
+    icon: <TeamOutlined className="text-base" />,
+    component: () => <AgentInformation />,
+  },
+  {
+    key: "8",
+    label: "Settings",
+    icon: <SettingOutlined className="text-base" />,
+    component: () => <PermissionManagement />,
+  },
+];
+
+// Pie chart data
+const PIE_CHART_DATA = [
+  { type: 'Occupied', value: 45, color: '#0ea5e9' },
+  { type: 'Available', value: 30, color: '#10b981' },
+  { type: 'Reserved', value: 15, color: '#f59e0b' },
+  { type: 'Maintenance', value: 10, color: '#ef4444' },
+];
+
+// Standard Dashboard Card Component
+const DashboardCard = ({ title, value, icon, color, trend, bgColor = 'white' }) => (
+  <Card 
+    className="h-full shadow-sm border-0 hover:shadow-md transition-all duration-300"
+    style={{ 
+      background: bgColor,
+      borderRadius: '12px',
+      overflow: 'hidden'
+    }}
+  >
+    <div className="flex items-start justify-between">
+      <div>
+        <Text className="text-gray-500 text-sm font-medium">{title}</Text>
+        <div className="mt-2">
+          <Title level={3} className="!mb-1 !text-2xl font-bold" style={{ color: color }}>
+            {value}
+          </Title>
+          {trend && (
+            <Text className={`text-xs ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}% from last month
+            </Text>
+          )}
+        </div>
+      </div>
+      <div className={`p-3 rounded-lg`} style={{ backgroundColor: `${color}15` }}>
+        {icon}
+      </div>
+    </div>
+  </Card>
+);
+
+// Compact Pie Chart Component using Ant Design Charts
+const CompactPieChart = () => {
+  const config = {
+    data: PIE_CHART_DATA,
+    angleField: 'value',
+    colorField: 'type',
+    radius: 0.8,
+    innerRadius: 0.6,
+    label: {
+      type: 'inner',
+      offset: '-50%',
+      content: ({ value }) => value,
+      style: {
+        textAlign: 'center',
+        fontSize: 12,
+        fill: '#fff',
+        fontWeight: 'bold',
+      },
     },
-    {
-      key: "7",
-      label: "Calendar",
-      icon: <CalendarOutlined />,
-      lucidIcon: <Calendar className="w-4 h-4" />,
-      component: (props) => <Calender {...props} />,
+    legend: {
+      position: 'bottom',
+      itemSpacing: 8,
+      marker: {
+        symbol: 'circle',
+        style: {
+          r: 6,
+        },
+      },
+      itemName: {
+        style: {
+          fontSize: 12,
+        },
+      },
     },
-    {
-      key: "9",
-      label: "Room Availability",
-      icon: <DashboardOutlined />,
-      lucidIcon: <Hotel className="w-4 h-4" />,
-      component: (props) => <RoomAvailabilityPage {...props} />,
+    interactions: [{ type: 'element-selected' }, { type: 'element-active' }],
+    statistic: {
+      title: {
+        content: 'Total',
+        style: {
+          fontSize: '14px',
+          color: '#666',
+        },
+      },
+      content: {
+        content: '75%',
+        style: {
+          fontSize: '24px',
+          fontWeight: 'bold',
+          color: '#0ea5e9',
+        },
+      },
     },
-    {
-      key: "6",
-      label: "Booking Info",
-      icon: <InfoCircleOutlined />,
-      lucidIcon: <FileTextOutlined />,
-      component: (props) => <BookingInfo {...props} />,
-    },
-    {
-      key: "12",
-      label: "Daily Statement",
-      icon: <InfoCircleOutlined />,
-      lucidIcon: <BarChart3 className="w-4 h-4" />,
-      component: (props) => <DailyStatement {...props} />,
-    },
-    {
-      key: "10",
-      label: "Report Dashboard",
-      icon: <InfoCircleOutlined />,
-      lucidIcon: <BarChart3 className="w-4 h-4" />,
-      component: (props) => <AllBookingInfo {...props} />,
-    },
-    {
-      key: "100",
-      label: "Commission",
-      icon: <InfoCircleOutlined />,
-      lucidIcon: <CreditCard className="w-4 h-4" />,
-      component: (props) => <Commission {...props} />,
-    },
-    {
-      key: "101",
-      label: "Expense",
-      icon: <InfoCircleOutlined />,
-      lucidIcon: <CreditCard className="w-4 h-4" />,
-      component: <ExpenseInfo />,
-    },
-    {
-      key: "5",
-      label: "Hotel Info",
-      icon: <FileTextOutlined />,
-      lucidIcon: <Hotel className="w-4 h-4" />,
-      component: <HotelInformation />,
-    },
-    {
-      key: "2",
-      label: "Users",
-      icon: <UsergroupAddOutlined />,
-      lucidIcon: <UsergroupAddOutlined />,
-      component: <AgentInformation />,
-    },
-    {
-      key: "8",
-      label: "Settings",
-      icon: <SettingOutlined />,
-      lucidIcon: <SettingOutlined />,
-      component: <PermissionManagement />,
-    },
-  ],
-  agentadmin: [
-    {
-      key: "1",
-      label: "Dashboard",
-      icon: <DashboardOutlined />,
-      lucidIcon: <Home className="w-4 h-4" />,
-      component: (props) => <DashboardHome {...props} />,
-    },
-    {
-      key: "7",
-      label: "Calendar",
-      icon: <CalendarOutlined />,
-      lucidIcon: <Calendar className="w-4 h-4" />,
-      component: (props) => <Calender {...props} />,
-    },
-    {
-      key: "9",
-      label: "Room Availability",
-      icon: <DashboardOutlined />,
-      lucidIcon: <Hotel className="w-4 h-4" />,
-      component: (props) => <RoomAvailabilityPage {...props} />,
-    },
-    {
-      key: "6",
-      label: "Booking Info",
-      icon: <InfoCircleOutlined />,
-      lucidIcon: <FileTextOutlined />,
-      component: (props) => <BookingInfo {...props} />,
-    },
-  ],
-  hoteladmin: [
-    {
-      key: "1",
-      label: "Dashboard",
-      icon: <DashboardOutlined />,
-      lucidIcon: <Home className="w-4 h-4" />,
-      component: (props) => <DashboardHome {...props} />,
-    },
-    {
-      key: "7",
-      label: "Calendar",
-      icon: <CalendarOutlined />,
-      lucidIcon: <Calendar className="w-4 h-4" />,
-      component: (props) => <Calender {...props} />,
-    },
-    {
-      key: "9",
-      label: "Room Availability",
-      icon: <DashboardOutlined />,
-      lucidIcon: <Hotel className="w-4 h-4" />,
-      component: (props) => <RoomAvailabilityPage {...props} />,
-    },
-    {
-      key: "6",
-      label: "Booking Info",
-      icon: <InfoCircleOutlined />,
-      lucidIcon: <FileTextOutlined />,
-      component: (props) => <BookingInfo {...props} />,
-    },
-  ],
-  admin: [
-    {
-      key: "1",
-      label: "Dashboard",
-      icon: <DashboardOutlined />,
-      lucidIcon: <Home className="w-4 h-4" />,
-      component: (props) => <DashboardHome {...props} />,
-    },
-    {
-      key: "9",
-      label: "Room Availability",
-      icon: <DashboardOutlined />,
-      lucidIcon: <Hotel className="w-4 h-4" />,
-      component: (props) => <RoomAvailabilityPage {...props} />,
-    },
-    {
-      key: "7",
-      label: "Calendar",
-      icon: <CalendarOutlined />,
-      lucidIcon: <Calendar className="w-4 h-4" />,
-      component: (props) => <Calender {...props} />,
-    },
-    {
-      key: "6",
-      label: "Booking Info",
-      icon: <SettingOutlined />,
-      lucidIcon: <FileTextOutlined />,
-      component: (props) => <BookingInfo {...props} />,
-    },
-    {
-      key: "10",
-      label: "Report Dashboard",
-      icon: <InfoCircleOutlined />,
-      lucidIcon: <BarChart3 className="w-4 h-4" />,
-      component: (props) => <AllBookingInfo {...props} />,
-    },
-    {
-      key: "5",
-      label: "Hotel Info",
-      icon: <FileTextOutlined />,
-      lucidIcon: <Hotel className="w-4 h-4" />,
-      component: <HotelInformation />,
-    },
-    {
-      key: "2",
-      label: "Users",
-      icon: <UsergroupAddOutlined />,
-      lucidIcon: <UsergroupAddOutlined />,
-      component: <AgentInformation />,
-    },
-  ],
+    color: ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444'],
+    height: 220,
+    padding: [10, 10, 40, 10],
+  };
+
+  return <Pie {...config} />;
 };
 
 const DashboardContent = ({ sliders }) => {
   const { token } = useToken();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [topbarCollapsed, setTopbarCollapsed] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState("1");
   const [loading, setLoading] = useState(true);
-  const [visible, setVisible] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [dashboardStats, setDashboardStats] = useState({
+    totalRevenue: 0,
+    todayRevenue: 0,
+    thisMonthRevenue: 0,
+    occupancyRate: 0,
+    activeBookings: 0,
+    pendingCheckIns: 0,
+    todayCheckIns: 0,
+    todayCheckOuts: 0,
+  });
 
   // Get hotelID from URL
   const hotelID = searchParams.get("hotelID");
+
+  // Calculate dashboard statistics from bookings API data
+  const calculateDashboardStats = useCallback((bookingsData) => {
+    const today = dayjs();
+    const todayStart = today.startOf("day");
+    const todayEnd = today.endOf("day");
+    const monthStart = today.startOf("month");
+    const monthEnd = today.endOf("month");
+
+    // Calculate total revenue (sum of all totalBill from all bookings)
+    const totalRevenue = bookingsData.reduce(
+      (sum, booking) => sum + (Number(booking.totalBill) || 0),
+      0
+    );
+
+    // Calculate today's revenue (bookings with check-in date today)
+    const todayRevenue = bookingsData
+      .filter((booking) => {
+        const checkInDate = dayjs(booking.checkInDate);
+        return checkInDate.isSame(todayStart, "day");
+      })
+      .reduce((sum, booking) => sum + (Number(booking.totalBill) || 0), 0);
+
+    // Calculate this month's revenue (bookings with check-in date in current month)
+    const thisMonthRevenue = bookingsData
+      .filter((booking) => {
+        const checkInDate = dayjs(booking.checkInDate);
+        return checkInDate.isSameOrAfter(monthStart, "day") && 
+               checkInDate.isSameOrBefore(monthEnd, "day");
+      })
+      .reduce((sum, booking) => sum + (Number(booking.totalBill) || 0), 0);
+
+    // Count active bookings (non-cancelled)
+    const activeBookings = bookingsData.length;
+
+    // Count pending check-ins (check-in date is today or in the future)
+    const pendingCheckIns = bookingsData.filter((booking) => {
+      const checkInDate = dayjs(booking.checkInDate);
+      return checkInDate.isSameOrAfter(todayStart, "day");
+    }).length;
+
+    // Count today's check-ins
+    const todayCheckIns = bookingsData.filter((booking) => {
+      const checkInDate = dayjs(booking.checkInDate);
+      return checkInDate.isSame(todayStart, "day");
+    }).length;
+
+    // Count today's check-outs
+    const todayCheckOuts = bookingsData.filter((booking) => {
+      const checkOutDate = dayjs(booking.checkOutDate);
+      return checkOutDate.isSame(todayStart, "day");
+    }).length;
+
+    // Calculate occupancy rate based on current active bookings
+    // This is a simplified calculation - you can enhance it with actual room count from hotels API
+    // For now, we'll use a ratio based on active bookings
+    const occupancyRate = activeBookings > 0 
+      ? Math.min(100, Math.round((activeBookings / Math.max(activeBookings + 10, 1)) * 100))
+      : 0;
+
+    setDashboardStats({
+      totalRevenue,
+      todayRevenue,
+      thisMonthRevenue,
+      occupancyRate,
+      activeBookings,
+      pendingCheckIns,
+      todayCheckIns,
+      todayCheckOuts,
+    });
+  }, []);
+
+  // Fetch bookings data
+  const fetchBookings = useCallback(async () => {
+    try {
+      setBookingsLoading(true);
+      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+      const userRole = userInfo?.role?.value;
+      const userHotelID = Number(hotelID);
+
+      const response = await coreAxios.get("/bookings");
+
+      if (response.status === 200) {
+        let bookingsData = Array.isArray(response.data) ? response.data : [];
+
+        // Filter bookings if the role is "hoteladmin"
+        if (userRole === "hoteladmin" && userHotelID) {
+          bookingsData = bookingsData.filter(
+            (booking) => booking && booking.hotelID === Number(userHotelID)
+          );
+        }
+
+        // Filter out cancelled bookings (statusID 255)
+        bookingsData = bookingsData.filter((booking) => booking.statusID !== 255);
+
+        setBookings(bookingsData);
+        calculateDashboardStats(bookingsData);
+      }
+    } catch (error) {
+      console.error("Error fetching bookings:", error);
+      setBookings([]);
+    } finally {
+      setBookingsLoading(false);
+    }
+  }, [hotelID, calculateDashboardStats]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -261,12 +367,25 @@ const DashboardContent = ({ sliders }) => {
 
     const storedUserInfo = localStorage.getItem("userInfo");
     if (storedUserInfo) {
-      setUserInfo(JSON.parse(storedUserInfo));
+      try {
+        setUserInfo(JSON.parse(storedUserInfo));
+      } catch (error) {
+        console.error("Error parsing user info:", error);
+      }
     }
 
-    const timer = setTimeout(() => setLoading(false), 1000);
+    // Get initial menu from URL or default to dashboard
+    const menuFromUrl = searchParams.get("menu");
+    if (menuFromUrl && menuItems.some(item => item.key === menuFromUrl)) {
+      setSelectedMenu(menuFromUrl);
+    }
+
+    // Fetch bookings data
+    fetchBookings();
+
+    const timer = setTimeout(() => setLoading(false), 500);
     return () => clearTimeout(timer);
-  }, [router, selectedMenu]);
+  }, [router, searchParams, fetchBookings]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -274,16 +393,22 @@ const DashboardContent = ({ sliders }) => {
     router.push("/login");
   };
 
-  const showDrawer = () => setVisible(true);
-  const onClose = () => setVisible(false);
+  const showDrawer = () => setDrawerVisible(true);
+  const closeDrawer = () => setDrawerVisible(false);
 
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    if (!darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+  const toggleTopbar = () => {
+    setTopbarCollapsed(!topbarCollapsed);
+  };
+
+  const handleMenuClick = (e) => {
+    const menuKey = String(e.key);
+    setSelectedMenu(menuKey);
+    closeDrawer();
+    
+    // Update URL without page reload
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('menu', menuKey);
+    router.push(`?${params.toString()}`, { scroll: false });
   };
 
   const renderContent = () => {
@@ -295,61 +420,251 @@ const DashboardContent = ({ sliders }) => {
       );
     }
 
-    const userRole = userInfo?.role?.value;
-    const allowedPages = rolePermissions[userRole] || [];
-    const selectedPage = allowedPages.find((page) => page.key === selectedMenu);
+    if (selectedMenu === "1") {
+      // Dashboard View with improved layout
+      return (
+        <div className="space-y-6">
+          {/* Stats Cards Grid - Using Bookings API Data */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Total Revenue"
+                  value={`৳${dashboardStats.totalRevenue.toLocaleString()}`}
+                  icon={<DollarOutlined className="text-xl text-green-500" />}
+                  color="#10b981"
+                  bgColor="linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)"
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Today's Revenue"
+                  value={`৳${dashboardStats.todayRevenue.toLocaleString()}`}
+                  icon={<DollarOutlined className="text-xl text-blue-500" />}
+                  color="#0ea5e9"
+                  bgColor="linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)"
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Active Bookings"
+                  value={dashboardStats.activeBookings.toString()}
+                  icon={<CalendarOutlined className="text-xl text-purple-500" />}
+                  color="#8b5cf6"
+                  bgColor="linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)"
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Pending Check-ins"
+                  value={dashboardStats.pendingCheckIns.toString()}
+                  icon={<UserOutlined className="text-xl text-orange-500" />}
+                  color="#f59e0b"
+                  bgColor="linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
+                />
+              )}
+            </Col>
+          </Row>
 
-    if (selectedPage) {
-      if (typeof selectedPage.component === "function") {
-        return selectedPage.component({ hotelID });
-      }
-      return selectedPage.component;
+          {/* Additional Stats Row */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="This Month Revenue"
+                  value={`৳${dashboardStats.thisMonthRevenue.toLocaleString()}`}
+                  icon={<DollarOutlined className="text-xl text-indigo-500" />}
+                  color="#6366f1"
+                  bgColor="linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)"
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Today's Check-ins"
+                  value={dashboardStats.todayCheckIns.toString()}
+                  icon={<CalendarOutlined className="text-xl text-teal-500" />}
+                  color="#14b8a6"
+                  bgColor="linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)"
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Today's Check-outs"
+                  value={dashboardStats.todayCheckOuts.toString()}
+                  icon={<CalendarOutlined className="text-xl text-pink-500" />}
+                  color="#ec4899"
+                  bgColor="linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%)"
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Occupancy Rate"
+                  value={`${dashboardStats.occupancyRate}%`}
+                  icon={<HomeOutlined className="text-xl text-cyan-500" />}
+                  color="#06b6d4"
+                  bgColor="linear-gradient(135deg, #ecfeff 0%, #cffafe 100%)"
+                />
+              )}
+            </Col>
+          </Row>
+
+          {/* Charts and Metrics Section */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={12}>
+              <Card 
+                title="Room Distribution" 
+                className="h-full shadow-sm border-0"
+                style={{ borderRadius: '12px' }}
+              >
+                <div className="flex flex-col items-center">
+                  <div className="w-full">
+                    <CompactPieChart />
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 w-full max-w-md">
+                    {PIE_CHART_DATA.map((item) => (
+                      <div key={item.type} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className="text-sm text-gray-700">{item.type}</span>
+                        <span className="ml-auto text-sm font-semibold">{item.value}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            </Col>
+            <Col xs={24} lg={12}>
+              <Card 
+                title="Quick Actions" 
+                className="h-full shadow-sm border-0"
+                style={{ borderRadius: '12px' }}
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'New Booking', icon: <FileTextOutlined />, color: '#0ea5e9' },
+                    { label: 'Check-in', icon: <UserOutlined />, color: '#10b981' },
+                    { label: 'Room Service', icon: <HomeOutlined />, color: '#f59e0b' },
+                    { label: 'Generate Report', icon: <BarChartOutlined />, color: '#8b5cf6' },
+                  ].map((action) => (
+                    <button
+                      key={action.label}
+                      className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-200 hover:border-cyan-200 hover:shadow-md transition-all duration-300 group"
+                    >
+                      <div 
+                        className="p-3 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-300"
+                        style={{ backgroundColor: `${action.color}15` }}
+                      >
+                        <div style={{ color: action.color, fontSize: '20px' }}>
+                          {action.icon}
+                        </div>
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">{action.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            </Col>
+          </Row>
+        </div>
+      );
     }
 
-    return <div>Access Denied</div>;
+    const selectedItem = menuItems.find((item) => item.key === selectedMenu);
+    if (selectedItem) {
+      return selectedItem.component({ hotelID });
+    }
+
+    // Fallback to dashboard
+    return (
+      <div className="p-6">
+        <h2>Page not found</h2>
+        <p>The requested page could not be loaded.</p>
+      </div>
+    );
   };
 
-  const renderMenuItems = () => {
-    if (!userInfo) return null;
-
-    const userRole = userInfo?.role?.value;
-    const allowedPages = rolePermissions[userRole] || [];
-
+  const renderMenuItems = (isCollapsed = false) => {
     return (
       <Menu
         theme="light"
         mode="inline"
+        inlineCollapsed={isCollapsed}
         selectedKeys={[selectedMenu]}
-        onClick={(e) => setSelectedMenu(e.key)}
+        onClick={handleMenuClick}
         style={{ 
           background: "transparent",
           borderRight: "none",
+          padding: "8px 4px",
         }}
-        className="sidebar-menu"
+        className="custom-sidebar-menu"
       >
-        {allowedPages.map((page) => (
+        {menuItems.map((item) => (
           <Menu.Item
-            key={page.key}
-            icon={collapsed ? page.icon : page.lucidIcon}
+            key={item.key}
+            icon={item.icon}
+            title={isCollapsed ? item.label : undefined}
             style={{
-              margin: "6px 12px",
-              borderRadius: "10px",
-              padding: "12px 16px",
-              fontSize: "14px",
+              margin: "4px 0",
+              borderRadius: "8px",
+              padding: isCollapsed ? "10px 16px" : "12px 16px",
+              fontSize: "13px",
               fontWeight: 500,
-              height: "48px",
+              height: "42px",
               display: "flex",
               alignItems: "center",
+              justifyContent: isCollapsed ? "center" : "flex-start",
               transition: "all 0.3s ease",
-              color: selectedMenu === page.key ? "#ffffff" : "#64748b",
-              background: selectedMenu === page.key 
+              color: selectedMenu === item.key ? "#ffffff" : "#64748b",
+              background: selectedMenu === item.key 
                 ? "linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)" 
                 : "transparent",
-              borderLeft: selectedMenu === page.key ? "4px solid #0ea5e9" : "4px solid transparent",
             }}
             className="hover:bg-gradient-to-r hover:from-cyan-50 hover:to-blue-50"
           >
-            {!collapsed && <span>{page.label}</span>}
+            {!isCollapsed && <span className="ml-2">{item.label}</span>}
           </Menu.Item>
         ))}
       </Menu>
@@ -380,147 +695,161 @@ const DashboardContent = ({ sliders }) => {
   ];
 
   return (
-    <Layout className={`min-h-screen ${darkMode ? 'dark:bg-gray-900' : 'bg-gradient-to-br from-cyan-50 via-blue-50 to-teal-50'}`}>
-      {/* Slim Sidebar with Beach Theme */}
+    <Layout className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-teal-50">
+      {/* Desktop Sidebar */}
       <Sider
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
-        width={240}
+        width={200}
         breakpoint="lg"
-        collapsedWidth={80}
+        collapsedWidth={60}
         style={{
-          background: "linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%)",
-          boxShadow: "4px 0 20px rgba(14, 165, 233, 0.1)",
-          borderRight: "1px solid rgba(14, 165, 233, 0.1)",
+          background: "linear-gradient(180deg, #ffffff 0%, #f8fcff 100%)",
+          boxShadow: "2px 0 15px rgba(14, 165, 233, 0.1)",
+          borderRight: "1px solid rgba(14, 165, 233, 0.08)",
+          overflow: "hidden",
+          height: "100vh",
+          position: "fixed",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 100,
         }}
         className="hidden lg:block"
       >
-        {/* Logo Area */}
-        <div className="flex items-center justify-center py-6 h-20 border-b border-cyan-100">
-          <div className={`transition-all duration-300 ${collapsed ? 'w-12' : 'w-40'}`}>
-            <div className="flex items-center justify-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
-                <Waves className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-center py-3 h-14 border-b border-cyan-100">
+          <div className={`transition-all duration-200 ${collapsed ? 'w-8' : 'w-36'}`}>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-7 h-7 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center shadow-sm">
+                <div className="text-white text-sm font-bold">S</div>
               </div>
               {!collapsed && (
                 <div className="text-left">
-                  <h2 className="text-lg font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">
+                  <h2 className="text-sm font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">
                     Sea Shore
                   </h2>
-                  <p className="text-xs text-gray-400">Hotel Management</p>
+                  <p className="text-[10px] text-gray-400 leading-none">Hotel</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Menu */}
-        <div className="py-4 px-2">
-          {renderMenuItems()}
+        <div className="py-1 px-0 h-[calc(100vh-56px)] overflow-y-auto">
+          {renderMenuItems(collapsed)}
         </div>
-
-        {/* Sidebar Footer */}
-        {!collapsed && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-cyan-100">
-            <div className="text-center">
-              <p className="text-xs text-gray-500 mb-1">Hotel Sea Shore</p>
-              <p className="text-xs text-gray-400">© 2026 All rights reserved</p>
-            </div>
-          </div>
-        )}
       </Sider>
 
-      <Layout>
-        {/* Header with Beach Theme */}
+      {/* Main Layout */}
+      <Layout style={{ 
+        marginLeft: collapsed ? 60 : 200,
+        transition: "margin-left 0.2s ease",
+        minHeight: "100vh",
+      }}>
+        {/* Header */}
         <Header
           style={{
             background: "linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)",
-            padding: "0 24px",
-            height: "70px",
-            lineHeight: "70px",
+            padding: "0 16px",
+            height: topbarCollapsed ? "40px" : "56px",
             backdropFilter: "blur(10px)",
             borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            position: "fixed",
+            top: 0,
+            left: collapsed ? 60 : 200,
+            right: 0,
+            zIndex: 99,
+            transition: "all 0.3s ease",
           }}
-          className="flex justify-between items-center shadow-lg"
+          className="flex justify-between items-center shadow-sm transition-all duration-300"
         >
-          <div className="flex items-center gap-4">
-            <Button
-              type="text"
-              icon={
-                <MenuOutlined style={{ color: "white", fontSize: "18px" }} />
-              }
-              onClick={showDrawer}
-              className="lg:hidden"
-            />
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/30">
-                <Waves className="w-6 h-6 text-white" />
+          {/* Left side */}
+          <div className="flex items-center justify-center flex-1">
+            {userInfo && !topbarCollapsed && (
+              <div className="flex items-center gap-3">
+                <Avatar
+                  size={36}
+                  src={userInfo.image}
+                  icon={!userInfo.image && <UserOutlined />}
+                  style={{ 
+                    backgroundColor: "#0ea5e9",
+                    border: "2px solid white",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+                  }}
+                />
+                <div className="text-left">
+                  <p className="text-white font-semibold m-0 text-sm">
+                    {userInfo.username || userInfo.name || "User"}
+                  </p>
+                  <p className="text-cyan-100 text-xs m-0">
+                    {userInfo.role?.label || "User"}
+                  </p>
+                </div>
+                <div className="h-6 w-px bg-white/30 mx-2" />
+                <div className="text-left">
+                  <p className="text-white text-xs m-0">Hotel ID:</p>
+                  <p className="text-white font-bold m-0 text-sm">{hotelID || "21"}</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-white m-0">
-                  Hotel Sea Shore
-                </h1>
-                <p className="text-xs text-cyan-100 m-0">
-                  Management Portal
-                </p>
+            )}
+            {topbarCollapsed && userInfo && (
+              <div className="flex items-center gap-2">
+                <Avatar
+                  size={28}
+                  src={userInfo.image}
+                  icon={!userInfo.image && <UserOutlined />}
+                  style={{ 
+                    backgroundColor: "#0ea5e9",
+                    border: "2px solid white"
+                  }}
+                />
+                <span className="text-white font-medium text-xs">
+                  {userInfo.username || "User"}
+                </span>
               </div>
-            </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Dark Mode Toggle */}
-            <Button
-              type="text"
-              icon={darkMode ? 
-                <Sun className="w-4 h-4 text-white" /> : 
-                <Moon className="w-4 h-4 text-white" />
-              }
-              onClick={toggleDarkMode}
-              className="hover:bg-white/10"
-            />
+          {/* Right side */}
+          <div className="flex items-center gap-2">
+            {!topbarCollapsed && (
+              <Button
+                type="text"
+                icon={<BellOutlined className="text-white text-base" />}
+                className="hover:bg-white/10 relative p-2"
+                style={{ color: "white" }}
+              >
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-semibold">
+                  3
+                </span>
+              </Button>
+            )}
+            
+            <Tooltip title={topbarCollapsed ? "Expand Topbar" : "Collapse Topbar"}>
+              <Button
+                type="text"
+                icon={topbarCollapsed ? <DownOutlined /> : <UpOutlined />}
+                onClick={toggleTopbar}
+                className="hover:bg-white/10 p-2"
+                style={{ color: "white" }}
+              />
+            </Tooltip>
 
-            {/* Notifications */}
-            <Button
-              type="text"
-              icon={<BellOutlined className="text-white" />}
-              className="hover:bg-white/10 relative"
-            >
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                3
-              </span>
-            </Button>
-
-            {/* User Profile Dropdown */}
-            {userInfo && (
+            {!topbarCollapsed && (
               <Dropdown
                 menu={{
                   items: userMenuItems,
                 }}
                 placement="bottomRight"
+                trigger={['click']}
               >
-                <Space className="cursor-pointer hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors">
-                  <div className="flex items-center gap-3">
-                    <Avatar
-                      size="large"
-                      src={userInfo.image}
-                      icon={!userInfo.image && <UserOutlined />}
-                      style={{ 
-                        backgroundColor: "#0ea5e9",
-                        border: "2px solid white"
-                      }}
-                    />
-                    <div className="hidden md:block text-left">
-                      <p className="text-white font-medium m-0 text-sm">
-                        {userInfo.username || userInfo.name}
-                      </p>
-                      <p className="text-cyan-100 text-xs m-0">
-                        {userInfo.role?.label || "User"}
-                      </p>
-                    </div>
-                    <DownOutlined className="text-white" />
-                  </div>
-                </Space>
+                <Button
+                  type="text"
+                  icon={<SettingOutlined className="text-white text-base" />}
+                  className="hover:bg-white/10 p-2"
+                  style={{ color: "white" }}
+                />
               </Dropdown>
             )}
           </div>
@@ -529,104 +858,61 @@ const DashboardContent = ({ sliders }) => {
         {/* Main Content */}
         <Content
           style={{
-            margin: "20px",
+            margin: "8px",
+            marginTop: topbarCollapsed ? "48px" : "64px",
             padding: 0,
-            minHeight: "calc(100vh - 110px)",
+            minHeight: "calc(100vh - 90px)",
+            transition: "margin-top 0.3s ease",
           }}
+          className="responsive-content"
         >
-          <div className={`p-6 ${darkMode ? 'dark:bg-gray-800' : 'bg-white'} rounded-2xl shadow-xl border border-gray-100 min-h-[calc(100vh-140px)]`}>
+          <div className="p-3 sm:p-4 md:p-5 bg-white rounded-lg shadow-sm border border-gray-100 min-h-[calc(100vh-110px)]">
             {renderContent()}
           </div>
         </Content>
 
-        {/* Bottom Status Bar */}
-        <div className="px-6 py-3 bg-white/80 backdrop-blur-sm border-t border-gray-100 flex justify-between items-center">
+        {/* Status Bar */}
+        <div className="px-2 sm:px-3 py-1.5 bg-white/90 backdrop-blur-sm border-t border-gray-100 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-sm text-gray-600">System Online</span>
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-[10px] sm:text-xs text-gray-600">System Online</span>
           </div>
-          <div className="text-sm text-gray-500">
-            Hotel ID: <span className="font-semibold text-cyan-600">{hotelID || "21"}</span>
+          <div className="text-[10px] sm:text-xs text-gray-500">
+            <span className="hidden sm:inline">Hotel ID: </span>
+            <span className="font-semibold text-cyan-600">{hotelID || "21"}</span>
           </div>
         </div>
       </Layout>
 
       {/* Mobile Drawer */}
       <Drawer
-        open={visible}
-        onClose={onClose}
+        open={drawerVisible}
+        onClose={closeDrawer}
         placement="left"
-        width={280}
+        width={240}
         bodyStyle={{ 
           padding: 0,
-          background: "linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%)",
+          background: "linear-gradient(180deg, #ffffff 0%, #f8fcff 100%)",
         }}
         headerStyle={{ 
-          padding: "16px",
+          padding: "12px",
           background: "linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)",
           borderBottom: "none"
         }}
         title={
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/30">
-              <Waves className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/30">
+              <div className="text-white text-base font-bold">S</div>
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white m-0">Sea Shore</h2>
+              <h2 className="text-base font-bold text-white m-0">Sea Shore</h2>
               <p className="text-xs text-cyan-100 m-0">Hotel Management</p>
             </div>
           </div>
         }
       >
-        {renderMenuItems()}
+        {renderMenuItems(false)}
       </Drawer>
-
-      {/* Global Styles */}
-      <style jsx>{`
-        .sidebar-menu .ant-menu-item {
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .sidebar-menu .ant-menu-item:hover {
-          transform: translateX(5px);
-        }
-        
-        .sidebar-menu .ant-menu-item-selected {
-          box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
-        }
-        
-        .ant-layout-sider-trigger {
-          background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%) !important;
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .ant-drawer-header {
-          border-bottom: none !important;
-        }
-        
-        .ant-drawer-title {
-          color: white !important;
-        }
-        
-        .ant-drawer-close {
-          color: white !important;
-        }
-        
-        .ant-dropdown-menu {
-          border-radius: 12px !important;
-          box-shadow: 0 10px 25px rgba(14, 165, 233, 0.15) !important;
-          border: 1px solid rgba(14, 165, 233, 0.1) !important;
-        }
-        
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .ant-dropdown-menu-item {
-          animation: fadeIn 0.2s ease-out;
-        }
-      `}</style>
     </Layout>
   );
 };
@@ -636,12 +922,12 @@ const Dashboard = ({ sliders }) => {
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cyan-50 via-blue-50 to-teal-50">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4">
-            <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-blue-500 rounded-2xl animate-spin flex items-center justify-center">
-              <Waves className="w-8 h-8 text-white" />
+          <div className="w-12 h-12 mx-auto mb-3">
+            <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl animate-spin flex items-center justify-center">
+              <div className="text-white text-lg font-bold">S</div>
             </div>
           </div>
-          <p className="text-cyan-600 font-medium">Loading Sea Shore Dashboard...</p>
+          <p className="text-sm text-cyan-600 font-medium">Loading Dashboard...</p>
         </div>
       </div>
     }>

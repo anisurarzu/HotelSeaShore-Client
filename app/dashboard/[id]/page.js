@@ -6,12 +6,9 @@ import {
   DownloadOutlined,
 } from "@ant-design/icons";
 import React, { useEffect, useState } from "react";
-import { Alert, Button, QRCode, Spin, Watermark, message } from "antd";
-import html2pdf from "html2pdf.js";
-import axios from "axios";
-import Image from "next/image";
+import { Button, Spin, message, Space } from "antd";
 import coreAxios from "@/utils/axiosInstance";
-import moment from "moment"; // Add moment for date formatting
+import moment from "moment";
 
 const Invoice = ({ params }) => {
   const [loading, setLoading] = useState(false);
@@ -31,22 +28,17 @@ const Invoice = ({ params }) => {
       setLoading(true);
       const response = await coreAxios.get(`/bookings/bookingNo/${id}`);
       if (response?.status === 200) {
-        // Filter out items where statusID is 255
         const filteredData = response?.data.filter(
           (item) => item.statusID !== 255
         );
-
-        calculateTotals(filteredData); // Calculate totals with filtered data
-        setData(filteredData); // Set state with filtered data
-        setLoading(false);
+        calculateTotals(filteredData);
+        setData(filteredData);
       } else {
         message.error("Failed to load data");
-        setLoading(false);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
       message.error("Error fetching data");
-      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -62,19 +54,20 @@ const Invoice = ({ params }) => {
     document.body.innerHTML = printContent;
     window.print();
     document.body.innerHTML = originalContent;
+    window.location.reload();
   };
 
   const downloadPDF = async () => {
-    if (!document) return; // safety check for SSR
-
-    const html2pdf = (await import("html2pdf.js")).default; // dynamic import
+    if (!document) return;
+    const html2pdf = (await import("html2pdf.js")).default;
     const element = document.getElementById("invoice-card");
     const options = {
-      margin: 0.5,
+      margin: [0.2, 0.2, 0.2, 0.2],
       filename: `Invoice-${data?.[0]?.bookingNo}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
     };
     html2pdf().from(element).set(options).save();
   };
@@ -112,431 +105,401 @@ const Invoice = ({ params }) => {
     });
   };
 
+  const getHotelInfo = () => {
+    const hotelID = data?.[0]?.hotelID;
+    const hotelInfoMap = {
+      1: {
+        name: "Mermaid",
+        logo: "/images/marmaid-logo.png",
+        color: "#1e40af",
+      },
+      2: {
+        name: "Hotel Golden Hill",
+        logo: "/images/goldenhil.png",
+        color: "#dc2626",
+      },
+      3: {
+        name: "Sea Paradise",
+        logo: "/images/Shamudro-Bari-1.png",
+        color: "#dc2626",
+      },
+      4: {
+        name: "Shopno Bilash Holiday Suites",
+        logo: "/images/Sopno.png",
+        color: "#1e3a8a",
+      },
+      6: {
+        name: "Beach Garden",
+        logo: "https://i.ibb.co.com/jZDnyS4V/beach-gardn.png",
+        color: "#16a34a",
+      },
+      7: {
+        name: "The Grand Sandy",
+        logo: "https://i.ibb.co/svznKpfF/Whats-App-Image-2025-07-01-at-22-11-50-dda6f6f0.jpg",
+        color: "#dc2626",
+      },
+    };
+    return hotelInfoMap[hotelID] || {
+      name: data?.[0]?.hotelName || "Hotel",
+      logo: "/images/Shamudro-Bari-1.png",
+      color: "#dc2626",
+    };
+  };
+
+  const hotelInfo = getHotelInfo();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Spin size="large" tip="Loading invoice..." />
+      </div>
+    );
+  }
+
   return (
-    <Watermark
-      content={`${
-        data?.[0]?.hotelID === 1
-          ? "Mermaid 2024"
-          : data?.[0]?.hotelID === 2
-          ? "Hotel Golden Hill"
-          : data?.[0]?.hotelID === 3
-          ? "Sea Paradise"
-          : data?.[0]?.hotelID === 4
-          ? "Shopno Bilash Holiday Suites"
-          : data?.[0]?.hotelID === 7
-          ? "The Grand Sandy"
-          : "Samudra Bari 2024"
-      }`}
-    >
-      {loading ? (
-        <Spin tip="Loading...">
-          <Alert
-            message="Alert message title"
-            description="Further details about the context of this alert."
-            type="info"
-          />
-        </Spin>
-      ) : (
-        <div>
-          <div className="mx-28">
-            <div className="flex gap-8 w-full mt-8 mx-0">
+    <div className="min-h-screen bg-gray-100 py-8 px-4 print:py-0 print:px-0 print:bg-white">
+      {/* Action Buttons - Hidden in Print */}
+      <div className="max-w-5xl mx-auto mb-6 print:hidden">
+        <Space size="middle">
               <Button
                 type="primary"
                 onClick={downloadPDF}
-                className="p-mr-2"
                 icon={<DownloadOutlined />}
+            size="large"
               >
                 Download PDF
               </Button>
               <Button
-                type="primary"
                 onClick={print}
-                className="p-mb-3"
                 icon={<PrinterOutlined />}
+            size="large"
               >
-                Print
+            Print Invoice
               </Button>
-            </div>
+        </Space>
           </div>
 
+      {/* Invoice Card */}
           <div
             id="invoice-card"
-            className="bg-white p-8 rounded-lg shadow-md border border-gray-300 w-full mt-4"
-            style={{ fontSize: "12px" }} // Make the overall text smaller
-          >
+        className="max-w-5xl mx-auto bg-white shadow-md print:shadow-none"
+        style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", fontSize: '10px' }}
+      >
+        {/* Header Section */}
+        <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 print:px-6 print:py-3">
+          <div className="flex justify-between items-start">
+            {/* Logo */}
+            <div className="flex-shrink-0">
+              {hotelInfo.logo && (
+                <div className="bg-white p-2 rounded shadow-sm">
+                  <img
+                    src={hotelInfo.logo}
+                    alt={hotelInfo.name}
+                    className="h-8 object-contain"
+                  />
+                </div>
+              )}
+                </div>
+
+            {/* Invoice Info */}
+            <div className="text-right text-white">
+              <h1 className="text-2xl font-bold tracking-tight mb-1 uppercase" style={{ letterSpacing: '0.05em' }}>
+                Invoice
+              </h1>
+              <div className="text-xs space-y-0.5 opacity-90">
+                <p className="font-semibold">
+                  #{data?.[0]?.bookingNo || "N/A"}
+                </p>
+                <p className="font-normal">
+                  {moment(data?.[0]?.createTime).format("MMM DD, YYYY") || "N/A"}
+                </p>
+                    </div>
+                  </div>
+                    </div>
+                  </div>
+
+        {/* Content Section */}
+        <div className="px-6 py-4 print:px-6 print:py-3" style={{ fontSize: '10px' }}>
+          {/* Guest & Hotel Information */}
+          <div className="grid grid-cols-2 gap-8 mb-4">
             <div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="logo-container flex items-center justify-center">
-                  {data?.[0]?.hotelID === 1 ? (
-                    <img
-                      src="/images/marmaid-logo.png"
-                      alt="Logo"
-                      style={{ width: "150px", height: "80px" }}
-                    />
-                  ) : data?.[0]?.hotelID === 2 ? (
-                    <img
-                      src="/images/goldenhil.png"
-                      alt="Logo"
-                      style={{ width: "150px", height: "80px" }}
-                    />
-                  ) : data?.[0]?.hotelID === 3 ? (
-                    <img
-                      src="/images/Shamudro-Bari-1.png"
-                      alt="Logo"
-                      style={{ width: "150px", height: "50px" }}
-                    />
-                  ) : data?.[0]?.hotelID === 4 ? (
-                    <img
-                      src="/images/Sopno.png"
-                      alt="Logo"
-                      style={{ width: "150px", height: "80px" }}
-                    />
-                  ) : data?.[0]?.hotelID === 6 ? (
-                    <img
-                      src="https://i.ibb.co.com/jZDnyS4V/beach-gardn.png"
-                      alt="Logo"
-                      style={{ width: "150px", height: "80px" }}
-                    />
-                  ) : data?.[0]?.hotelID === 7 ? (
-                    <img
-                      src="https://i.ibb.co/svznKpfF/Whats-App-Image-2025-07-01-at-22-11-50-dda6f6f0.jpg"
-                      alt="Logo"
-                      style={{ width: "150px", height: "120px" }}
-                    />
-                  ) : (
-                    <img
-                      src="/images/Shamudro-Bari-1.png"
-                      alt="Logo"
-                      style={{ width: "150px", height: "140px" }}
-                    />
-                  )}
-                </div>
-                <div className="mt-8 text-center">
-                  <h4
-                    className={`uppercase ${
-                      data?.[0]?.hotelID === 1
-                        ? "text-blue-700"
-                        : data?.[0]?.hotelID === 4
-                        ? "text-[#2B388F]"
-                        : data?.[0]?.hotelID === 6
-                        ? "text-[#6C9944]"
-                        : "text-red-700"
-                    } font-semibold text-xl`}
-                  >
-                    {data?.[0]?.hotelName} INVOICE
-                  </h4>
-                </div>
-                {data?.[0]?.hotelID === 1 ? (
-                  <div className="text-center">
-                    <div className="mt-8 text-black text-left">
-                      <p>
-                        Address: Block # A, Plot # 17, Kolatoli Main Road, Cox’s
-                        Bazar 4700
-                      </p>
-                      <p>Front Desk no: 01818083949</p>
-                      <p>Reservation no: 01898841012</p>
-                    </div>
-                  </div>
-                ) : data?.[0]?.hotelID === 2 ? (
-                  <div className="text-center">
-                    <div className="mt-8 text-black text-left">
-                      <p>
-                        {`Address: Plot #65, Block# B, Sugandha Point, Kolatoli, Cox's Bazar`}
-                      </p>
-                      <p>Front Desk no: 01313708031</p>
-                      <p>Reservation no: 01898841013</p>
-                    </div>
-                  </div>
-                ) : data?.[0]?.hotelID === 3 ? (
-                  <div className="text-center">
-                    <div className="mt-8 text-black text-left">
-                      <p>
-                        {` Address: Kolatoli Beach Road, Kolatoli Cox's Bazar-4700.`}
-                      </p>
-                      <p>Front Desk no: 01898841012</p>
-                      <p>Reservation no: 01321143586</p>
-                    </div>
-                  </div>
-                ) : data?.[0]?.hotelID === 4 ? (
-                  <div className="mt-8 text-black text-left">
-                    <p>
-                      {`Address: Shopno Bilash Holiday Suites, Block # A, Plot #
-                      28, kolatoli Residential Area, Cox's Bazar`}
-                    </p>
-                    <p>Front Desk no: 01711877621</p>
-                    <p>Reservation no: 01898841013</p>
-                  </div>
-                ) : data?.[0]?.hotelID === 6 ? (
-                  <div className="mt-8 text-black text-left">
-                    <p>
-                      {`Address: Plot No-	199, Block # B, Saykat Bahumukhi Samabay Samity Ltd. Lighthouse, Kolatoli, Cox’s Bazar`}
-                    </p>
-                    <p>Front Desk no: 01898841016</p>
-                    <p>Reservation no: 01898841015</p>
-                  </div>
-                ) : data?.[0]?.hotelID === 7 ? (
-                  <div className="mt-8 text-black text-left">
-                    <p>
-                      {`Address: N.H.A Building No- 10, Hotel The Grand Sandy,Kolatoli, Cox’s Bazar`}
-                    </p>
-                    <p>Front Desk no: 01827689324</p>
-                    <p>Reservation no: 01898841017</p>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <div className="mt-8 text-black text-left">
-                      <p>
-                        Address: N.H.A building No- 09, Samudra Bari, Kolatoli,
-                        Cox’s Bazar
-                      </p>
-                      <p>Front Desk no: 01886628295</p>
-                      <p>Reservation no: 01886628296</p>
-                    </div>
-                  </div>
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pb-1 border-b border-slate-200">
+                Billed To
+              </h2>
+              <div className="space-y-1">
+                <p className="font-bold text-slate-900 text-xs">
+                  {data?.[0]?.fullName || "N/A"}
+                </p>
+                <p className="text-slate-600 text-xs">{data?.[0]?.phone || "N/A"}</p>
+                {data?.[0]?.email && (
+                  <p className="text-slate-600 text-xs">{data?.[0]?.email}</p>
+                )}
+                {data?.[0]?.nidPassport && (
+                  <p className="text-slate-600 text-xs">
+                    ID: {data?.[0]?.nidPassport}
+                  </p>
+                )}
+                {data?.[0]?.address && (
+                  <p className="text-slate-600 text-xs">{data?.[0]?.address}</p>
                 )}
               </div>
-              <div className="flex justify-between">
-                <h3
-                  className={`font-bold ${
-                    data?.[0]?.hotelID === 1
-                      ? "text-blue-700"
-                      : data?.[0]?.hotelID === 4
-                      ? "text-[#2B388F]"
-                      : data?.[0]?.hotelID === 6
-                      ? "text-[#6C9944]"
-                      : "text-red-700"
-                  } `}
-                >
-                  Invoice Number: {data?.[0]?.bookingNo || "N/A"}
-                </h3>
-                <p
-                  className={`${
-                    data?.[0]?.hotelID === 1
-                      ? "text-blue-700"
-                      : data?.[0]?.hotelID === 4
-                      ? "text-[#2B388F]"
-                      : data?.[0]?.hotelID === 6
-                      ? "text-[#6C9944]"
-                      : "text-red-700"
-                  }  font-bold`}
-                >
-                  Booking Date:
-                  {moment(data?.[0]?.createTime).format("D MMM YYYY") ||
-                    "02 October 2024"}
-                </p>
-              </div>
+            </div>
 
-              <div className="mt-8 text-black">
-                <p className="font-bold text-md">Bill To:</p>
-                <p>Guest Name: {data?.[0]?.fullName || "Ahmed Niloy"}</p>
-                <p>Phone: {data?.[0]?.phone || "01625441918"}</p>
-                {data[0]?.email && (
-                  <p>Email: {data?.[0]?.email || "01625441918"}</p>
+            <div>
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pb-1 border-b border-slate-200">
+                Hotel Information
+              </h2>
+              <div className="space-y-1">
+                <p className="font-bold text-slate-900 text-xs">
+                  {data?.[0]?.hotelName || hotelInfo.name}
+                </p>
+                <p className="text-slate-600 text-xs">
+                  <span className="font-semibold">Date:</span>{" "}
+                  {moment(data?.[0]?.createTime).format("MMM DD, YYYY") || "N/A"}
+                </p>
+                {data?.[0]?.bookedBy && (
+                  <p className="text-slate-600 text-xs">
+                    <span className="font-semibold">By:</span> {data?.[0]?.bookedBy}
+                  </p>
                 )}
-                <p>NID/Passport: {data?.[0]?.nidPassport || "3762373821"}</p>
-                <p>
-                  Address: {data?.[0]?.address || "Jinjira, Keranigong, Dhaka"}
-                </p>
               </div>
-
-              {/* Table for Booking Details */}
-              <div className="mt-8 text-black">
-                <p className="font-bold text-md">Booking Details:</p>
-                <table
-                  className="table-auto w-full border-collapse border border-gray-400 mt-4 text-left text-xs" // Smaller text
-                  style={{ fontSize: "10px" }} // Reduce text size within the table further
-                >
-                  <thead>
-                    <tr
-                      className={`${
-                        data?.[0]?.hotelID === 1
-                          ? "bg-blue-700"
-                          : data?.[0]?.hotelID === 4
-                          ? "bg-[#2B388F]"
-                          : data?.[0]?.hotelID === 6
-                          ? "bg-[#6C9944]"
-                          : "bg-red-700"
-                      } text-white`}
-                    >
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        SL
-                      </th>
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        Room
-                      </th>
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        Check-in
-                      </th>
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        Check-out
-                      </th>
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        Nights
-                      </th>
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        Adults
-                      </th>
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        Children
-                      </th>
-
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        Bill (Per Night)
-                      </th>
-                      <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                        Bill
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data?.map((booking, index) => (
-                      <tr key={index}>
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {` ${index+1}`}
-                        </td>
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {` ${booking?.roomCategoryName || "N/A"}`}
-                        </td>
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {moment(booking?.checkInDate).format("D MMM YYYY") ||
-                            "N/A"}
-                        </td>
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {moment(booking?.checkOutDate).format("D MMM YYYY") ||
-                            "N/A"}
-                        </td>
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {booking?.nights || "N/A"}
-                        </td>
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {booking?.adults || "N/A"}
-                        </td>
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {booking?.children || "N/A"}
-                        </td>
-                        {/* <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {booking?.isKitchen ? "Yes" : "No"}
-                        </td>
-                        {data?.[0]?.hotelID === 4 && (
-                          <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                            {booking?.extraBed ? "Yes" : "No"}
-                          </td>
-                        )} */}
-
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {booking?.roomPrice || "N/A"}
-                        </td>
-                        <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          {booking?.totalBill || "N/A"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="mt-2 text-black">
-                <p className="font-bold text-md">Additional Details</p>
-                <table
-                  className="table-auto w-full border-collapse border border-gray-400 mt-4 text-left text-xs"
-                  style={{ fontSize: "10px" }}
-                >
-                  <thead>
-                    {data?.some((booking) => booking.isKitchen) && ( // Check if isKitchen is true for any row
-                      <tr className="bg-blue-700 text-white">
-                        <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          Kitchen Facilities
-                        </th>
-                        <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          Bill (Kitchen)
-                        </th>
-                      </tr>
-                    )}
-                    {data?.some((booking) => booking.extraBed) && ( // Check if extraBed is true for any row
-                      <tr className="bg-green-700 text-white">
-                        <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          Extra Bed
-                        </th>
-                        <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                          Bill (Extra Bed)
-                        </th>
-                      </tr>
-                    )}
-                  </thead>
-                  <tbody>
-                    {data
-                      ?.filter(
-                        (booking) => booking.isKitchen || booking.extraBed
-                      ) // Filter rows where either condition is true
-                      .map((booking, index) => (
-                        <>
-                          {booking.isKitchen && ( // Render only if isKitchen is true
-                            <tr key={`kitchen-${index}`}>
-                              <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                                Yes
-                              </td>
-                              <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                                {booking.kitchenTotalBill || "N/A"}
-                              </td>
-                            </tr>
-                          )}
-                          {booking.extraBed && ( // Render only if extraBed is true
-                            <tr key={`extrabed-${index}`}>
-                              <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                                Yes
-                              </td>
-                              <td className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
-                                {booking.extraBedTotalBill || "N/A"}
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <p className="font-bold text-md mt-2 text-black">
-                Note: {data?.[0]?.note}
-              </p>
-
-              <div className="mt-8 text-black">
-                <p className="font-bold text-md">Payment Information:</p>
-                <p>Total Bill: {totals?.totalBill} taka</p>
-                <p>Total Advance: {totals.totalAdvance} taka</p>
-                <p>Total Due: {totals.totalDue} taka</p>
-                <p>Payment Method: {data?.[0]?.paymentMethod} </p>
-                <p>Transaction ID: {data?.[0]?.transactionId} </p>
-              </div>
-
-              <div className="mt-8 text-black">
-                <p className="py-1">
-                  Booked by: {data?.[0]?.bookedByID || "N/A"}
-                </p>
-                <p className="py-1 font-bold">
-                  {data?.[0]?.hotelID === 1
-                    ? "Check in - 1.00 PM & Check out - 11:00 AM"
-                    : data?.[0]?.hotelID === 2
-                    ? "Check in - 1.00 PM & Check out - 11:00 AM"
-                    : data?.[0]?.hotelID === 4
-                    ? "11:30 AM & Check out - 11:00 AM "
-                    : data?.[0]?.hotelID === 3
-                    ? "Check-in 2 PM & Check out - 12 PM "
-                    : data?.[0]?.hotelID === 6
-                    ? "Check in - 11:30 AM & Check out - 11:00 AM"
-                    : "Check in - 12:30 PM & Check out - 11:00 AM"}
-                </p>
-              </div>
-              <p className="text-black">
-                Thank you so much for choosing {data?.[0]?.hotelName}. Hope you
-                will enjoy your stay with us. Best of luck for your Cox’s Bazar
-                trip.
-              </p>
             </div>
           </div>
+
+          {/* Booking Details Table */}
+          <div className="mb-3">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Booking Details
+            </h2>
+            <div className="overflow-x-auto border border-slate-200 rounded">
+              <table className="w-full" style={{ fontSize: '9px' }}>
+                <thead>
+                  <tr className="bg-slate-100 border-b border-slate-200">
+                    <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
+                      Room
+                    </th>
+                    <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
+                      Check-In
+                    </th>
+                    <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
+                      Check-Out
+                    </th>
+                    <th className="px-2 py-1.5 text-center text-xs font-bold text-slate-700 uppercase">
+                      Nights
+                    </th>
+                    <th className="px-2 py-1.5 text-center text-xs font-bold text-slate-700 uppercase">
+                      Guests
+                    </th>
+                    <th className="px-2 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">
+                      Rate
+                    </th>
+                    <th className="px-2 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">
+                      Amount
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data?.map((booking, index) => (
+                    <tr key={index}>
+                      <td className="px-2 py-1.5">
+                        <div className="font-semibold text-slate-900 text-xs">
+                          {booking?.roomCategoryName || "N/A"}
+                        </div>
+                        {booking?.roomNumberName && (
+                          <div className="text-slate-500 text-xs">
+                            #{booking.roomNumberName}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-slate-600">
+                        {moment(booking?.checkInDate).format("MMM DD, YY")}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-slate-600">
+                        {moment(booking?.checkOutDate).format("MMM DD, YY")}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-center font-semibold text-slate-700">
+                        {booking?.nights || 0}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-center text-slate-600">
+                        {booking?.adults || 0}A{booking?.children > 0 ? `/${booking.children}C` : ''}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-right text-slate-600">
+                        ৳{Number(booking?.roomPrice || 0).toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-right font-bold text-slate-900">
+                        ৳{Number(booking?.totalBill || 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Additional Services */}
+          {(totals.kitchenTotalBill > 0 || totals.extraBedTotalBill > 0) && (
+            <div className="mb-3">
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Additional Services
+              </h2>
+              <div className="border border-slate-200 rounded overflow-hidden">
+                {totals.kitchenTotalBill > 0 && (
+                  <div className="flex justify-between items-center px-3 py-1.5 bg-slate-50 border-b border-slate-200">
+                    <span className="text-xs font-semibold text-slate-700">Kitchen</span>
+                    <span className="text-xs font-bold text-slate-900">
+                      ৳{totals.kitchenTotalBill.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {totals.extraBedTotalBill > 0 && (
+                  <div className="flex justify-between items-center px-3 py-1.5 bg-slate-50">
+                    <span className="text-xs font-semibold text-slate-700">Extra Bed</span>
+                    <span className="text-xs font-bold text-slate-900">
+                      ৳{totals.extraBedTotalBill.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Note */}
+          {data?.[0]?.note && (
+            <div className="mb-3 p-2 bg-amber-50 border-l-2 border-amber-400 rounded-r">
+              <p className="text-xs font-bold text-amber-900 uppercase mb-1">
+                Note
+              </p>
+              <p className="text-xs text-amber-900">{data[0].note}</p>
+            </div>
+          )}
+
+          {/* Totals Section */}
+          <div className="mt-4 flex justify-end">
+            <div className="w-full max-w-xs">
+              <div className="bg-slate-50 rounded p-3 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-600 font-semibold">Subtotal</span>
+                  <span className="text-slate-900 font-bold">
+                    ৳{totals.totalBill.toLocaleString()}
+                  </span>
+                </div>
+                {totals.kitchenTotalBill > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-600 font-semibold">Kitchen</span>
+                    <span className="text-slate-900 font-bold">
+                      ৳{totals.kitchenTotalBill.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {totals.extraBedTotalBill > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-600 font-semibold">Extra Bed</span>
+                    <span className="text-slate-900 font-bold">
+                      ৳{totals.extraBedTotalBill.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                <div className="border-t border-slate-300 pt-2 mt-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-900 uppercase">
+                      Total
+                    </span>
+                    <span className="text-base font-bold text-slate-900">
+                      ৳{totals.finalTotal.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between text-xs pt-1 border-t border-slate-200">
+                  <span className="text-slate-600 font-semibold">Advance</span>
+                  <span className="text-green-700 font-bold">
+                    -৳{totals.totalAdvance.toLocaleString()}
+                  </span>
+                </div>
+                <div className="bg-slate-700 text-white rounded p-2 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xs uppercase">Due</span>
+                    <span className="font-bold text-base">
+                      ৳{totals.totalDue.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Information */}
+          <div className="mt-4 pt-3 border-t border-slate-200">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 p-2 rounded">
+                <p className="text-xs text-slate-500 font-semibold mb-0.5 uppercase">Payment Method</p>
+                <p className="font-bold text-slate-900 text-xs">
+                  {data?.[0]?.paymentMethod || "N/A"}
+                </p>
+              </div>
+              {data?.[0]?.transactionId && (
+                <div className="bg-slate-50 p-2 rounded">
+                  <p className="text-xs text-slate-500 font-semibold mb-0.5 uppercase">Transaction ID</p>
+                  <p className="font-bold text-slate-900 text-xs">
+                    {data[0].transactionId}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-4 pt-3 border-t border-slate-200 text-center">
+            <p className="text-xs text-slate-600 font-semibold mb-1">
+              Thank you for choosing {data?.[0]?.hotelName || hotelInfo.name}
+            </p>
+            <p className="text-xs text-slate-500">
+              We hope you enjoyed your stay
+            </p>
+          </div>
         </div>
-      )}
-    </Watermark>
+      </div>
+
+      {/* Print Styles */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 0.3in;
+          }
+          body {
+            background: white;
+            margin: 0;
+            padding: 0;
+            font-size: 10px !important;
+          }
+          * {
+            font-size: 10px !important;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+          .print\\:px-6 {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+          }
+          .print\\:py-3 {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+          }
+          .print\\:shadow-none {
+            box-shadow: none !important;
+          }
+          .print\\:bg-white {
+            background: white !important;
+          }
+          #invoice-card {
+            max-width: 100% !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
+    </div>
   );
 };
 

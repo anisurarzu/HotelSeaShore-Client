@@ -13,8 +13,8 @@ const geistMono = localFont({
 });
 
 export const metadata = {
-  title: "Fast Track Booking Ltd.",
-  description: "",
+  title: "Hotel Sea Shore",
+  description: "Hotel Sea Shore",
 };
 
 export default function RootLayout({ children }) {
