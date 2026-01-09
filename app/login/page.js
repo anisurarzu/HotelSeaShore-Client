@@ -83,9 +83,8 @@ const HotelSeaShoreLogin = () => {
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("userInfo", JSON.stringify(response.data.user));
 
-        // HotelID 21 diye direct dashboard e pathano
-        const hotelID = "21";
-        router.push(`/dashboard?hotelID=${hotelID}`);
+        // Redirect to dashboard without hardcoded hotelID
+        router.push(`/dashboard`);
         
       } else {
         throw new Error("Login failed");
@@ -221,7 +220,7 @@ const HotelSeaShoreLogin = () => {
                           as="input"
                           type="text"
                           placeholder={t.loginIDPlaceholder}
-                          className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-cyan-500 focus:bg-white transition-all text-sm"
+                          className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-cyan-500 focus:bg-white transition-all text-sm text-gray-900"
                           onChange={(e) => {
                             handleChange(e);
                             setLoginError("");
@@ -250,7 +249,7 @@ const HotelSeaShoreLogin = () => {
                           as="input"
                           type={showPassword ? "text" : "password"}
                           placeholder={t.passwordPlaceholder}
-                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-cyan-500 focus:bg-white transition-all text-sm"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-cyan-500 focus:bg-white transition-all text-sm text-gray-900"
                           onChange={(e) => {
                             handleChange(e);
                             setLoginError("");

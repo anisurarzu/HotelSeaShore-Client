@@ -14,6 +14,9 @@ import {
   Card,
   Row,
   Col,
+  Modal,
+  Table,
+  Divider,
 } from "antd";
 import {
   DashboardOutlined,
@@ -35,13 +38,13 @@ import {
   TeamOutlined,
   CheckSquareOutlined,
   UpOutlined,
+  EyeOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { Pie } from "@ant-design/charts";
 import DashboardHome from "@/component/DashboardHome";
-import coreAxios from "@/utils/axiosInstance";
-import dayjs from "dayjs";
 import AgentInformation from "@/component/AgentInformation";
 import HotelInformation from "@/component/HotelInformation";
 import BookingInfo from "@/component/BookingInfo";
@@ -52,6 +55,18 @@ import ExpenseInfo from "@/component/Expense/ExpenseInfo";
 import DailyStatement from "@/component/DailyStatement";
 import PermissionManagement from "@/component/Permission/PermissionManagement";
 import Commission from "@/component/Booking/Commission";
+import coreAxios from "@/utils/axiosInstance";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+
+// Extend dayjs with plugins
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -71,12 +86,12 @@ const menuItems = [
     icon: <CalendarOutlined className="text-base" />,
     component: (props) => <Calender {...props} />,
   },
-  {
-    key: "9",
-    label: "Room Availability",
-    icon: <CheckSquareOutlined className="text-base" />,
-    component: (props) => <RoomAvailabilityPage {...props} />,
-  },
+  // {
+  //   key: "9",
+  //   label: "Room Availability",
+  //   icon: <CheckSquareOutlined className="text-base" />,
+  //   component: (props) => <RoomAvailabilityPage {...props} />,
+  // },
   {
     key: "6",
     label: "Booking Info",
@@ -136,7 +151,7 @@ const PIE_CHART_DATA = [
 ];
 
 // Standard Dashboard Card Component
-const DashboardCard = ({ title, value, icon, color, trend, bgColor = 'white' }) => (
+const DashboardCard = ({ title, value, icon, color, trend, bgColor = 'white', onViewDetails }) => (
   <Card 
     className="h-full shadow-sm border-0 hover:shadow-md transition-all duration-300"
     style={{ 
@@ -146,8 +161,22 @@ const DashboardCard = ({ title, value, icon, color, trend, bgColor = 'white' }) 
     }}
   >
     <div className="flex items-start justify-between">
-      <div>
+      <div className="flex-1">
+        <div className="flex items-center justify-between mb-1">
         <Text className="text-gray-500 text-sm font-medium">{title}</Text>
+          {onViewDetails && (
+            <Tooltip title="View Details">
+              <Button
+                type="text"
+                size="small"
+                // icon={<EyeOutlined className="text-xs" />}
+                onClick={onViewDetails}
+                className="!text-gray-400 hover:!text-gray-600 !p-1 !h-auto"
+                style={{ fontSize: '10px' }}
+              />
+            </Tooltip>
+          )}
+        </div>
         <div className="mt-2">
           <Title level={3} className="!mb-1 !text-2xl font-bold" style={{ color: color }}>
             {value}
@@ -174,7 +203,7 @@ const CompactPieChart = () => {
     colorField: 'type',
     radius: 0.8,
     innerRadius: 0.6,
-    label: false, // Disable labels to avoid the error, use legend instead
+    label: false,
     legend: {
       position: 'bottom',
       itemSpacing: 8,
@@ -229,6 +258,8 @@ const DashboardContent = ({ sliders }) => {
   const [darkMode, setDarkMode] = useState(false);
   const [bookings, setBookings] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [detailModalType, setDetailModalType] = useState(null);
   const [dashboardStats, setDashboardStats] = useState({
     totalRevenue: 0,
     todayRevenue: 0,
@@ -238,6 +269,9 @@ const DashboardContent = ({ sliders }) => {
     pendingCheckIns: 0,
     todayCheckIns: 0,
     todayCheckOuts: 0,
+    totalNights: 0,
+    todayNights: 0,
+    thisMonthNights: 0,
   });
 
   // Get hotelID from URL
@@ -245,61 +279,78 @@ const DashboardContent = ({ sliders }) => {
 
   // Calculate dashboard statistics from bookings API data
   const calculateDashboardStats = useCallback((bookingsData) => {
-    const today = dayjs();
+    const today = dayjs().tz("Asia/Dhaka");
     const todayStart = today.startOf("day");
     const todayEnd = today.endOf("day");
     const monthStart = today.startOf("month");
     const monthEnd = today.endOf("month");
 
-    // Calculate total revenue (sum of all totalBill from all bookings)
-    const totalRevenue = bookingsData.reduce(
-      (sum, booking) => sum + (Number(booking.totalBill) || 0),
-      0
-    );
+    // Initialize counters
+    let totalRevenue = 0;
+    let todayRevenue = 0;
+    let thisMonthRevenue = 0;
+    let totalNights = 0;
+    let todayNights = 0;
+    let thisMonthNights = 0;
+    let activeBookings = 0;
+    let pendingCheckIns = 0;
+    let todayCheckIns = 0;
+    let todayCheckOuts = 0;
 
-    // Calculate today's revenue (bookings with check-in date today)
-    const todayRevenue = bookingsData
-      .filter((booking) => {
-        const checkInDate = dayjs(booking.checkInDate);
-        return checkInDate.isSame(todayStart, "day");
-      })
-      .reduce((sum, booking) => sum + (Number(booking.totalBill) || 0), 0);
+    bookingsData.forEach((booking) => {
+      // Parse dates properly
+      const checkInDate = dayjs(booking.checkInDate).tz("Asia/Dhaka");
+      const checkOutDate = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
+      
+      // Get booking details
+      const nights = parseInt(booking.nights) || 1;
+      const totalBill = parseFloat(booking.totalBill) || 0;
+      const advancePayment = parseFloat(booking.advancePayment) || 0;
+      const duePayment = parseFloat(booking.duePayment) || 0;
 
-    // Calculate this month's revenue (bookings with check-in date in current month)
-    const thisMonthRevenue = bookingsData
-      .filter((booking) => {
-        const checkInDate = dayjs(booking.checkInDate);
-        return checkInDate.isSameOrAfter(monthStart, "day") && 
-               checkInDate.isSameOrBefore(monthEnd, "day");
-      })
-      .reduce((sum, booking) => sum + (Number(booking.totalBill) || 0), 0);
+      // Add to total revenue (only count completed payments or all bills depending on your logic)
+      // Here we count totalBill as revenue
+      totalRevenue += totalBill;
+      totalNights += nights;
 
-    // Count active bookings (non-cancelled)
-    const activeBookings = bookingsData.length;
+      // Check if check-in date is today
+      if (checkInDate.isSame(todayStart, "day")) {
+        todayRevenue += totalBill;
+        todayNights += nights;
+        todayCheckIns++;
+      }
 
-    // Count pending check-ins (check-in date is today or in the future)
-    const pendingCheckIns = bookingsData.filter((booking) => {
-      const checkInDate = dayjs(booking.checkInDate);
-      return checkInDate.isSameOrAfter(todayStart, "day");
-    }).length;
+      // Check if check-in date is within current month
+      if (checkInDate.isSameOrAfter(monthStart, "day") && 
+          checkInDate.isSameOrBefore(monthEnd, "day")) {
+        thisMonthRevenue += totalBill;
+        thisMonthNights += nights;
+      }
 
-    // Count today's check-ins
-    const todayCheckIns = bookingsData.filter((booking) => {
-      const checkInDate = dayjs(booking.checkInDate);
-      return checkInDate.isSame(todayStart, "day");
-    }).length;
+      // Check if check-out date is today
+      if (checkOutDate.isSame(todayStart, "day")) {
+        todayCheckOuts++;
+      }
 
-    // Count today's check-outs
-    const todayCheckOuts = bookingsData.filter((booking) => {
-      const checkOutDate = dayjs(booking.checkOutDate);
-      return checkOutDate.isSame(todayStart, "day");
-    }).length;
+      // Determine if booking is active (check-in date is today or in the past AND check-out date is in the future or today)
+      const isActive = checkInDate.isSameOrBefore(todayEnd, "day") && 
+                       checkOutDate.isSameOrAfter(todayStart, "day");
+      
+      if (isActive) {
+        activeBookings++;
+      }
 
-    // Calculate occupancy rate based on current active bookings
-    // This is a simplified calculation - you can enhance it with actual room count from hotels API
-    // For now, we'll use a ratio based on active bookings
+      // Count pending check-ins (check-in date is in the future)
+      if (checkInDate.isAfter(todayStart, "day")) {
+        pendingCheckIns++;
+      }
+    });
+
+    // Calculate occupancy rate (simplified - assuming max 10 rooms available)
+    // You should replace this with actual hotel room count from your API
+    const maxRooms = 10; // This should come from your hotel data
     const occupancyRate = activeBookings > 0 
-      ? Math.min(100, Math.round((activeBookings / Math.max(activeBookings + 10, 1)) * 100))
+      ? Math.min(100, Math.round((activeBookings / maxRooms) * 100))
       : 0;
 
     setDashboardStats({
@@ -311,6 +362,9 @@ const DashboardContent = ({ sliders }) => {
       pendingCheckIns,
       todayCheckIns,
       todayCheckOuts,
+      totalNights,
+      todayNights,
+      thisMonthNights,
     });
   }, []);
 
@@ -401,6 +455,261 @@ const DashboardContent = ({ sliders }) => {
     router.push(`?${params.toString()}`, { scroll: false });
   };
 
+  // Handle view details for cards
+  const handleViewDetails = (type) => {
+    setDetailModalType(type);
+    setDetailModalVisible(true);
+  };
+
+  const closeDetailModal = () => {
+    setDetailModalVisible(false);
+    setDetailModalType(null);
+  };
+
+  // Get filtered bookings based on card type
+  const getFilteredBookings = (type) => {
+    const today = dayjs().tz("Asia/Dhaka");
+    const todayStart = today.startOf("day");
+    const monthStart = today.startOf("month");
+    const monthEnd = today.endOf("month");
+
+    switch (type) {
+      case 'totalRevenue':
+        return bookings;
+      case 'todayRevenue':
+        return bookings.filter(booking => 
+          dayjs(booking.checkInDate).tz("Asia/Dhaka").isSame(todayStart, "day")
+        );
+      case 'thisMonthRevenue':
+        return bookings.filter(booking => {
+          const checkInDate = dayjs(booking.checkInDate).tz("Asia/Dhaka");
+          return checkInDate.isSameOrAfter(monthStart, "day") && 
+                 checkInDate.isSameOrBefore(monthEnd, "day");
+        });
+      case 'activeBookings':
+        return bookings.filter(booking => {
+          const checkInDate = dayjs(booking.checkInDate).tz("Asia/Dhaka");
+          const checkOutDate = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
+          return checkInDate.isSameOrBefore(today.endOf("day"), "day") && 
+                 checkOutDate.isSameOrAfter(todayStart, "day");
+        });
+      case 'pendingCheckIns':
+        return bookings.filter(booking => 
+          dayjs(booking.checkInDate).tz("Asia/Dhaka").isAfter(todayStart, "day")
+        );
+      case 'todayCheckIns':
+        return bookings.filter(booking => 
+          dayjs(booking.checkInDate).tz("Asia/Dhaka").isSame(todayStart, "day")
+        );
+      case 'todayCheckOuts':
+        return bookings.filter(booking => 
+          dayjs(booking.checkOutDate).tz("Asia/Dhaka").isSame(todayStart, "day")
+        );
+      case 'totalNights':
+        return bookings;
+      case 'todayNights':
+        return bookings.filter(booking => 
+          dayjs(booking.checkInDate).tz("Asia/Dhaka").isSame(todayStart, "day")
+        );
+      case 'thisMonthNights':
+        return bookings.filter(booking => {
+          const checkInDate = dayjs(booking.checkInDate).tz("Asia/Dhaka");
+          return checkInDate.isSameOrAfter(monthStart, "day") && 
+                 checkInDate.isSameOrBefore(monthEnd, "day");
+        });
+      case 'totalBookings':
+        return bookings;
+      default:
+        return [];
+    }
+  };
+
+  // Detail Modal Component
+  const DetailModal = () => {
+    const filteredBookings = getFilteredBookings(detailModalType);
+    
+    const getModalTitle = () => {
+      const titles = {
+        'totalRevenue': 'Total Revenue Details',
+        'todayRevenue': "Today's Revenue Details",
+        'thisMonthRevenue': "This Month's Revenue Details",
+        'activeBookings': 'Active Bookings Details',
+        'pendingCheckIns': 'Pending Check-ins Details',
+        'todayCheckIns': "Today's Check-ins Details",
+        'todayCheckOuts': "Today's Check-outs Details",
+        'totalNights': 'Total Nights Details',
+        'todayNights': "Today's Nights Details",
+        'thisMonthNights': "This Month's Nights Details",
+        'totalBookings': 'Total Bookings Details',
+      };
+      return titles[detailModalType] || 'Details';
+    };
+
+    const columns = [
+      {
+        title: 'Guest Name',
+        dataIndex: 'fullName',
+        key: 'fullName',
+        width: 150,
+        render: (text) => <span className="text-xs font-medium">{text || 'N/A'}</span>,
+      },
+      {
+        title: 'Check-in',
+        dataIndex: 'checkInDate',
+        key: 'checkInDate',
+        width: 100,
+        render: (date) => (
+          <span className="text-xs text-gray-600">
+            {dayjs(date).tz("Asia/Dhaka").format('DD MMM YY')}
+          </span>
+        ),
+      },
+      {
+        title: 'Check-out',
+        dataIndex: 'checkOutDate',
+        key: 'checkOutDate',
+        width: 100,
+        render: (date) => (
+          <span className="text-xs text-gray-600">
+            {dayjs(date).tz("Asia/Dhaka").format('DD MMM YY')}
+          </span>
+        ),
+      },
+      {
+        title: 'Nights',
+        dataIndex: 'nights',
+        key: 'nights',
+        width: 60,
+        align: 'center',
+        render: (nights) => <span className="text-xs">{nights || 1}</span>,
+      },
+      {
+        title: 'Total Bill',
+        dataIndex: 'totalBill',
+        key: 'totalBill',
+        width: 100,
+        align: 'right',
+        render: (amount) => (
+          <span className="text-xs font-semibold text-green-600">
+            ৳{Number(amount || 0).toLocaleString()}
+          </span>
+        ),
+      },
+      {
+        title: 'Advance',
+        dataIndex: 'advancePayment',
+        key: 'advancePayment',
+        width: 90,
+        align: 'right',
+        render: (amount) => (
+          <span className="text-xs text-blue-600">
+            ৳{Number(amount || 0).toLocaleString()}
+          </span>
+        ),
+      },
+      {
+        title: 'Due',
+        dataIndex: 'duePayment',
+        key: 'duePayment',
+        width: 90,
+        align: 'right',
+        render: (amount) => (
+          <span className="text-xs text-orange-600">
+            ৳{Number(amount || 0).toLocaleString()}
+          </span>
+        ),
+      },
+    ];
+
+    const calculateSummary = () => {
+      const totalBill = filteredBookings.reduce((sum, b) => sum + (Number(b.totalBill) || 0), 0);
+      const totalAdvance = filteredBookings.reduce((sum, b) => sum + (Number(b.advancePayment) || 0), 0);
+      const totalDue = filteredBookings.reduce((sum, b) => sum + (Number(b.duePayment) || 0), 0);
+      const totalNights = filteredBookings.reduce((sum, b) => sum + (Number(b.nights) || 1), 0);
+      
+      return { totalBill, totalAdvance, totalDue, totalNights, count: filteredBookings.length };
+    };
+
+    const summary = calculateSummary();
+
+    return (
+      <Modal
+        title={
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-700">{getModalTitle()}</span>
+            <Button
+              type="text"
+              size="small"
+              icon={<CloseOutlined className="text-xs" />}
+              onClick={closeDetailModal}
+              className="!text-gray-400 hover:!text-gray-600 !h-6 !w-6 !p-0"
+            />
+          </div>
+        }
+        open={detailModalVisible}
+        onCancel={closeDetailModal}
+        footer={null}
+        width={900}
+        className="detail-modal"
+        styles={{
+          header: { padding: '12px 16px', borderBottom: '1px solid #f0f0f0' },
+          body: { padding: '12px 16px', maxHeight: '70vh', overflowY: 'auto' },
+        }}
+      >
+        <div className="space-y-4">
+          {/* Summary Cards */}
+          <Row gutter={[12, 12]}>
+            <Col xs={12} sm={6}>
+              <div className="bg-blue-50 p-2 rounded border border-blue-100">
+                <p className="text-[9px] text-gray-500 mb-0.5 font-medium">Total Bookings</p>
+                <p className="text-xs font-bold text-blue-600">{summary.count}</p>
+              </div>
+            </Col>
+            <Col xs={12} sm={6}>
+              <div className="bg-green-50 p-2 rounded border border-green-100">
+                <p className="text-[9px] text-gray-500 mb-0.5 font-medium">Total Revenue</p>
+                <p className="text-xs font-bold text-green-600">৳{summary.totalBill.toLocaleString()}</p>
+              </div>
+            </Col>
+            <Col xs={12} sm={6}>
+              <div className="bg-amber-50 p-2 rounded border border-amber-100">
+                <p className="text-[9px] text-gray-500 mb-0.5 font-medium">Total Nights</p>
+                <p className="text-xs font-bold text-amber-600">{summary.totalNights}</p>
+              </div>
+            </Col>
+            <Col xs={12} sm={6}>
+              <div className="bg-orange-50 p-2 rounded border border-orange-100">
+                <p className="text-[9px] text-gray-500 mb-0.5 font-medium">Due Amount</p>
+                <p className="text-xs font-bold text-orange-600">৳{summary.totalDue.toLocaleString()}</p>
+              </div>
+            </Col>
+          </Row>
+
+          <Divider className="!my-2" style={{ margin: '8px 0' }} />
+
+          {/* Bookings Table */}
+          <div>
+            <p className="text-[10px] text-gray-600 mb-1.5 font-semibold uppercase tracking-wide">Booking Details</p>
+            <Table
+              columns={columns}
+              dataSource={filteredBookings}
+              rowKey={(record) => record._id || record.bookingID || Math.random()}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: false,
+                showTotal: (total) => `Total: ${total}`,
+                size: 'small',
+              }}
+              size="small"
+              scroll={{ x: 700 }}
+              className="text-xs"
+            />
+          </div>
+        </div>
+      </Modal>
+    );
+  };
+
   const renderContent = () => {
     if (loading) {
       return (
@@ -422,13 +731,14 @@ const DashboardContent = ({ sliders }) => {
                   <Skeleton active paragraph={{ rows: 2 }} />
                 </Card>
               ) : (
-                <DashboardCard
-                  title="Total Revenue"
+              <DashboardCard
+                title="Total Revenue"
                   value={`৳${dashboardStats.totalRevenue.toLocaleString()}`}
-                  icon={<DollarOutlined className="text-xl text-green-500" />}
-                  color="#10b981"
-                  bgColor="linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)"
-                />
+                icon={<DollarOutlined className="text-xl text-green-500" />}
+                color="#10b981"
+                bgColor="linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)"
+                  onViewDetails={() => handleViewDetails('totalRevenue')}
+              />
               )}
             </Col>
             <Col xs={24} sm={12} lg={6}>
@@ -437,13 +747,14 @@ const DashboardContent = ({ sliders }) => {
                   <Skeleton active paragraph={{ rows: 2 }} />
                 </Card>
               ) : (
-                <DashboardCard
+              <DashboardCard
                   title="Today's Revenue"
                   value={`৳${dashboardStats.todayRevenue.toLocaleString()}`}
                   icon={<DollarOutlined className="text-xl text-blue-500" />}
-                  color="#0ea5e9"
-                  bgColor="linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)"
-                />
+                color="#0ea5e9"
+                bgColor="linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)"
+                  onViewDetails={() => handleViewDetails('todayRevenue')}
+              />
               )}
             </Col>
             <Col xs={24} sm={12} lg={6}>
@@ -452,13 +763,14 @@ const DashboardContent = ({ sliders }) => {
                   <Skeleton active paragraph={{ rows: 2 }} />
                 </Card>
               ) : (
-                <DashboardCard
-                  title="Active Bookings"
+              <DashboardCard
+                title="Active Bookings"
                   value={dashboardStats.activeBookings.toString()}
-                  icon={<CalendarOutlined className="text-xl text-purple-500" />}
-                  color="#8b5cf6"
-                  bgColor="linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)"
-                />
+                icon={<CalendarOutlined className="text-xl text-purple-500" />}
+                color="#8b5cf6"
+                bgColor="linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)"
+                  onViewDetails={() => handleViewDetails('activeBookings')}
+              />
               )}
             </Col>
             <Col xs={24} sm={12} lg={6}>
@@ -467,12 +779,13 @@ const DashboardContent = ({ sliders }) => {
                   <Skeleton active paragraph={{ rows: 2 }} />
                 </Card>
               ) : (
-                <DashboardCard
-                  title="Pending Check-ins"
+              <DashboardCard
+                title="Pending Check-ins"
                   value={dashboardStats.pendingCheckIns.toString()}
-                  icon={<UserOutlined className="text-xl text-orange-500" />}
-                  color="#f59e0b"
-                  bgColor="linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
+                icon={<UserOutlined className="text-xl text-orange-500" />}
+                color="#f59e0b"
+                bgColor="linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
+                  onViewDetails={() => handleViewDetails('pendingCheckIns')}
                 />
               )}
             </Col>
@@ -492,6 +805,7 @@ const DashboardContent = ({ sliders }) => {
                   icon={<DollarOutlined className="text-xl text-indigo-500" />}
                   color="#6366f1"
                   bgColor="linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)"
+                  onViewDetails={() => handleViewDetails('thisMonthRevenue')}
                 />
               )}
             </Col>
@@ -507,6 +821,7 @@ const DashboardContent = ({ sliders }) => {
                   icon={<CalendarOutlined className="text-xl text-teal-500" />}
                   color="#14b8a6"
                   bgColor="linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)"
+                  onViewDetails={() => handleViewDetails('todayCheckIns')}
                 />
               )}
             </Col>
@@ -522,6 +837,7 @@ const DashboardContent = ({ sliders }) => {
                   icon={<CalendarOutlined className="text-xl text-pink-500" />}
                   color="#ec4899"
                   bgColor="linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%)"
+                  onViewDetails={() => handleViewDetails('todayCheckOuts')}
                 />
               )}
             </Col>
@@ -537,6 +853,74 @@ const DashboardContent = ({ sliders }) => {
                   icon={<HomeOutlined className="text-xl text-cyan-500" />}
                   color="#06b6d4"
                   bgColor="linear-gradient(135deg, #ecfeff 0%, #cffafe 100%)"
+                />
+              )}
+            </Col>
+          </Row>
+
+          {/* Additional Stats Row - Nights and Other Metrics */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Total Nights"
+                  value={dashboardStats.totalNights.toString()}
+                  icon={<CalendarOutlined className="text-xl text-amber-500" />}
+                  color="#f59e0b"
+                  bgColor="linear-gradient(135deg, #fef3c7 0%, #fef3c7 100%)"
+                  onViewDetails={() => handleViewDetails('totalNights')}
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Today Nights"
+                  value={dashboardStats.todayNights.toString()}
+                  icon={<CalendarOutlined className="text-xl text-emerald-500" />}
+                  color="#10b981"
+                  bgColor="linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)"
+                  onViewDetails={() => handleViewDetails('todayNights')}
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="This Month Nights"
+                  value={dashboardStats.thisMonthNights.toString()}
+                  icon={<CalendarOutlined className="text-xl text-violet-500" />}
+                  color="#8b5cf6"
+                  bgColor="linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)"
+                  onViewDetails={() => handleViewDetails('thisMonthNights')}
+                />
+              )}
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              {bookingsLoading ? (
+                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </Card>
+              ) : (
+                <DashboardCard
+                  title="Total Bookings"
+                  value={bookings.length.toString()}
+                  icon={<FileTextOutlined className="text-xl text-rose-500" />}
+                  color="#ef4444"
+                  bgColor="linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)"
+                  onViewDetails={() => handleViewDetails('totalBookings')}
                 />
               )}
             </Col>
@@ -598,6 +982,39 @@ const DashboardContent = ({ sliders }) => {
               </Card>
             </Col>
           </Row>
+
+          {/* Recent Bookings Section */}
+          <Card 
+            title="Recent Bookings" 
+            className="h-full shadow-sm border-0 mt-6"
+            style={{ borderRadius: '12px' }}
+          >
+            {bookingsLoading ? (
+              <Skeleton active paragraph={{ rows: 4 }} />
+            ) : bookings.length === 0 ? (
+              <div className="text-center py-8">
+                <CalendarOutlined className="text-4xl text-gray-300 mb-2" />
+                <p className="text-gray-500">No bookings found</p>
+              </div>
+            ) : (
+            <div className="space-y-3">
+                {bookings.slice(0, 5).map((booking) => (
+                  <div key={booking._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-blue-50 transition-colors duration-200">
+                    <div>
+                      <p className="font-medium text-gray-800">{booking.fullName}</p>
+                      <p className="text-sm text-gray-500">
+                        {dayjs(booking.checkInDate).format('DD MMM YYYY')} - {dayjs(booking.checkOutDate).format('DD MMM YYYY')}
+                      </p>
+                  </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-gray-800">৳{booking.totalBill?.toLocaleString()}</p>
+                      <p className="text-sm text-gray-500">{booking.nights} night{booking.nights > 1 ? 's' : ''}</p>
+                    </div>
+                </div>
+              ))}
+            </div>
+            )}
+          </Card>
         </div>
       );
     }
@@ -778,8 +1195,8 @@ const DashboardContent = ({ sliders }) => {
                 </div>
                 <div className="h-6 w-px bg-white/30 mx-2" />
                 <div className="text-left">
-                  <p className="text-white text-xs m-0">Hotel ID:</p>
-                  <p className="text-white font-bold m-0 text-sm">{hotelID || "21"}</p>
+                  <p className="text-white text-xs m-0">Hotel:</p>
+                  <p className="text-white font-bold m-0 text-sm">{'Hotel Sea Shore'}</p>
                 </div>
               </div>
             )}
@@ -868,8 +1285,8 @@ const DashboardContent = ({ sliders }) => {
             <span className="text-[10px] sm:text-xs text-gray-600">System Online</span>
           </div>
           <div className="text-[10px] sm:text-xs text-gray-500">
-            <span className="hidden sm:inline">Hotel ID: </span>
-            <span className="font-semibold text-cyan-600">{hotelID || "21"}</span>
+            <span className="hidden sm:inline">Hotel Name: </span>
+            <span className="font-semibold text-cyan-600">{"Hotel Sea Shore"}</span>
           </div>
         </div>
       </Layout>
@@ -903,6 +1320,9 @@ const DashboardContent = ({ sliders }) => {
       >
         {renderMenuItems(false)}
       </Drawer>
+
+      {/* Detail Modal */}
+      <DetailModal />
     </Layout>
   );
 };
