@@ -8,7 +8,6 @@ import {
   Select,
   message,
   Popconfirm,
-  Tooltip,
   DatePicker,
   Modal,
   Tag,
@@ -105,7 +104,7 @@ const HotelCalendar = ({ hotelID }) => {
   // Get booking color - green for all bookings
   const getBookingColor = (value) => {
     if (!value) return "#ffffff";
-    return "#90EE90"; // Green for all bookings
+    return "linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)"; // Fancy green gradient for bookings
   };
 
   // Open booking modal for Add or Edit
@@ -289,28 +288,24 @@ const HotelCalendar = ({ hotelID }) => {
       const dayOfWeek = date.format("ddd");
       const dayNum = date.format("D");
       const isToday = date.isSame(dayjs(), 'day');
-      const isWeekend = dayOfWeek === 'Sat' || dayOfWeek === 'Sun';
+      // Friday and Saturday are government holidays in Bangladesh
+      const isHoliday = dayOfWeek === 'Fri' || dayOfWeek === 'Sat';
       
       return {
         title: (
           <div className="text-center p-0 m-0" style={{ minWidth: '80px' }}>
             <div 
-              className={`font-bold ${isToday ? 'text-red-600' : ''} ${isWeekend ? 'text-blue-600' : ''}`}
+              className={`font-bold ${isToday ? 'text-red-600' : ''} ${isHoliday ? 'text-orange-600' : ''}`}
               style={{ fontSize: '9px', lineHeight: '1.2' }}
             >
               {dayOfWeek.toUpperCase()}
+              {isHoliday && <span className="text-xs ml-1">🏛️</span>}
             </div>
             <div 
-              className={`font-extrabold ${isToday ? 'text-red-600' : ''}`}
+              className={`font-extrabold ${isToday ? 'text-red-600' : ''} ${isHoliday ? 'text-orange-600' : ''}`}
               style={{ fontSize: '12px', lineHeight: '1.2' }}
             >
               {dayNum}
-            </div>
-            <div 
-              className="text-gray-500 font-medium"
-              style={{ fontSize: '8px', lineHeight: '1.2' }}
-            >
-              {calculateDayTotal(dateStr)}
             </div>
           </div>
         ),
@@ -334,17 +329,27 @@ const HotelCalendar = ({ hotelID }) => {
             }
           }
           
+          const cellColor = getBookingColor(bookingInfo || '');
+          const isGradient = cellColor.includes('gradient');
+          
           return (
-            <Tooltip title={bookingInfo ? `${bookingNo ? `Booking: ${bookingNo}` : ''} ${customerName ? `Customer: ${customerName}` : bookingInfo}` : "Click to view history or add booking"}>
               <div
-                className="flex items-center justify-center p-1 relative"
+                className={`flex items-center justify-center p-1 relative calendar-cell ${bookingInfo ? 'booked-cell' : ''} ${isHoliday ? 'holiday-cell' : ''}`}
                 style={{
                   minHeight: '60px',
-                  backgroundColor: getBookingColor(bookingInfo || ''),
+                  ...(isGradient 
+                    ? { backgroundImage: cellColor, backgroundColor: '#10b981' }
+                    : { backgroundColor: cellColor }
+                  ),
                   cursor: 'pointer',
-                  border: '1px solid #e8e8e8',
+                  border: isHoliday ? '2px solid #f97316' : '1px solid #e8e8e8',
                   fontSize: '9px',
                   padding: '4px',
+                  borderRadius: '6px',
+                  boxShadow: isHoliday ? '0 2px 4px rgba(249, 115, 22, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.08)',
+                  transition: bookingInfo ? 'transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out, z-index 0.3s ease-in-out' : 'none',
+                  zIndex: 1,
+                  ...(isHoliday && !bookingInfo ? { backgroundColor: '#fff7ed' } : {}), // Light orange tint for holiday cells
                 }}
                 onClick={() => handleCellClick(record.key, dateStr)}
               >
@@ -352,12 +357,12 @@ const HotelCalendar = ({ hotelID }) => {
                   <div className="w-full h-full flex flex-col justify-between">
                     <div className="flex-grow overflow-hidden text-center">
                       {customerName && (
-                        <div className="font-semibold text-gray-800 mb-1" style={{ fontSize: '9px', lineHeight: '1.3', wordBreak: 'break-word' }}>
+                        <div className="font-semibold text-white mb-1" style={{ fontSize: '9px', lineHeight: '1.3', wordBreak: 'break-word' }}>
                           {customerName}
                         </div>
                       )}
                       {bookingNo && (
-                        <div className="text-gray-600 font-medium" style={{ fontSize: '8px', lineHeight: '1.2' }}>
+                        <div className="text-white font-medium" style={{ fontSize: '8px', lineHeight: '1.2' }}>
                           {bookingNo}
                         </div>
                       )}
@@ -365,13 +370,13 @@ const HotelCalendar = ({ hotelID }) => {
                     <Button
                       type="link"
                       size="small"
-                      icon={<EditOutlined style={{ fontSize: '8px' }} />}
+                      icon={<EditOutlined style={{ fontSize: '8px', color: '#ffffff' }} />}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleEditClick(record.key, dateStr, bookingInfo, e);
                       }}
                       className="p-0 m-0"
-                      style={{ fontSize: '8px', height: '16px', marginTop: '2px' }}
+                      style={{ fontSize: '8px', height: '16px', marginTop: '2px', color: '#ffffff' }}
                     >
                       Edit
                     </Button>
@@ -395,7 +400,6 @@ const HotelCalendar = ({ hotelID }) => {
                   </div>
                 )}
               </div>
-            </Tooltip>
           );
         },
       };
@@ -418,6 +422,9 @@ const HotelCalendar = ({ hotelID }) => {
             <div className="font-bold text-xs sm:text-sm">{text}</div>
             <div className="text-xs text-gray-500">
               {calculateTotalBooked(record.key)}/{generateDateColumns().length}
+            </div>
+            <div className="text-gray-800 mt-1" style={{ fontSize: '10px' }}>
+              {record.category || 'N/A'}
             </div>
           </div>
         ),
@@ -883,7 +890,7 @@ const HotelCalendar = ({ hotelID }) => {
           <div className="flex flex-row items-center justify-between gap-2 sm:gap-3">
             <div className="flex-1 min-w-0">
               <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-800 truncate">
-                Booking Calendar ({dateRange[0].format("MMM D, YYYY")} - {dateRange[1].format("MMM D, YYYY")})
+                Booking Calendar ({dateRange[0].format("DD/MM/YYYY")} - {dateRange[1].format("DD/MM/YYYY")})
               </h1>
             </div>
             
@@ -938,7 +945,7 @@ const HotelCalendar = ({ hotelID }) => {
                 <RangePicker
                   value={dateRange}
                   onChange={handleDateRangeChange}
-                  format="MMM D, YYYY"
+                  format="DD/MM/YYYY"
                   allowClear={false}
                   size="small"
                   className="w-full sm:w-auto"
@@ -1018,6 +1025,40 @@ const HotelCalendar = ({ hotelID }) => {
                       cell: (props) => (
                         <td {...props} style={{ padding: '0 !important' }} />
                       ),
+                      wrapper: (props) => {
+                        const dates = generateDateColumns();
+                        return (
+                          <>
+                            <tbody {...props} />
+                            <tfoot>
+                              <tr>
+                                <td 
+                                  className="text-center bg-gray-100 font-semibold border"
+                                  style={{ padding: '8px 4px', fontSize: '10px', position: 'sticky', left: 0, zIndex: 5, background: '#f3f4f6' }}
+                                >
+                                  Total
+                                </td>
+                                {dates.map((date) => {
+                                  const dateStr = date.format("YYYY-MM-DD");
+                                  const bookedQty = calculateDayTotal(dateStr);
+                                  const totalRooms = roomList.length;
+                                  const ratio = totalRooms > 0 ? `${bookedQty}/${totalRooms}` : '0/0';
+                                  return (
+                                    <td
+                                      key={dateStr}
+                                      className="text-center bg-gray-50 border"
+                                      style={{ padding: '8px 4px', fontSize: '10px' }}
+                                    >
+                                      <div className="font-semibold text-gray-800">{bookedQty}</div>
+                                      <div className="text-xs text-gray-600 mt-1">{ratio}</div>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            </tfoot>
+                          </>
+                        );
+                      },
                     },
                   }}
                 />
@@ -1039,7 +1080,7 @@ const HotelCalendar = ({ hotelID }) => {
           <div>
             <div className="font-semibold text-base sm:text-lg">Booking History</div>
             <div className="text-xs sm:text-sm text-gray-500 font-normal">
-              {selectedRoomKey && roomList.find(r => r.key === selectedRoomKey)?.flatNo} - {selectedDateStr && dayjs(selectedDateStr).format("MMM D, YYYY")}
+              {selectedRoomKey && roomList.find(r => r.key === selectedRoomKey)?.flatNo} - {selectedDateStr && dayjs(selectedDateStr).format("DD/MM/YYYY")}
             </div>
           </div>
         }
@@ -1105,13 +1146,13 @@ const HotelCalendar = ({ hotelID }) => {
                     <div>
                       <span className="text-gray-600">Check-in:</span>{" "}
                       <span className="font-medium">
-                        {booking.checkInDate ? dayjs(booking.checkInDate).format("MMM D, YYYY") : "N/A"}
+                        {booking.checkInDate ? dayjs(booking.checkInDate).format("DD/MM/YYYY") : "N/A"}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-600">Check-out:</span>{" "}
                       <span className="font-medium">
-                        {booking.checkOutDate ? dayjs(booking.checkOutDate).format("MMM D, YYYY") : "N/A"}
+                        {booking.checkOutDate ? dayjs(booking.checkOutDate).format("DD/MM/YYYY") : "N/A"}
                       </span>
                     </div>
                     <div>
@@ -1207,6 +1248,7 @@ const HotelCalendar = ({ hotelID }) => {
                     formik.setFieldValue("checkInDate", date);
                     calculateNights(date, formik.values.checkOutDate);
                   }}
+                  format="DD/MM/YYYY"
                   className="w-full"
                   style={{ width: "100%", height: "40px" }}
                   disabledDate={(current) => current && current < dayjs().startOf("day")}
@@ -1221,6 +1263,7 @@ const HotelCalendar = ({ hotelID }) => {
                     formik.setFieldValue("checkOutDate", date);
                     calculateNights(formik.values.checkInDate, date);
                   }}
+                  format="DD/MM/YYYY"
                   className="w-full"
                   style={{ width: "100%", height: "40px" }}
                   disabledDate={(current) => current && current <= formik.values.checkInDate}
@@ -1448,6 +1491,11 @@ const HotelCalendar = ({ hotelID }) => {
         .calendar-table .ant-table-tbody > tr > td {
           padding: 0 !important;
           vertical-align: top;
+          overflow: visible !important;
+        }
+        
+        .calendar-table .ant-table-tbody > tr {
+          position: relative;
         }
         
         .calendar-table .ant-table-cell {
@@ -1476,7 +1524,12 @@ const HotelCalendar = ({ hotelID }) => {
         
         .calendar-table .ant-table-body {
           overflow-x: auto !important;
+          overflow-y: visible !important;
           -webkit-overflow-scrolling: touch;
+        }
+        
+        .calendar-table .ant-table-body > table {
+          overflow: visible !important;
         }
         
         @media (max-width: 640px) {
@@ -1494,6 +1547,49 @@ const HotelCalendar = ({ hotelID }) => {
           .no-print {
             display: none;
           }
+        }
+        
+        .calendar-cell {
+          cursor: pointer !important;
+          border-radius: 6px !important;
+          position: relative;
+        }
+        
+        .calendar-cell.booked-cell {
+          border: 1px solid rgba(16, 185, 129, 0.4) !important;
+          background-size: 100% 100% !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+        }
+        
+        .calendar-cell.booked-cell:hover {
+          transform: scale(1.2);
+          z-index: 999 !important;
+          position: relative;
+          box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.7) !important;
+          border-radius: 6px !important;
+        }
+        
+        .calendar-cell.holiday-cell {
+          position: relative;
+        }
+        
+        .calendar-cell.holiday-cell::before {
+          content: '';
+          position: absolute;
+          top: 2px;
+          right: 2px;
+          width: 8px;
+          height: 8px;
+          background-color: #f97316;
+          border-radius: 50%;
+          z-index: 2;
+        }
+        
+        .calendar-cell.holiday-cell:hover {
+          border-color: #f97316 !important;
+          box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3) !important;
         }
       `}</style>
     </div>
