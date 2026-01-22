@@ -35,7 +35,7 @@ const AllBookingInfo = ({ hotelID }) => {
       const userRole = userInfo?.role?.value;
       const userHotelID = hotelID;
 
-      const res = await coreAxios.get(`hotel`);
+      const res = await coreAxios.get(`/hotels`);
       setLoading(false);
 
       if (res?.status === 200) {

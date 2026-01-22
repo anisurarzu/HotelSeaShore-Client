@@ -23,10 +23,16 @@ import {
 } from "antd";
 import { useFormik } from "formik";
 import dayjs from "dayjs";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import moment from "moment";
+
+// Extend dayjs with plugins
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
-import { CopyOutlined, ReloadOutlined, PlusOutlined } from "@ant-design/icons";
+import { CopyOutlined, ReloadOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
@@ -62,6 +68,8 @@ const BookingInfo = ({ hotelID }) => {
     current: 1,
     pageSize: 10,
   });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [checkInDate, setCheckInDate] = useState(null);
   
   // Ref to track if we've already handled query params (prevent duplicate modal opens)
   const hasHandledQueryParams = useRef(false);
@@ -785,12 +793,56 @@ const BookingInfo = ({ hotelID }) => {
     formik.setFieldValue("duePayment", duePayment >= 0 ? duePayment : 0); // Ensure due payment is non-negative
   };
 
-  // Apply all filters (simplified - no filters needed, just show all bookings)
+  // Apply all filters (search and date filter)
   const applyFilters = () => {
-    // Just show all bookings without filtering
-    setFilteredBookings(Array.isArray(bookings) ? bookings : []);
+    let filtered = Array.isArray(bookings) ? bookings : [];
+    
+    // Apply search filter
+    if (searchTerm && searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter((booking) => {
+        const bookingNo = (booking.bookingNo || "").toLowerCase();
+        const fullName = (booking.fullName || "").toLowerCase();
+        const phone = (booking.phone || "").toLowerCase();
+        const email = (booking.email || "").toLowerCase();
+        const roomCategoryName = (booking.roomCategoryName || "").toLowerCase();
+        const roomNumberName = (booking.roomNumberName || "").toLowerCase();
+        const hotelName = (booking.hotelName || "").toLowerCase();
+        const transactionId = (booking.transactionId || "").toLowerCase();
+        
+        return (
+          bookingNo.includes(searchLower) ||
+          fullName.includes(searchLower) ||
+          phone.includes(searchLower) ||
+          email.includes(searchLower) ||
+          roomCategoryName.includes(searchLower) ||
+          roomNumberName.includes(searchLower) ||
+          hotelName.includes(searchLower) ||
+          transactionId.includes(searchLower)
+        );
+      });
+    }
+    
+    // Apply check-in date filter (single date)
+    if (checkInDate) {
+      const selectedDate = dayjs(checkInDate).startOf("day");
+      
+      filtered = filtered.filter((booking) => {
+        if (!booking.checkInDate) return false;
+        const bookingCheckIn = dayjs(booking.checkInDate).startOf("day");
+        return bookingCheckIn.isSame(selectedDate, "day");
+      });
+    }
+    
+    setFilteredBookings(filtered);
     setPagination({ ...pagination, current: 1 });
   };
+  
+  // Apply filters when search term or date changes
+  useEffect(() => {
+    applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, checkInDate, bookings]);
 
   // Paginate the filtered data
   const paginatedBookings = filteredBookings.slice(
@@ -989,85 +1041,126 @@ const BookingInfo = ({ hotelID }) => {
                 <div className="mb-6">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <h1 className="text-2xl font-bold text-gray-800">Bookings</h1>
-                    <Space>
-                      <Button
-                        icon={<ReloadOutlined />}
-                        onClick={() => {
-                          fetchBookings();
-                          fetchHotelInfo();
-                        }}
-                        loading={tableLoading}
-                      >
-                        Refresh
-                      </Button>
-                      {bookingPermissions?.insertAccess && (
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                      {/* Search and Date Filter - Same Row */}
+                      <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:flex-initial">
+                        <Input
+                          placeholder="Search bookings..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          allowClear
+                          style={{ height: "40px", minWidth: "200px" }}
+                          prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
+                        />
+                        <DatePicker
+                          value={checkInDate}
+                          onChange={(date) => setCheckInDate(date)}
+                          format="MMM D, YYYY"
+                          allowClear
+                          placeholder="Check-in Date"
+                          style={{ height: "40px", width: "160px" }}
+                        />
+                        {(searchTerm || checkInDate) && (
+                          <Button
+                            onClick={() => {
+                              setSearchTerm("");
+                              setCheckInDate(null);
+                            }}
+                            style={{ height: "40px" }}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <Space>
                         <Button
-                          type="primary"
-                          icon={<PlusOutlined />}
+                          icon={<ReloadOutlined />}
                           onClick={() => {
-                            formik.resetForm();
-                            setVisible(true);
-                            setIsEditing(false);
-                            setEditingKey(null);
-                            setPrevData(null);
-                            // Clear category and room selections
-                            setRoomCategories([]);
-                            setRoomNumbers([]);
-                            // Reset query params ref when manually opening modal
-                            hasHandledQueryParams.current = false;
-                            // Clear query params from URL if they exist
-                            if (searchParams.get("room") || searchParams.get("date")) {
-                              router.replace("/dashboard?menu=6");
-                            }
-                            // Fetch hotel info to set default hotel
+                            fetchBookings();
                             fetchHotelInfo();
                           }}
+                          loading={tableLoading}
                         >
-                          Create Booking
+                          Refresh
                         </Button>
-                      )}
-                    </Space>
+                        {bookingPermissions?.insertAccess && (
+                          <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={() => {
+                              formik.resetForm();
+                              setVisible(true);
+                              setIsEditing(false);
+                              setEditingKey(null);
+                              setPrevData(null);
+                              // Clear category and room selections
+                              setRoomCategories([]);
+                              setRoomNumbers([]);
+                              // Reset query params ref when manually opening modal
+                              hasHandledQueryParams.current = false;
+                              // Clear query params from URL if they exist
+                              if (searchParams.get("room") || searchParams.get("date")) {
+                                router.replace("/dashboard?menu=6");
+                              }
+                              // Fetch hotel info to set default hotel
+                              fetchHotelInfo();
+                            }}
+                          >
+                            Create Booking
+                          </Button>
+                        )}
+                      </Space>
+                    </div>
                   </div>
+                  
+                  {/* Results Count */}
+                  {filteredBookings.length !== bookings.length && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      Showing {filteredBookings.length} of {bookings.length} bookings
+                    </div>
+                  )}
                 </div>
 
                 {/* Bookings Table */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full" style={{ fontSize: "12px" }}>
+                    <table className="w-full border-collapse" style={{ fontSize: "12px", border: "1px solid #e5e7eb" }}>
                       {/* Table Header */}
-                      <thead className="bg-gray-50 border-b">
+                      <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Booking No.
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Guest Name
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Phone
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Room
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Check In
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Check Out
                           </th>
-                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Nights
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Advance
                           </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Total
                           </th>
-                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Status
                           </th>
-                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100">
+                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Actions
                           </th>
                         </tr>
@@ -1078,49 +1171,49 @@ const BookingInfo = ({ hotelID }) => {
                         {tableLoading ? (
                           // Skeleton Loading Rows - matches table structure exactly
                           Array.from({ length: 8 }).map((_, idx) => (
-                            <tr key={`skeleton-${idx}`} className="border-b">
-                              <td className="px-3 py-2.5">
+                            <tr key={`skeleton-${idx}`}>
+                              <td className="px-3 py-2.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 100, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5">
+                              <td className="px-3 py-2.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 120, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5">
+                              <td className="px-3 py-2.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 100, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5">
+                              <td className="px-3 py-2.5 border border-gray-300">
                                 <div className="space-y-1">
                                   <Skeleton.Input active size="small" style={{ width: 80, height: 14 }} />
                                   <Skeleton.Input active size="small" style={{ width: 60, height: 12 }} />
                                 </div>
                               </td>
-                              <td className="px-3 py-2.5">
+                              <td className="px-3 py-2.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5">
+                              <td className="px-3 py-2.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5 text-center">
+                              <td className="px-3 py-2.5 text-center border border-gray-300">
                                 <div style={{ display: "flex", justifyContent: "center" }}>
                                   <Skeleton.Input active size="small" style={{ width: 40, height: 16 }} />
                                 </div>
                               </td>
-                              <td className="px-3 py-2.5 text-right">
+                              <td className="px-3 py-2.5 text-right border border-gray-300">
                                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                                   <Skeleton.Input active size="small" style={{ width: 70, height: 16 }} />
                                 </div>
                               </td>
-                              <td className="px-3 py-2.5 text-right">
+                              <td className="px-3 py-2.5 text-right border border-gray-300">
                                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                                   <Skeleton.Input active size="small" style={{ width: 70, height: 16 }} />
                                 </div>
                               </td>
-                              <td className="px-3 py-2.5 text-center">
+                              <td className="px-3 py-2.5 text-center border border-gray-300">
                                 <div style={{ display: "flex", justifyContent: "center" }}>
                                   <Skeleton.Button active size="small" style={{ width: 70, height: 24 }} />
                                 </div>
                               </td>
-                              <td className="px-3 py-2.5 text-center">
+                              <td className="px-3 py-2.5 text-center border border-gray-300">
                                 <div style={{ display: "flex", justifyContent: "center", gap: "4px" }}>
                                   <Skeleton.Button active size="small" style={{ width: 50, height: 24 }} />
                                   <Skeleton.Button active size="small" style={{ width: 50, height: 24 }} />
@@ -1132,12 +1225,12 @@ const BookingInfo = ({ hotelID }) => {
                           paginatedBookings?.map((booking, idx) => (
                           <tr
                             key={booking._id}
-                            className={`border-b hover:bg-gray-50 transition-colors ${
+                            className={`hover:bg-gray-50 transition-colors ${
                               booking.statusID === 255 ? "bg-red-50" : ""
                             }`}
                           >
                             {/* Booking No with Link and Copy Feature */}
-                            <td className="px-3 py-2.5 whitespace-nowrap">
+                            <td className="px-3 py-2.5 whitespace-nowrap border border-gray-300">
                               <span className="flex items-center gap-1.5">
                                 <Link
                                   target="_blank"
@@ -1158,41 +1251,41 @@ const BookingInfo = ({ hotelID }) => {
                               </span>
                             </td>
                             {/* Guest Name */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-800 font-medium">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-800 font-medium border border-gray-300">
                               {booking.fullName}
                             </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
                               {booking.phone}
                             </td>
                             {/* Room Info */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
                               <div>
                                 <div className="font-medium">{booking.roomCategoryName}</div>
                                 <div className="text-xs text-gray-500">{booking.roomNumberName}</div>
                               </div>
                             </td>
                             {/* Check In */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
                               {moment(booking.checkInDate).format("D MMM YY")}
                             </td>
                             {/* Check Out */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
                               {moment(booking.checkOutDate).format("D MMM YY")}
                             </td>
                             {/* Nights */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 text-center">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 text-center border border-gray-300">
                               {booking.nights}
                             </td>
                             {/* Advance Payment */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 text-right">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 text-right border border-gray-300">
                               {booking.advancePayment}
                             </td>
                             {/* Total Bill */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm font-semibold text-green-700 text-right">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-sm font-semibold text-green-700 text-right border border-gray-300">
                               {booking.totalBill}
                             </td>
                             {/* Booking Status */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-center">
+                            <td className="px-3 py-2.5 whitespace-nowrap text-center border border-gray-300">
                               <span
                                 className="px-2 py-1 rounded text-xs font-semibold"
                                 style={{
@@ -1204,7 +1297,7 @@ const BookingInfo = ({ hotelID }) => {
                               </span>
                             </td>
                             {/* Actions */}
-                            <td className="px-3 py-2.5 whitespace-nowrap">
+                            <td className="px-3 py-2.5 whitespace-nowrap border border-gray-300">
                               <div className="flex gap-1.5 justify-center">
                                 <Button
                                   type="link"
@@ -1598,7 +1691,7 @@ const BookingInfo = ({ hotelID }) => {
                             />
                           </Form.Item>
                         </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
+                        {/* <Col xs={24} sm={12} md={12} lg={6}>
                           <Form.Item label="E-mail" style={{ marginBottom: "12px" }}>
                             <Input
                               name="email"
@@ -1609,7 +1702,7 @@ const BookingInfo = ({ hotelID }) => {
                               style={{ height: "40px" }}
                             />
                           </Form.Item>
-                        </Col>
+                        </Col> */}
                         <Col xs={24} sm={12} md={12} lg={6}>
                           <Form.Item label="NID/Passport" style={{ marginBottom: "12px" }}>
                             <Input

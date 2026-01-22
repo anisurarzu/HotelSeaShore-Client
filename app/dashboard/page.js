@@ -52,9 +52,7 @@ import Calender from "@/component/Calender";
 import RoomAvailabilityPage from "@/component/RoomSearchPage";
 import AllBookingInfo from "@/component/AllBookingInfo";
 import ExpenseInfo from "@/component/Expense/ExpenseInfo";
-import DailyStatement from "@/component/DailyStatement";
 import PermissionManagement from "@/component/Permission/PermissionManagement";
-import Commission from "@/component/Booking/Commission";
 import coreAxios from "@/utils/axiosInstance";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -99,22 +97,10 @@ const menuItems = [
     component: (props) => <BookingInfo {...props} />,
   },
   {
-    key: "12",
-    label: "Daily Statement",
-    icon: <BarChartOutlined className="text-base" />,
-    component: (props) => <DailyStatement {...props} />,
-  },
-  {
     key: "10",
     label: "Report Dashboard",
     icon: <BarChartOutlined className="text-base" />,
-    component: (props) => <AllBookingInfo {...props} />,
-  },
-  {
-    key: "100",
-    label: "Commission",
-    icon: <DollarOutlined className="text-base" />,
-    component: (props) => <Commission {...props} />,
+    component: (props) => <AllBookingInfo hotelID={props?.hotelID || 1} />,
   },
   {
     key: "101",

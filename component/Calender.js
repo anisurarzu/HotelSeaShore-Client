@@ -293,7 +293,7 @@ const HotelCalendar = ({ hotelID }) => {
       
       return {
         title: (
-          <div className="text-center p-0 m-0" style={{ minWidth: '45px' }}>
+          <div className="text-center p-0 m-0" style={{ minWidth: '80px' }}>
             <div 
               className={`font-bold ${isToday ? 'text-red-600' : ''} ${isWeekend ? 'text-blue-600' : ''}`}
               style={{ fontSize: '9px', lineHeight: '1.2' }}
@@ -315,35 +315,50 @@ const HotelCalendar = ({ hotelID }) => {
           </div>
         ),
         key: dateStr,
-        width: 50, // Fixed small width for mobile
+        width: 80, // Wider width to show customer name
         align: 'center',
         render: (_, record) => {
           const bookingKey = `${record.key}-${dateStr}`;
           const bookingInfo = bookingData[bookingKey];
           
+          // Extract customer name from bookingInfo (format: "bookingNo - fullName")
+          let customerName = "";
+          let bookingNo = "";
+          if (bookingInfo) {
+            const parts = bookingInfo.split(" - ");
+            if (parts.length >= 2) {
+              bookingNo = parts[0];
+              customerName = parts.slice(1).join(" - "); // In case name contains " - "
+            } else {
+              customerName = bookingInfo;
+            }
+          }
+          
           return (
-            <Tooltip title={bookingInfo ? `Click to view history: ${bookingInfo}` : "Click to view history or add booking"}>
+            <Tooltip title={bookingInfo ? `${bookingNo ? `Booking: ${bookingNo}` : ''} ${customerName ? `Customer: ${customerName}` : bookingInfo}` : "Click to view history or add booking"}>
               <div
-                className="flex items-center justify-center p-0 relative"
+                className="flex items-center justify-center p-1 relative"
                 style={{
-                  minHeight: '50px',
+                  minHeight: '60px',
                   backgroundColor: getBookingColor(bookingInfo || ''),
                   cursor: 'pointer',
                   border: '1px solid #e8e8e8',
-                  fontSize: '8px',
-                  padding: '2px',
+                  fontSize: '9px',
+                  padding: '4px',
                 }}
                 onClick={() => handleCellClick(record.key, dateStr)}
               >
                 {bookingInfo ? (
-                  <div className="w-full h-full flex flex-col">
+                  <div className="w-full h-full flex flex-col justify-between">
                     <div className="flex-grow overflow-hidden text-center">
-                      <div className="font-semibold" style={{ fontSize: '8px' }}>
-                        {bookingInfo.split(' ')[0]}
-                      </div>
-                      {bookingInfo.length > 10 && (
-                        <div className="text-gray-600" style={{ fontSize: '7px' }}>
-                          ...
+                      {customerName && (
+                        <div className="font-semibold text-gray-800 mb-1" style={{ fontSize: '9px', lineHeight: '1.3', wordBreak: 'break-word' }}>
+                          {customerName}
+                        </div>
+                      )}
+                      {bookingNo && (
+                        <div className="text-gray-600 font-medium" style={{ fontSize: '8px', lineHeight: '1.2' }}>
+                          {bookingNo}
                         </div>
                       )}
                     </div>
@@ -356,7 +371,7 @@ const HotelCalendar = ({ hotelID }) => {
                         handleEditClick(record.key, dateStr, bookingInfo, e);
                       }}
                       className="p-0 m-0"
-                      style={{ fontSize: '8px', height: '16px' }}
+                      style={{ fontSize: '8px', height: '16px', marginTop: '2px' }}
                     >
                       Edit
                     </Button>
@@ -865,25 +880,15 @@ const HotelCalendar = ({ hotelID }) => {
       <div className="mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm mb-2 p-2 sm:p-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3">
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800">
+          <div className="flex flex-row items-center justify-between gap-2 sm:gap-3">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-800 truncate">
                 Booking Calendar ({dateRange[0].format("MMM D, YYYY")} - {dateRange[1].format("MMM D, YYYY")})
               </h1>
-              {/* <p className="text-gray-600 text-xs sm:text-sm">
-                
-              </p> */}
-              {/* {selectedHotel && (
-                <p className="text-gray-500 text-xs mt-1">
-                  {selectedHotel}
-                </p>
-              )} */}
             </div>
-          </div>
-
-          {/* Navigation Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+            
+            {/* Navigation Controls - Aligned to the right */}
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <Button
                 icon={<LeftOutlined />}
                 onClick={goToPreviousMonth}
@@ -911,9 +916,7 @@ const HotelCalendar = ({ hotelID }) => {
                 <span className="hidden sm:inline">Next</span>
                 <span className="sm:hidden">›</span>
               </Button>
-            </div>
-
-            <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+              
               <Button
                 type={showDateRange ? "primary" : "default"}
                 icon={<CalendarOutlined />}
@@ -924,17 +927,6 @@ const HotelCalendar = ({ hotelID }) => {
                 <span className="hidden md:inline">Custom Range</span>
                 <span className="md:hidden">Range</span>
               </Button>
-              
-              {/* <Button
-                type="primary"
-                icon={<EyeOutlined />}
-                onClick={() => window.print()}
-                size="small"
-                className="text-xs"
-              >
-                <span className="hidden sm:inline">Print</span>
-                <span className="sm:hidden">Print</span>
-              </Button> */}
             </div>
           </div>
 
@@ -1016,7 +1008,7 @@ const HotelCalendar = ({ hotelID }) => {
                   size="small"
                   rowKey="key"
                   scroll={{ 
-                    x: 'max-content',
+                    x: 1200, // Show approximately 15 days (15 * 80px = 1200px) + room column
                     y: 550 // Height for approximately 10 rows (50px per row + header)
                   }}
                   className="calendar-table"
@@ -1445,7 +1437,7 @@ const HotelCalendar = ({ hotelID }) => {
 
       <style jsx global>{`
         .calendar-table .ant-table-thead > tr > th {
-          padding: 2px 1px !important;
+          padding: 4px 2px !important;
           text-align: center;
           background: #fafafa;
           position: sticky;
@@ -1455,7 +1447,7 @@ const HotelCalendar = ({ hotelID }) => {
         
         .calendar-table .ant-table-tbody > tr > td {
           padding: 0 !important;
-          vertical-align: middle;
+          vertical-align: top;
         }
         
         .calendar-table .ant-table-cell {
@@ -1480,6 +1472,11 @@ const HotelCalendar = ({ hotelID }) => {
         
         .calendar-table .ant-table-tbody > tr:hover > td:first-child {
           background: #fafafa !important;
+        }
+        
+        .calendar-table .ant-table-body {
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch;
         }
         
         @media (max-width: 640px) {

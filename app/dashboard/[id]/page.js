@@ -192,7 +192,7 @@ const Invoice = ({ params }) => {
             <div className="flex-shrink-0">
               {hotelInfo.logo && (
                 <div className="bg-white p-2 rounded shadow-sm">
-                  <img
+                    <img
                     src={hotelInfo.logo}
                     alt={hotelInfo.name}
                     className="h-8 object-contain"
@@ -209,7 +209,7 @@ const Invoice = ({ params }) => {
               <div className="text-xs space-y-0.5 opacity-90">
                 <p className="font-semibold">
                   #{data?.[0]?.bookingNo || "N/A"}
-                </p>
+                      </p>
                 <p className="font-normal">
                   {moment(data?.[0]?.createTime).format("MMM DD, YYYY") || "N/A"}
                 </p>
@@ -229,7 +229,7 @@ const Invoice = ({ params }) => {
               <div className="space-y-1">
                 <p className="font-bold text-slate-900 text-xs">
                   {data?.[0]?.fullName || "N/A"}
-                </p>
+                    </p>
                 <p className="text-slate-600 text-xs">{data?.[0]?.phone || "N/A"}</p>
                 {data?.[0]?.email && (
                   <p className="text-slate-600 text-xs">{data?.[0]?.email}</p>
@@ -264,7 +264,7 @@ const Invoice = ({ params }) => {
                 )}
               </div>
             </div>
-          </div>
+              </div>
 
           {/* Booking Details Table */}
           <div className="mb-3">
@@ -273,34 +273,34 @@ const Invoice = ({ params }) => {
             </h2>
             <div className="overflow-x-auto border border-slate-200 rounded">
               <table className="w-full" style={{ fontSize: '9px' }}>
-                <thead>
+                  <thead>
                   <tr className="bg-slate-100 border-b border-slate-200">
                     <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
-                      Room
-                    </th>
+                        Room
+                      </th>
                     <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
                       Check-In
-                    </th>
+                      </th>
                     <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
                       Check-Out
-                    </th>
+                      </th>
                     <th className="px-2 py-1.5 text-center text-xs font-bold text-slate-700 uppercase">
-                      Nights
-                    </th>
+                        Nights
+                      </th>
                     <th className="px-2 py-1.5 text-center text-xs font-bold text-slate-700 uppercase">
                       Guests
-                    </th>
+                      </th>
                     <th className="px-2 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">
                       Rate
-                    </th>
+                      </th>
                     <th className="px-2 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">
                       Amount
-                    </th>
-                  </tr>
-                </thead>
+                      </th>
+                    </tr>
+                  </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data?.map((booking, index) => (
-                    <tr key={index}>
+                    {data?.map((booking, index) => (
+                      <tr key={index}>
                       <td className="px-2 py-1.5">
                         <div className="font-semibold text-slate-900 text-xs">
                           {booking?.roomCategoryName || "N/A"}
@@ -310,31 +310,31 @@ const Invoice = ({ params }) => {
                             #{booking.roomNumberName}
                           </div>
                         )}
-                      </td>
+                        </td>
                       <td className="px-2 py-1.5 text-xs text-slate-600">
                         {moment(booking?.checkInDate).format("MMM DD, YY")}
-                      </td>
+                        </td>
                       <td className="px-2 py-1.5 text-xs text-slate-600">
                         {moment(booking?.checkOutDate).format("MMM DD, YY")}
-                      </td>
+                        </td>
                       <td className="px-2 py-1.5 text-xs text-center font-semibold text-slate-700">
                         {booking?.nights || 0}
-                      </td>
+                        </td>
                       <td className="px-2 py-1.5 text-xs text-center text-slate-600">
                         {booking?.adults || 0}A{booking?.children > 0 ? `/${booking.children}C` : ''}
-                      </td>
+                        </td>
                       <td className="px-2 py-1.5 text-xs text-right text-slate-600">
                         ৳{Number(booking?.roomPrice || 0).toLocaleString()}
-                      </td>
+                        </td>
                       <td className="px-2 py-1.5 text-xs text-right font-bold text-slate-900">
                         ৳{Number(booking?.totalBill || 0).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
             </div>
-          </div>
+              </div>
 
           {/* Additional Services */}
           {(totals.kitchenTotalBill > 0 || totals.extraBedTotalBill > 0) && (
@@ -350,7 +350,7 @@ const Invoice = ({ params }) => {
                       ৳{totals.kitchenTotalBill.toLocaleString()}
                     </span>
                   </div>
-                )}
+                          )}
                 {totals.extraBedTotalBill > 0 && (
                   <div className="flex justify-between items-center px-3 py-1.5 bg-slate-50">
                     <span className="text-xs font-semibold text-slate-700">Extra Bed</span>
@@ -425,7 +425,7 @@ const Invoice = ({ params }) => {
                 </div>
               </div>
             </div>
-          </div>
+              </div>
 
           {/* Payment Information */}
           <div className="mt-4 pt-3 border-t border-slate-200">
