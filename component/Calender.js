@@ -868,16 +868,16 @@ const HotelCalendar = ({ hotelID }) => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3">
             <div>
               <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800">
-                Hotel Booking Calendar
+                Booking Calendar ({dateRange[0].format("MMM D, YYYY")} - {dateRange[1].format("MMM D, YYYY")})
               </h1>
-              <p className="text-gray-600 text-xs sm:text-sm">
-                {dateRange[0].format("MMM D, YYYY")} - {dateRange[1].format("MMM D, YYYY")}
-              </p>
-              {selectedHotel && (
+              {/* <p className="text-gray-600 text-xs sm:text-sm">
+                
+              </p> */}
+              {/* {selectedHotel && (
                 <p className="text-gray-500 text-xs mt-1">
                   {selectedHotel}
                 </p>
-              )}
+              )} */}
             </div>
           </div>
 
@@ -925,7 +925,7 @@ const HotelCalendar = ({ hotelID }) => {
                 <span className="md:hidden">Range</span>
               </Button>
               
-              <Button
+              {/* <Button
                 type="primary"
                 icon={<EyeOutlined />}
                 onClick={() => window.print()}
@@ -934,7 +934,7 @@ const HotelCalendar = ({ hotelID }) => {
               >
                 <span className="hidden sm:inline">Print</span>
                 <span className="sm:hidden">Print</span>
-              </Button>
+              </Button> */}
             </div>
           </div>
 
@@ -1035,7 +1035,7 @@ const HotelCalendar = ({ hotelID }) => {
         </div>
 
         {/* Monthly Booking Summary */}
-        {!loading && <MonthlySummary />}
+        {/* {!loading && <MonthlySummary />} */}
 
         {/* Legend and Instructions */}
        
