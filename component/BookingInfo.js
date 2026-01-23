@@ -1038,80 +1038,78 @@ const BookingInfo = ({ hotelID }) => {
           <div>
             <div className="space-y-4">
                 {/* Header Section */}
-                <div className="mb-6">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="mb-3">
+                  <div className="flex flex-row items-center justify-between gap-2 flex-wrap">
                     <h1 className="text-2xl font-bold text-gray-800">Bookings</h1>
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                    <div className="flex flex-row items-center gap-2 flex-1 justify-end min-w-0">
                       {/* Search and Date Filter - Same Row */}
-                      <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:flex-initial">
-                        <Input
-                          placeholder="Search bookings..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          allowClear
-                          style={{ height: "40px", minWidth: "200px" }}
-                          prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
-                        />
-                        <DatePicker
-                          value={checkInDate}
-                          onChange={(date) => setCheckInDate(date)}
-                          format="MMM D, YYYY"
-                          allowClear
-                          placeholder="Check-in Date"
-                          style={{ height: "40px", width: "160px" }}
-                        />
-                        {(searchTerm || checkInDate) && (
-                          <Button
-                            onClick={() => {
-                              setSearchTerm("");
-                              setCheckInDate(null);
-                            }}
-                            style={{ height: "40px" }}
-                          >
-                            Clear
-                          </Button>
-                        )}
-                      </div>
+                      <Input
+                        placeholder="Search bookings..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        allowClear
+                        style={{ height: "40px", width: "150px", flex: "0 0 auto" }}
+                        prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
+                      />
+                      <DatePicker
+                        value={checkInDate}
+                        onChange={(date) => setCheckInDate(date)}
+                        format="MMM D, YYYY"
+                        allowClear
+                        placeholder="Check-in Date"
+                        style={{ height: "40px", width: "160px", flex: "0 0 auto" }}
+                      />
+                      {(searchTerm || checkInDate) && (
+                        <Button
+                          onClick={() => {
+                            setSearchTerm("");
+                            setCheckInDate(null);
+                          }}
+                          style={{ height: "40px", flex: "0 0 auto" }}
+                        >
+                          Clear
+                        </Button>
+                      )}
                       
                       {/* Action Buttons */}
-                      <Space>
+                      <Button
+                        icon={<ReloadOutlined />}
+                        onClick={() => {
+                          fetchBookings();
+                          fetchHotelInfo();
+                        }}
+                        loading={tableLoading}
+                        style={{ height: "40px", flex: "0 0 auto" }}
+                      >
+                        Refresh
+                      </Button>
+                      {bookingPermissions?.insertAccess && (
                         <Button
-                          icon={<ReloadOutlined />}
+                          type="primary"
+                          icon={<PlusOutlined />}
                           onClick={() => {
-                            fetchBookings();
+                            formik.resetForm();
+                            setVisible(true);
+                            setIsEditing(false);
+                            setEditingKey(null);
+                            setPrevData(null);
+                            // Clear category and room selections
+                            setRoomCategories([]);
+                            setRoomNumbers([]);
+                            // Reset query params ref when manually opening modal
+                            hasHandledQueryParams.current = false;
+                            // Clear query params from URL if they exist
+                            if (searchParams.get("room") || searchParams.get("date")) {
+                              router.replace("/dashboard?menu=6");
+                            }
+                            // Fetch hotel info to set default hotel
                             fetchHotelInfo();
                           }}
-                          loading={tableLoading}
+                          style={{ height: "40px", flex: "0 0 auto" }}
                         >
-                          Refresh
+                          Create Booking
                         </Button>
-                        {bookingPermissions?.insertAccess && (
-                          <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={() => {
-                              formik.resetForm();
-                              setVisible(true);
-                              setIsEditing(false);
-                              setEditingKey(null);
-                              setPrevData(null);
-                              // Clear category and room selections
-                              setRoomCategories([]);
-                              setRoomNumbers([]);
-                              // Reset query params ref when manually opening modal
-                              hasHandledQueryParams.current = false;
-                              // Clear query params from URL if they exist
-                              if (searchParams.get("room") || searchParams.get("date")) {
-                                router.replace("/dashboard?menu=6");
-                              }
-                              // Fetch hotel info to set default hotel
-                              fetchHotelInfo();
-                            }}
-                          >
-                            Create Booking
-                          </Button>
-                        )}
-                      </Space>
+                      )}
                     </div>
                   </div>
                   
@@ -1126,26 +1124,26 @@ const BookingInfo = ({ hotelID }) => {
                 {/* Bookings Table */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse" style={{ fontSize: "12px", border: "1px solid #e5e7eb" }}>
+                    <table className="w-full border-collapse" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
                       {/* Table Header */}
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Booking No.
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Guest Name
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Phone
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Room
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Check In
                           </th>
-                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Check Out
                           </th>
                           <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
@@ -1172,25 +1170,25 @@ const BookingInfo = ({ hotelID }) => {
                           // Skeleton Loading Rows - matches table structure exactly
                           Array.from({ length: 8 }).map((_, idx) => (
                             <tr key={`skeleton-${idx}`}>
-                              <td className="px-3 py-2.5 border border-gray-300">
+                              <td className="px-2 py-1.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 100, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5 border border-gray-300">
+                              <td className="px-2 py-1.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 120, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5 border border-gray-300">
+                              <td className="px-2 py-1.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 100, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5 border border-gray-300">
+                              <td className="px-2 py-1.5 border border-gray-300">
                                 <div className="space-y-1">
                                   <Skeleton.Input active size="small" style={{ width: 80, height: 14 }} />
                                   <Skeleton.Input active size="small" style={{ width: 60, height: 12 }} />
                                 </div>
                               </td>
-                              <td className="px-3 py-2.5 border border-gray-300">
+                              <td className="px-2 py-1.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
                               </td>
-                              <td className="px-3 py-2.5 border border-gray-300">
+                              <td className="px-2 py-1.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
                               </td>
                               <td className="px-3 py-2.5 text-center border border-gray-300">
@@ -1230,13 +1228,13 @@ const BookingInfo = ({ hotelID }) => {
                             }`}
                           >
                             {/* Booking No with Link and Copy Feature */}
-                            <td className="px-3 py-2.5 whitespace-nowrap border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
                               <span className="flex items-center gap-1.5">
                                 <Link
                                   target="_blank"
                                   href={`/dashboard/${booking.bookingNo}`}
                                   passHref
-                                  className="text-blue-600 hover:text-blue-800 cursor-pointer font-medium text-sm"
+                                  className="text-blue-600 hover:text-blue-800 cursor-pointer font-medium text-xs"
                                 >
                                   {booking.bookingNo}
                                 </Link>
@@ -1251,41 +1249,41 @@ const BookingInfo = ({ hotelID }) => {
                               </span>
                             </td>
                             {/* Guest Name */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-800 font-medium border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
                               {booking.fullName}
                             </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {booking.phone}
                             </td>
                             {/* Room Info */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               <div>
-                                <div className="font-medium">{booking.roomCategoryName}</div>
-                                <div className="text-xs text-gray-500">{booking.roomNumberName}</div>
+                                <div className="font-medium text-xs">{booking.roomCategoryName}</div>
+                                <div className="text-xs text-gray-500" style={{ fontSize: "10px" }}>{booking.roomNumberName}</div>
                               </div>
                             </td>
                             {/* Check In */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {moment(booking.checkInDate).format("D MMM YY")}
                             </td>
                             {/* Check Out */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {moment(booking.checkOutDate).format("D MMM YY")}
                             </td>
                             {/* Nights */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 text-center border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-center border border-gray-300">
                               {booking.nights}
                             </td>
                             {/* Advance Payment */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm text-gray-700 text-right border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-right border border-gray-300">
                               {booking.advancePayment}
                             </td>
                             {/* Total Bill */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-sm font-semibold text-green-700 text-right border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-green-700 text-right border border-gray-300">
                               {booking.totalBill}
                             </td>
                             {/* Booking Status */}
-                            <td className="px-3 py-2.5 whitespace-nowrap text-center border border-gray-300">
+                            <td className="px-2 py-1.5 whitespace-nowrap text-center border border-gray-300">
                               <span
                                 className="px-2 py-1 rounded text-xs font-semibold"
                                 style={{
@@ -1297,13 +1295,13 @@ const BookingInfo = ({ hotelID }) => {
                               </span>
                             </td>
                             {/* Actions */}
-                            <td className="px-3 py-2.5 whitespace-nowrap border border-gray-300">
-                              <div className="flex gap-1.5 justify-center">
+                            <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
+                              <div className="flex gap-1.5 justify-center items-center">
                                 <Button
                                   type="link"
                                   size="small"
                                   onClick={() => handleViewDetails(booking)}
-                                  style={{ fontSize: "11px", padding: "0 4px" }}
+                                  style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
                                 >
                                   View
                                 </Button>
@@ -1313,7 +1311,7 @@ const BookingInfo = ({ hotelID }) => {
                                       <Button 
                                         onClick={() => handleEdit(booking)}
                                         size="small"
-                                        style={{ fontSize: "11px", height: "24px", padding: "0 8px" }}
+                                        style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
                                       >
                                         Edit
                                       </Button>
@@ -1329,7 +1327,7 @@ const BookingInfo = ({ hotelID }) => {
                                           type="link" 
                                           danger 
                                           size="small"
-                                          style={{ fontSize: "11px", padding: "0 4px" }}
+                                          style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
                                         >
                                           Cancel
                                         </Button>
@@ -1348,8 +1346,8 @@ const BookingInfo = ({ hotelID }) => {
 
                   {/* Pagination */}
                   {!tableLoading && filteredBookings.length > 0 && (
-                    <div className="flex justify-between items-center px-4 py-3 border-t bg-gray-50">
-                      <div className="text-sm text-gray-700">
+                    <div className="flex justify-between items-center px-3 py-2 border-t bg-gray-50">
+                      <div className="text-xs text-gray-700">
                         Showing {paginatedBookings.length} of {filteredBookings.length} bookings
                       </div>
                       <Pagination
@@ -1618,32 +1616,63 @@ const BookingInfo = ({ hotelID }) => {
                     <style dangerouslySetInnerHTML={{__html: `
                       .booking-form .ant-form-item {
                         margin-bottom: 12px !important;
+                        display: flex !important;
+                        flex-direction: column !important;
                       }
                       .booking-form .ant-form-item-label {
                         padding-bottom: 4px !important;
+                        line-height: 1.5 !important;
                       }
                       .booking-form .ant-form-item-label > label {
                         font-size: 12px !important;
                         font-weight: 500 !important;
                         height: auto !important;
+                        line-height: 1.5 !important;
+                      }
+                      .booking-form .ant-form-item-control {
+                        flex: 1 !important;
                       }
                       .booking-form .ant-input,
                       .booking-form .ant-picker,
-                      .booking-form .ant-select-selector {
+                      .booking-form .ant-select-selector,
+                      .booking-form .ant-input-number {
                         height: 40px !important;
                         font-size: 14px !important;
                         padding: 8px 12px !important;
+                        line-height: 1.5 !important;
+                        display: flex !important;
+                        align-items: center !important;
+                      }
+                      .booking-form .ant-picker-input {
+                        height: 100% !important;
+                      }
+                      .booking-form .ant-picker-input > input {
+                        height: 100% !important;
+                        line-height: 1.5 !important;
                       }
                       .booking-form .ant-input-number {
-                        height: 40px !important;
                         width: 100% !important;
                       }
                       .booking-form .ant-input-number-input {
                         height: 38px !important;
                         font-size: 14px !important;
+                        line-height: 1.5 !important;
                       }
                       .booking-form .ant-select {
                         height: 40px !important;
+                      }
+                      .booking-form .ant-select-selector {
+                        display: flex !important;
+                        align-items: center !important;
+                      }
+                      .booking-form .ant-row {
+                        display: flex !important;
+                        flex-wrap: wrap !important;
+                        align-items: flex-start !important;
+                      }
+                      .booking-form .ant-col {
+                        display: flex !important;
+                        flex-direction: column !important;
                       }
                     `}} />
                     {/* Guest Information Section */}
@@ -2159,7 +2188,7 @@ const BookingInfo = ({ hotelID }) => {
                       </Row>
                     </Card>
 
-                    <div className="flex justify-end gap-3 pt-3 border-t" style={{ marginTop: "16px", paddingTop: "16px" }}>
+                    <div className="flex justify-end gap-3 pt-3 border-t items-center" style={{ marginTop: "16px", paddingTop: "16px" }}>
                       <Button
                         onClick={() => {
                           setVisible(false);
@@ -2168,7 +2197,7 @@ const BookingInfo = ({ hotelID }) => {
                           setPrevData(null);
                           formik.resetForm();
                         }}
-                        style={{ height: "40px", padding: "0 24px", fontSize: "14px" }}
+                        style={{ height: "40px", padding: "0 24px", fontSize: "14px", display: "flex", alignItems: "center" }}
                       >
                         Cancel
                       </Button>
@@ -2177,7 +2206,7 @@ const BookingInfo = ({ hotelID }) => {
                         htmlType="submit"
                         loading={submitLoading}
                         className="bg-[#8ABF55] hover:bg-[#7DA54E]"
-                        style={{ height: "40px", padding: "0 32px", fontSize: "14px", fontWeight: 500 }}
+                        style={{ height: "40px", padding: "0 32px", fontSize: "14px", fontWeight: 500, display: "flex", alignItems: "center" }}
                       >
                         {isEditing ? "Update Booking" : "Create Booking"}
                       </Button>

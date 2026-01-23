@@ -64,71 +64,53 @@ html {
 .poppins-font {
   font-family: 'Poppins', sans-serif;
 }
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 255, 255, 255; /* Changed to white */
-  --background-end-rgb: 255, 255, 255;   /* Changed to white */
+/* Dark mode menu styles */
+.dark-menu .ant-menu-item {
+  color: #d1d5db !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+.dark-menu .ant-menu-item:hover {
+  background-color: rgba(55, 65, 81, 0.5) !important;
+  color: #ffffff !important;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-start-rgb)); /* Set to white */
+.dark-menu .ant-menu-item-selected {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  color: #ffffff !important;
 }
 
-/* Smooth scrolling for the entire document */
-html {
-  scroll-behavior: smooth;
+.dark-menu .ant-menu-item-icon {
+  color: inherit !important;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Dark mode sider background override */
+.dark .ant-layout-sider-children {
+  background: transparent !important;
 }
 
-/* Hide the default carousel dots */
-.ant-carousel .slick-dots {
-  display: none !important;
+/* Left sidebar collapse button styling */
+.ant-layout-sider-trigger {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  transition: all 0.3s ease !important;
 }
 
-/* Custom swiper pagination bullets */
-.swiper-pagination-bullet {
-  background-color: #000;
-  opacity: 1;
+.ant-layout-sider-trigger:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
 }
 
-.swiper-pagination-bullet-active {
-  background-color: #ff0000;
+.dark .ant-layout-sider-trigger {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
 }
 
-/* Custom drop shadow */
-.custom-drop-shadow {
-  box-shadow: 0 20px 25px -5px rgba(230, 238, 241, 1), 0 10px 10px -5px rgba(230, 238, 241, 1);
-}
-
-/* Custom light shadow */
-.custom-light-shadow {
-  box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.1), 0px 6px 6px rgba(0, 0, 0, 0.05);
-}
-
-.ant-layout-sider-children{
-  background: white !important;
-}
-
-.poppins-font {
-  font-family: 'Poppins', sans-serif;
+.dark .ant-layout-sider-trigger:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
 }
 @tailwind base;
 @tailwind components;
@@ -195,4 +177,166 @@ html {
 
 .poppins-font {
   font-family: 'Poppins', sans-serif;
+}
+
+/* Dark mode menu styles */
+.dark-menu .ant-menu-item {
+  color: #d1d5db !important;
+}
+
+.dark-menu .ant-menu-item:hover {
+  background-color: rgba(55, 65, 81, 0.5) !important;
+  color: #ffffff !important;
+}
+
+.dark-menu .ant-menu-item-selected {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  color: #ffffff !important;
+}
+
+.dark-menu .ant-menu-item-icon {
+  color: inherit !important;
+}
+
+/* Dark mode sider background override */
+.dark .ant-layout-sider-children {
+  background: transparent !important;
+}
+
+/* Left sidebar collapse button styling */
+.ant-layout-sider-trigger {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  transition: all 0.3s ease !important;
+}
+
+.ant-layout-sider-trigger:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
+}
+
+.dark .ant-layout-sider-trigger {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+.dark .ant-layout-sider-trigger:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
+}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 255, 255, 255; /* Changed to white */
+  --background-end-rgb: 255, 255, 255;   /* Changed to white */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-start-rgb)); /* Set to white */
+}
+
+/* Smooth scrolling for the entire document */
+html {
+  scroll-behavior: smooth;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Hide the default carousel dots */
+.ant-carousel .slick-dots {
+  display: none !important;
+}
+
+/* Custom swiper pagination bullets */
+.swiper-pagination-bullet {
+  background-color: #000;
+  opacity: 1;
+}
+
+.swiper-pagination-bullet-active {
+  background-color: #ff0000;
+}
+
+/* Custom drop shadow */
+.custom-drop-shadow {
+  box-shadow: 0 20px 25px -5px rgba(230, 238, 241, 1), 0 10px 10px -5px rgba(230, 238, 241, 1);
+}
+
+/* Custom light shadow */
+.custom-light-shadow {
+  box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.1), 0px 6px 6px rgba(0, 0, 0, 0.05);
+}
+
+.ant-layout-sider-children{
+  background: white !important;
+}
+
+.poppins-font {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Dark mode menu styles */
+.dark-menu .ant-menu-item {
+  color: #d1d5db !important;
+}
+
+.dark-menu .ant-menu-item:hover {
+  background-color: rgba(55, 65, 81, 0.5) !important;
+  color: #ffffff !important;
+}
+
+.dark-menu .ant-menu-item-selected {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  color: #ffffff !important;
+}
+
+.dark-menu .ant-menu-item-icon {
+  color: inherit !important;
+}
+
+/* Dark mode sider background override */
+.dark .ant-layout-sider-children {
+  background: transparent !important;
+}
+
+/* Left sidebar collapse button styling */
+.ant-layout-sider-trigger {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  transition: all 0.3s ease !important;
+}
+
+.ant-layout-sider-trigger:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
+}
+
+.dark .ant-layout-sider-trigger {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+.dark .ant-layout-sider-trigger:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
 }

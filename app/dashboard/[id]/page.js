@@ -105,44 +105,156 @@ const Invoice = ({ params }) => {
     });
   };
 
+  // Function to get hotel-specific color scheme
+  const getHotelColorScheme = (hotelID) => {
+    switch (hotelID) {
+      case 1: // Mermaid
+        return {
+          primary: "#1e40af",
+          secondary: "#eff6ff",
+          accent: "#bfdbfe",
+          tableHeader: "#1e40af",
+          gradientFrom: "#1e3a8a",
+          gradientTo: "#2563eb",
+        };
+      case 2: // Golden Hill
+        return {
+          primary: "#b45309",
+          secondary: "#fffbeb",
+          accent: "#fde68a",
+          tableHeader: "#b45309",
+          gradientFrom: "#92400e",
+          gradientTo: "#d97706",
+        };
+      case 3: // Sea Paradise
+        return {
+          primary: "#047857",
+          secondary: "#ecfdf5",
+          accent: "#a7f3d0",
+          tableHeader: "#047857",
+          gradientFrom: "#065f46",
+          gradientTo: "#059669",
+        };
+      case 4: // Shopno Bilash
+        return {
+          primary: "#1e3a8a",
+          secondary: "#eff6ff",
+          accent: "#c7d2fe",
+          tableHeader: "#1e3a8a",
+          gradientFrom: "#1e3a8a",
+          gradientTo: "#3b82f6",
+        };
+      case 6: // Beach Garden
+        return {
+          primary: "#15803d",
+          secondary: "#f0fdf4",
+          accent: "#bbf7d0",
+          tableHeader: "#15803d",
+          gradientFrom: "#166534",
+          gradientTo: "#22c55e",
+        };
+      case 7: // The Grand Sandy
+        return {
+          primary: "#6d28d9",
+          secondary: "#faf5ff",
+          accent: "#ddd6fe",
+          tableHeader: "#6d28d9",
+          gradientFrom: "#5b21b6",
+          gradientTo: "#7c3aed",
+        };
+      default: // Default/Sea Shore
+        return {
+          primary: "#b91c1c",
+          secondary: "#fef2f2",
+          accent: "#fecaca",
+          tableHeader: "#b91c1c",
+          gradientFrom: "#991b1b",
+          gradientTo: "#dc2626",
+        };
+    }
+  };
+
   const getHotelInfo = () => {
     const hotelID = data?.[0]?.hotelID;
+    const hotelLogo = data?.[0]?.hotelLogo;
+    const hotelColor = data?.[0]?.hotelColor;
+    
+    // Use hotelLogo from API if available
+    if (hotelLogo) {
+      // Use refined golden/amber color scheme for logos from API (eye-catching but not too bright)
+      const goldenColorScheme = {
+        primary: "#b45309",
+        secondary: "#fffbeb",
+        accent: "#fde68a",
+        tableHeader: "#b45309",
+        gradientFrom: "#92400e",
+        gradientTo: "#d97706",
+      };
+      
+      // If hotelColor is provided, use it with refined tones; otherwise use golden
+      const colorScheme = hotelColor ? {
+        primary: hotelColor,
+        secondary: "#fffbeb",
+        accent: "#fde68a",
+        tableHeader: hotelColor,
+        gradientFrom: hotelColor,
+        gradientTo: hotelColor,
+      } : goldenColorScheme;
+      
+      return {
+        name: data?.[0]?.hotelName || "Hotel",
+        logo: hotelLogo,
+        color: colorScheme.primary,
+        colorScheme: colorScheme,
+      };
+    }
+    
+    const colorScheme = getHotelColorScheme(hotelID);
+    
+    // Fallback to hardcoded mapping if hotelLogo is not available
     const hotelInfoMap = {
       1: {
         name: "Mermaid",
         logo: "/images/marmaid-logo.png",
-        color: "#1e40af",
+        color: colorScheme.primary,
+        colorScheme: colorScheme,
       },
       2: {
         name: "Hotel Golden Hill",
         logo: "/images/goldenhil.png",
-        color: "#dc2626",
+        color: colorScheme.primary,
+        colorScheme: colorScheme,
       },
       3: {
         name: "Sea Paradise",
         logo: "/images/Shamudro-Bari-1.png",
-        color: "#dc2626",
+        color: colorScheme.primary,
+        colorScheme: colorScheme,
       },
       4: {
         name: "Shopno Bilash Holiday Suites",
         logo: "/images/Sopno.png",
-        color: "#1e3a8a",
+        color: colorScheme.primary,
+        colorScheme: colorScheme,
       },
       6: {
         name: "Beach Garden",
         logo: "https://i.ibb.co.com/jZDnyS4V/beach-gardn.png",
-        color: "#16a34a",
+        color: colorScheme.primary,
+        colorScheme: colorScheme,
       },
       7: {
         name: "The Grand Sandy",
         logo: "https://i.ibb.co/svznKpfF/Whats-App-Image-2025-07-01-at-22-11-50-dda6f6f0.jpg",
-        color: "#dc2626",
+        color: colorScheme.primary,
+        colorScheme: colorScheme,
       },
     };
     return hotelInfoMap[hotelID] || {
       name: data?.[0]?.hotelName || "Hotel",
       logo: "/images/Shamudro-Bari-1.png",
-      color: "#dc2626",
+      color: colorScheme.primary,
+      colorScheme: colorScheme,
     };
   };
 
@@ -186,16 +298,21 @@ const Invoice = ({ params }) => {
         style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", fontSize: '10px' }}
       >
         {/* Header Section */}
-        <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 print:px-6 print:py-3">
+        <div 
+          className="px-6 py-4 print:px-6 print:py-3"
+          style={{
+            background: `linear-gradient(to right, ${hotelInfo.colorScheme.gradientFrom}, ${hotelInfo.colorScheme.gradientTo})`
+          }}
+        >
           <div className="flex justify-between items-start">
             {/* Logo */}
             <div className="flex-shrink-0">
               {hotelInfo.logo && (
-                <div className="bg-white p-2 rounded shadow-sm">
+                <div className="bg-white p-3 rounded shadow-sm">
                     <img
                     src={hotelInfo.logo}
                     alt={hotelInfo.name}
-                    className="h-8 object-contain"
+                    className="h-16 object-contain"
                   />
                 </div>
               )}
@@ -223,7 +340,13 @@ const Invoice = ({ params }) => {
           {/* Guest & Hotel Information */}
           <div className="grid grid-cols-2 gap-8 mb-4">
             <div>
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pb-1 border-b border-slate-200">
+              <h2 
+                className="text-xs font-bold uppercase tracking-wider mb-2 pb-1 border-b"
+                style={{
+                  color: hotelInfo.colorScheme.tableHeader,
+                  borderColor: hotelInfo.colorScheme.accent
+                }}
+              >
                 Billed To
               </h2>
               <div className="space-y-1">
@@ -246,7 +369,13 @@ const Invoice = ({ params }) => {
             </div>
 
             <div>
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pb-1 border-b border-slate-200">
+              <h2 
+                className="text-xs font-bold uppercase tracking-wider mb-2 pb-1 border-b"
+                style={{
+                  color: hotelInfo.colorScheme.tableHeader,
+                  borderColor: hotelInfo.colorScheme.accent
+                }}
+              >
                 Hotel Information
               </h2>
               <div className="space-y-1">
@@ -268,32 +397,62 @@ const Invoice = ({ params }) => {
 
           {/* Booking Details Table */}
           <div className="mb-3">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+            <h2 
+              className="text-xs font-bold uppercase tracking-wider mb-2"
+              style={{ color: hotelInfo.colorScheme.tableHeader }}
+            >
               Booking Details
             </h2>
             <div className="overflow-x-auto border border-slate-200 rounded">
               <table className="w-full" style={{ fontSize: '9px' }}>
                   <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200">
-                    <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
+                  <tr 
+                    className="border-b"
+                    style={{
+                      backgroundColor: hotelInfo.colorScheme.secondary,
+                      borderColor: hotelInfo.colorScheme.accent
+                    }}
+                  >
+                    <th 
+                      className="px-2 py-1.5 text-left text-xs font-bold uppercase"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
                         Room
                       </th>
-                    <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
+                    <th 
+                      className="px-2 py-1.5 text-left text-xs font-bold uppercase"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
                       Check-In
                       </th>
-                    <th className="px-2 py-1.5 text-left text-xs font-bold text-slate-700 uppercase">
+                    <th 
+                      className="px-2 py-1.5 text-left text-xs font-bold uppercase"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
                       Check-Out
                       </th>
-                    <th className="px-2 py-1.5 text-center text-xs font-bold text-slate-700 uppercase">
+                    <th 
+                      className="px-2 py-1.5 text-center text-xs font-bold uppercase"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
                         Nights
                       </th>
-                    <th className="px-2 py-1.5 text-center text-xs font-bold text-slate-700 uppercase">
+                    <th 
+                      className="px-2 py-1.5 text-center text-xs font-bold uppercase"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
                       Guests
                       </th>
-                    <th className="px-2 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">
+                    <th 
+                      className="px-2 py-1.5 text-right text-xs font-bold uppercase"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
                       Rate
                       </th>
-                    <th className="px-2 py-1.5 text-right text-xs font-bold text-slate-700 uppercase">
+                    <th 
+                      className="px-2 py-1.5 text-right text-xs font-bold uppercase"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
                       Amount
                       </th>
                     </tr>
@@ -339,21 +498,50 @@ const Invoice = ({ params }) => {
           {/* Additional Services */}
           {(totals.kitchenTotalBill > 0 || totals.extraBedTotalBill > 0) && (
             <div className="mb-3">
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              <h2 
+                className="text-xs font-bold uppercase tracking-wider mb-2"
+                style={{ color: hotelInfo.colorScheme.tableHeader }}
+              >
                 Additional Services
               </h2>
-              <div className="border border-slate-200 rounded overflow-hidden">
+              <div 
+                className="border rounded overflow-hidden"
+                style={{ 
+                  borderColor: hotelInfo.colorScheme.accent 
+                }}
+              >
                 {totals.kitchenTotalBill > 0 && (
-                  <div className="flex justify-between items-center px-3 py-1.5 bg-slate-50 border-b border-slate-200">
-                    <span className="text-xs font-semibold text-slate-700">Kitchen</span>
+                  <div 
+                    className="flex justify-between items-center px-3 py-1.5 border-b"
+                    style={{
+                      backgroundColor: hotelInfo.colorScheme.secondary,
+                      borderColor: hotelInfo.colorScheme.accent
+                    }}
+                  >
+                    <span 
+                      className="text-xs font-semibold"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
+                      Kitchen
+                    </span>
                     <span className="text-xs font-bold text-slate-900">
                       ৳{totals.kitchenTotalBill.toLocaleString()}
                     </span>
                   </div>
                           )}
                 {totals.extraBedTotalBill > 0 && (
-                  <div className="flex justify-between items-center px-3 py-1.5 bg-slate-50">
-                    <span className="text-xs font-semibold text-slate-700">Extra Bed</span>
+                  <div 
+                    className="flex justify-between items-center px-3 py-1.5"
+                    style={{
+                      backgroundColor: hotelInfo.colorScheme.secondary
+                    }}
+                  >
+                    <span 
+                      className="text-xs font-semibold"
+                      style={{ color: hotelInfo.colorScheme.tableHeader }}
+                    >
+                      Extra Bed
+                    </span>
                     <span className="text-xs font-bold text-slate-900">
                       ৳{totals.extraBedTotalBill.toLocaleString()}
                     </span>
@@ -376,7 +564,12 @@ const Invoice = ({ params }) => {
           {/* Totals Section */}
           <div className="mt-4 flex justify-end">
             <div className="w-full max-w-xs">
-              <div className="bg-slate-50 rounded p-3 space-y-1.5">
+              <div 
+                className="rounded p-3 space-y-1.5"
+                style={{
+                  backgroundColor: hotelInfo.colorScheme.secondary
+                }}
+              >
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-600 font-semibold">Subtotal</span>
                   <span className="text-slate-900 font-bold">
@@ -415,7 +608,12 @@ const Invoice = ({ params }) => {
                     -৳{totals.totalAdvance.toLocaleString()}
                   </span>
                 </div>
-                <div className="bg-slate-700 text-white rounded p-2 mt-2">
+                <div 
+                  className="text-white rounded p-2 mt-2"
+                  style={{
+                    backgroundColor: hotelInfo.colorScheme.primary
+                  }}
+                >
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-xs uppercase">Due</span>
                     <span className="font-bold text-base">
@@ -428,17 +626,42 @@ const Invoice = ({ params }) => {
               </div>
 
           {/* Payment Information */}
-          <div className="mt-4 pt-3 border-t border-slate-200">
+          <div 
+            className="mt-4 pt-3 border-t"
+            style={{
+              borderColor: hotelInfo.colorScheme.accent
+            }}
+          >
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 p-2 rounded">
-                <p className="text-xs text-slate-500 font-semibold mb-0.5 uppercase">Payment Method</p>
+              <div 
+                className="p-2 rounded"
+                style={{
+                  backgroundColor: hotelInfo.colorScheme.secondary
+                }}
+              >
+                <p 
+                  className="text-xs font-semibold mb-0.5 uppercase"
+                  style={{ color: hotelInfo.colorScheme.tableHeader }}
+                >
+                  Payment Method
+                </p>
                 <p className="font-bold text-slate-900 text-xs">
                   {data?.[0]?.paymentMethod || "N/A"}
                 </p>
               </div>
               {data?.[0]?.transactionId && (
-                <div className="bg-slate-50 p-2 rounded">
-                  <p className="text-xs text-slate-500 font-semibold mb-0.5 uppercase">Transaction ID</p>
+                <div 
+                  className="p-2 rounded"
+                  style={{
+                    backgroundColor: hotelInfo.colorScheme.secondary
+                  }}
+                >
+                  <p 
+                    className="text-xs font-semibold mb-0.5 uppercase"
+                    style={{ color: hotelInfo.colorScheme.tableHeader }}
+                  >
+                    Transaction ID
+                  </p>
                   <p className="font-bold text-slate-900 text-xs">
                     {data[0].transactionId}
                   </p>

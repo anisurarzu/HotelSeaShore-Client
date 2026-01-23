@@ -17,6 +17,9 @@ import {
   Modal,
   Table,
   Divider,
+  Switch,
+  Radio,
+  Space,
 } from "antd";
 import {
   DashboardOutlined,
@@ -40,6 +43,9 @@ import {
   UpOutlined,
   EyeOutlined,
   CloseOutlined,
+  ThunderboltOutlined,
+  AppstoreOutlined,
+  BgColorsOutlined,
 } from "@ant-design/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useCallback } from "react";
@@ -137,45 +143,73 @@ const PIE_CHART_DATA = [
 ];
 
 // Standard Dashboard Card Component
-const DashboardCard = ({ title, value, icon, color, trend, bgColor = 'white', onViewDetails }) => (
+const DashboardCard = ({ title, value, icon, color, bgColor = 'white', gradient, bgGradient }) => (
   <Card 
-    className="h-full shadow-sm border-0 hover:shadow-md transition-all duration-300"
+    className="h-full shadow-lg border-0 hover:shadow-xl transition-all duration-300 hover:scale-105"
     style={{ 
-      background: bgColor,
+      background: bgGradient || gradient || "#ffffff",
       borderRadius: '12px',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      border: "none",
+      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+      position: "relative",
     }}
+    bodyStyle={{ padding: "18px" }}
   >
-    <div className="flex items-start justify-between">
+    {/* Decorative overlay */}
+    <div 
+      style={{
+        position: "absolute",
+        top: 0,
+        right: 0,
+        width: "100px",
+        height: "100px",
+        background: "rgba(255, 255, 255, 0.1)",
+        borderRadius: "50%",
+        transform: "translate(30px, -30px)",
+        pointerEvents: "none",
+      }}
+    />
+    <div className="flex items-center justify-between relative z-10">
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-1">
-        <Text className="text-gray-500 text-sm font-medium">{title}</Text>
-          {onViewDetails && (
-            <Tooltip title="View Details">
-              <Button
-                type="text"
-                size="small"
-                // icon={<EyeOutlined className="text-xs" />}
-                onClick={onViewDetails}
-                className="!text-gray-400 hover:!text-gray-600 !p-1 !h-auto"
-                style={{ fontSize: '10px' }}
-              />
-            </Tooltip>
-          )}
-        </div>
-        <div className="mt-2">
-          <Title level={3} className="!mb-1 !text-2xl font-bold" style={{ color: color }}>
+        <Text
+          className="text-xs block mb-2"
+          style={{ 
+            fontSize: "11px", 
+            fontWeight: 500,
+            color: "rgba(255, 255, 255, 0.9)",
+            textShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
+          }}
+        >
+          {title}
+        </Text>
+        <Title
+          level={4}
+          className="m-0"
+          style={{
+            fontSize: "22px",
+            fontWeight: 700,
+            color: "#ffffff",
+            lineHeight: "1.3",
+            textShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+          }}
+        >
             {value}
           </Title>
-          {trend && (
-            <Text className={`text-xs ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}% from last month
-            </Text>
-          )}
         </div>
-      </div>
-      <div className={`p-3 rounded-lg`} style={{ backgroundColor: `${color}15` }}>
+      <div
+        className="p-2.5 rounded-xl flex items-center justify-center"
+        style={{
+          background: "rgba(255, 255, 255, 0.25)",
+          backdropFilter: "blur(10px)",
+          minWidth: "48px",
+          height: "48px",
+          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+        }}
+      >
+        <div style={{ fontSize: "20px", color: "#ffffff" }}>
         {icon}
+        </div>
       </div>
     </div>
   </Card>
@@ -240,24 +274,37 @@ const DashboardContent = ({ sliders }) => {
   const [selectedMenu, setSelectedMenu] = useState("1");
   const [loading, setLoading] = useState(true);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [settingsSidebarCollapsed, setSettingsSidebarCollapsed] = useState(true);
   const [userInfo, setUserInfo] = useState(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('darkMode') === 'true';
+    }
+    return false;
+  });
+  const [themeColor, setThemeColor] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('themeColor') || 'golden';
+    }
+    return 'golden';
+  });
+  const [cardColorScheme, setCardColorScheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('cardColorScheme') || 'gradient';
+    }
+    return 'gradient';
+  });
   const [bookings, setBookings] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [detailModalType, setDetailModalType] = useState(null);
   const [dashboardStats, setDashboardStats] = useState({
-    totalRevenue: 0,
-    todayRevenue: 0,
-    thisMonthRevenue: 0,
-    occupancyRate: 0,
-    activeBookings: 0,
-    pendingCheckIns: 0,
+    todayBookingAmount: 0,
+    currentMonthBookingAmount: 0,
     todayCheckIns: 0,
     todayCheckOuts: 0,
-    totalNights: 0,
-    todayNights: 0,
-    thisMonthNights: 0,
+    todayOccupancyRate: 0,
+    currentMonthOccupancyRate: 0,
   });
 
   // Get hotelID from URL
@@ -272,16 +319,12 @@ const DashboardContent = ({ sliders }) => {
     const monthEnd = today.endOf("month");
 
     // Initialize counters
-    let totalRevenue = 0;
-    let todayRevenue = 0;
-    let thisMonthRevenue = 0;
-    let totalNights = 0;
-    let todayNights = 0;
-    let thisMonthNights = 0;
-    let activeBookings = 0;
-    let pendingCheckIns = 0;
+    let todayBookingAmount = 0;
+    let currentMonthBookingAmount = 0;
     let todayCheckIns = 0;
     let todayCheckOuts = 0;
+    let todayActiveBookings = 0;
+    let currentMonthActiveBookings = 0;
 
     bookingsData.forEach((booking) => {
       // Parse dates properly
@@ -289,68 +332,57 @@ const DashboardContent = ({ sliders }) => {
       const checkOutDate = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
       
       // Get booking details
-      const nights = parseInt(booking.nights) || 1;
       const totalBill = parseFloat(booking.totalBill) || 0;
-      const advancePayment = parseFloat(booking.advancePayment) || 0;
-      const duePayment = parseFloat(booking.duePayment) || 0;
 
-      // Add to total revenue (only count completed payments or all bills depending on your logic)
-      // Here we count totalBill as revenue
-      totalRevenue += totalBill;
-      totalNights += nights;
-
-      // Check if check-in date is today
+      // Today's Booking Amount (bookings with check-in date today)
       if (checkInDate.isSame(todayStart, "day")) {
-        todayRevenue += totalBill;
-        todayNights += nights;
+        todayBookingAmount += totalBill;
         todayCheckIns++;
       }
 
-      // Check if check-in date is within current month
+      // Current Month Booking Amount (bookings with check-in date in current month)
       if (checkInDate.isSameOrAfter(monthStart, "day") && 
           checkInDate.isSameOrBefore(monthEnd, "day")) {
-        thisMonthRevenue += totalBill;
-        thisMonthNights += nights;
+        currentMonthBookingAmount += totalBill;
       }
 
-      // Check if check-out date is today
+      // Today's Check-outs
       if (checkOutDate.isSame(todayStart, "day")) {
         todayCheckOuts++;
       }
 
-      // Determine if booking is active (check-in date is today or in the past AND check-out date is in the future or today)
-      const isActive = checkInDate.isSameOrBefore(todayEnd, "day") && 
+      // Today's Occupancy (active bookings today)
+      const isActiveToday = checkInDate.isSameOrBefore(todayEnd, "day") && 
                        checkOutDate.isSameOrAfter(todayStart, "day");
-      
-      if (isActive) {
-        activeBookings++;
+      if (isActiveToday) {
+        todayActiveBookings++;
       }
 
-      // Count pending check-ins (check-in date is in the future)
-      if (checkInDate.isAfter(todayStart, "day")) {
-        pendingCheckIns++;
+      // Current Month Occupancy (active bookings in current month)
+      const isActiveInMonth = checkInDate.isSameOrBefore(monthEnd, "day") && 
+                             checkOutDate.isSameOrAfter(monthStart, "day");
+      if (isActiveInMonth) {
+        currentMonthActiveBookings++;
       }
     });
 
-    // Calculate occupancy rate (simplified - assuming max 10 rooms available)
-    // You should replace this with actual hotel room count from your API
-    const maxRooms = 10; // This should come from your hotel data
-    const occupancyRate = activeBookings > 0 
-      ? Math.min(100, Math.round((activeBookings / maxRooms) * 100))
+    // Calculate occupancy rates (assuming max 10 rooms available)
+    // TODO: Get from hotel data
+    const maxRooms = 10;
+    const todayOccupancyRate = todayActiveBookings > 0 
+      ? Math.min(100, Math.round((todayActiveBookings / maxRooms) * 100))
+      : 0;
+    const currentMonthOccupancyRate = currentMonthActiveBookings > 0
+      ? Math.min(100, Math.round((currentMonthActiveBookings / maxRooms) * 100))
       : 0;
 
     setDashboardStats({
-      totalRevenue,
-      todayRevenue,
-      thisMonthRevenue,
-      occupancyRate,
-      activeBookings,
-      pendingCheckIns,
+      todayBookingAmount,
+      currentMonthBookingAmount,
       todayCheckIns,
       todayCheckOuts,
-      totalNights,
-      todayNights,
-      thisMonthNights,
+      todayOccupancyRate,
+      currentMonthOccupancyRate,
     });
   }, []);
 
@@ -425,6 +457,39 @@ const DashboardContent = ({ sliders }) => {
 
   const showDrawer = () => setDrawerVisible(true);
   const closeDrawer = () => setDrawerVisible(false);
+  const toggleSettingsSidebar = () => setSettingsSidebarCollapsed(!settingsSidebarCollapsed);
+
+  // Handle dark mode toggle
+  const handleDarkModeToggle = (checked) => {
+    setDarkMode(checked);
+    localStorage.setItem('darkMode', checked.toString());
+    if (checked) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
+
+  // Handle theme color change
+  const handleThemeColorChange = (value) => {
+    setThemeColor(value);
+    localStorage.setItem('themeColor', value);
+  };
+
+  // Handle card color scheme change
+  const handleCardColorSchemeChange = (value) => {
+    setCardColorScheme(value);
+    localStorage.setItem('cardColorScheme', value);
+  };
+
+  // Initialize dark mode on mount
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   const toggleTopbar = () => {
     setTopbarCollapsed(!topbarCollapsed);
@@ -706,301 +771,95 @@ const DashboardContent = ({ sliders }) => {
     }
 
     if (selectedMenu === "1") {
-      // Dashboard View with improved layout
+      // Dashboard View - Only 6 cards
+      const currentMonthName = dayjs().format("MMMM");
+      
+      const dashboardCards = [
+        {
+          title: "Today's Booking Amount",
+          value: `৳${dashboardStats.todayBookingAmount.toLocaleString()}`,
+          icon: <DollarOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%)",
+        },
+        {
+          title: `Current Month (${currentMonthName}) Booking Amount`,
+          value: `৳${dashboardStats.currentMonthBookingAmount.toLocaleString()}`,
+          icon: <DollarOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)",
+        },
+        {
+          title: "Today's Check-ins",
+          value: dashboardStats.todayCheckIns.toString(),
+          icon: <UserOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #ea580c 0%, #dc2626 50%, #b91c1c 100%)",
+        },
+        {
+          title: "Today's Check-outs",
+          value: dashboardStats.todayCheckOuts.toString(),
+          icon: <CalendarOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #f97316 0%, #ea580c 50%, #dc2626 100%)",
+        },
+        {
+          title: "Today's Occupancy Rate",
+          value: `${dashboardStats.todayOccupancyRate}%`,
+          icon: <HomeOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #d97706 0%, #b45309 50%, #92400e 100%)",
+        },
+        {
+          title: "Current Month Occupancy Rate",
+          value: `${dashboardStats.currentMonthOccupancyRate}%`,
+          icon: <HomeOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%)",
+        },
+      ];
+
       return (
         <div className="space-y-6">
-          {/* Stats Cards Grid - Using Bookings API Data */}
-          <Row gutter={[16, 16]}>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-              <DashboardCard
-                title="Total Revenue"
-                  value={`৳${dashboardStats.totalRevenue.toLocaleString()}`}
-                icon={<DollarOutlined className="text-xl text-green-500" />}
-                color="#10b981"
-                bgColor="linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)"
-                  onViewDetails={() => handleViewDetails('totalRevenue')}
-              />
-              )}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-              <DashboardCard
-                  title="Today's Revenue"
-                  value={`৳${dashboardStats.todayRevenue.toLocaleString()}`}
-                  icon={<DollarOutlined className="text-xl text-blue-500" />}
-                color="#0ea5e9"
-                bgColor="linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)"
-                  onViewDetails={() => handleViewDetails('todayRevenue')}
-              />
-              )}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-              <DashboardCard
-                title="Active Bookings"
-                  value={dashboardStats.activeBookings.toString()}
-                icon={<CalendarOutlined className="text-xl text-purple-500" />}
-                color="#8b5cf6"
-                bgColor="linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)"
-                  onViewDetails={() => handleViewDetails('activeBookings')}
-              />
-              )}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-              <DashboardCard
-                title="Pending Check-ins"
-                  value={dashboardStats.pendingCheckIns.toString()}
-                icon={<UserOutlined className="text-xl text-orange-500" />}
-                color="#f59e0b"
-                bgColor="linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
-                  onViewDetails={() => handleViewDetails('pendingCheckIns')}
-                />
-              )}
-            </Col>
-          </Row>
+          {/* Header */}
+          <div className="mb-4">
+            <Title
+              level={2}
+              className={`m-0 mb-1 ${darkMode ? 'text-white' : ''}`}
+              style={{
+                fontSize: "24px",
+                fontWeight: 600,
+                color: darkMode ? "#ffffff" : "#1f2937",
+              }}
+            >
+              Dashboard
+            </Title>
+            <Text className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Overview of your hotel's performance
+            </Text>
+          </div>
 
-          {/* Additional Stats Row */}
-          <Row gutter={[16, 16]}>
-            <Col xs={24} sm={12} lg={6}>
+          {/* Stats Cards Grid - Only 6 Cards */}
+          <Row gutter={[12, 12]}>
+            {dashboardCards.map((card, idx) => (
+              <Col xs={24} sm={12} md={12} lg={6} key={idx}>
               {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
+                  <Card className="h-full shadow-sm border-0" style={{ borderRadius: '8px' }}>
+                    <Skeleton active paragraph={{ rows: 1 }} />
                 </Card>
               ) : (
                 <DashboardCard
-                  title="This Month Revenue"
-                  value={`৳${dashboardStats.thisMonthRevenue.toLocaleString()}`}
-                  icon={<DollarOutlined className="text-xl text-indigo-500" />}
-                  color="#6366f1"
-                  bgColor="linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)"
-                  onViewDetails={() => handleViewDetails('thisMonthRevenue')}
+                    title={card.title}
+                    value={card.value}
+                    icon={card.icon}
+                    color={card.color}
+                    bgGradient={card.bgGradient}
+                    gradient={card.gradient}
                 />
               )}
             </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-                <DashboardCard
-                  title="Today's Check-ins"
-                  value={dashboardStats.todayCheckIns.toString()}
-                  icon={<CalendarOutlined className="text-xl text-teal-500" />}
-                  color="#14b8a6"
-                  bgColor="linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)"
-                  onViewDetails={() => handleViewDetails('todayCheckIns')}
-                />
-              )}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-                <DashboardCard
-                  title="Today's Check-outs"
-                  value={dashboardStats.todayCheckOuts.toString()}
-                  icon={<CalendarOutlined className="text-xl text-pink-500" />}
-                  color="#ec4899"
-                  bgColor="linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%)"
-                  onViewDetails={() => handleViewDetails('todayCheckOuts')}
-                />
-              )}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-                <DashboardCard
-                  title="Occupancy Rate"
-                  value={`${dashboardStats.occupancyRate}%`}
-                  icon={<HomeOutlined className="text-xl text-cyan-500" />}
-                  color="#06b6d4"
-                  bgColor="linear-gradient(135deg, #ecfeff 0%, #cffafe 100%)"
-                />
-              )}
-            </Col>
+            ))}
           </Row>
-
-          {/* Additional Stats Row - Nights and Other Metrics */}
-          <Row gutter={[16, 16]}>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-                <DashboardCard
-                  title="Total Nights"
-                  value={dashboardStats.totalNights.toString()}
-                  icon={<CalendarOutlined className="text-xl text-amber-500" />}
-                  color="#f59e0b"
-                  bgColor="linear-gradient(135deg, #fef3c7 0%, #fef3c7 100%)"
-                  onViewDetails={() => handleViewDetails('totalNights')}
-                />
-              )}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-                <DashboardCard
-                  title="Today Nights"
-                  value={dashboardStats.todayNights.toString()}
-                  icon={<CalendarOutlined className="text-xl text-emerald-500" />}
-                  color="#10b981"
-                  bgColor="linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)"
-                  onViewDetails={() => handleViewDetails('todayNights')}
-                />
-              )}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-                <DashboardCard
-                  title="This Month Nights"
-                  value={dashboardStats.thisMonthNights.toString()}
-                  icon={<CalendarOutlined className="text-xl text-violet-500" />}
-                  color="#8b5cf6"
-                  bgColor="linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)"
-                  onViewDetails={() => handleViewDetails('thisMonthNights')}
-                />
-              )}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {bookingsLoading ? (
-                <Card className="h-full shadow-sm border-0" style={{ borderRadius: '12px' }}>
-                  <Skeleton active paragraph={{ rows: 2 }} />
-                </Card>
-              ) : (
-                <DashboardCard
-                  title="Total Bookings"
-                  value={bookings.length.toString()}
-                  icon={<FileTextOutlined className="text-xl text-rose-500" />}
-                  color="#ef4444"
-                  bgColor="linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)"
-                  onViewDetails={() => handleViewDetails('totalBookings')}
-                />
-              )}
-            </Col>
-          </Row>
-
-          {/* Charts and Metrics Section */}
-          <Row gutter={[16, 16]}>
-            <Col xs={24} lg={12}>
-              <Card 
-                title="Room Distribution" 
-                className="h-full shadow-sm border-0"
-                style={{ borderRadius: '12px' }}
-              >
-                <div className="flex flex-col items-center">
-                  <div className="w-full">
-                    <CompactPieChart />
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 w-full max-w-md">
-                    {PIE_CHART_DATA.map((item) => (
-                      <div key={item.type} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="text-sm text-gray-700">{item.type}</span>
-                        <span className="ml-auto text-sm font-semibold">{item.value}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-            </Col>
-            <Col xs={24} lg={12}>
-              <Card 
-                title="Quick Actions" 
-                className="h-full shadow-sm border-0"
-                style={{ borderRadius: '12px' }}
-              >
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'New Booking', icon: <FileTextOutlined />, color: '#0ea5e9' },
-                    { label: 'Check-in', icon: <UserOutlined />, color: '#10b981' },
-                    { label: 'Room Service', icon: <HomeOutlined />, color: '#f59e0b' },
-                    { label: 'Generate Report', icon: <BarChartOutlined />, color: '#8b5cf6' },
-                  ].map((action) => (
-                    <button
-                      key={action.label}
-                      className="flex flex-col items-center justify-center p-4 rounded-xl border border-gray-200 hover:border-cyan-200 hover:shadow-md transition-all duration-300 group"
-                    >
-                      <div 
-                        className="p-3 rounded-lg mb-2 group-hover:scale-110 transition-transform duration-300"
-                        style={{ backgroundColor: `${action.color}15` }}
-                      >
-                        <div style={{ color: action.color, fontSize: '20px' }}>
-                          {action.icon}
-                        </div>
-                      </div>
-                      <span className="text-sm font-medium text-gray-700">{action.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </Card>
-            </Col>
-          </Row>
-
-          {/* Recent Bookings Section */}
-          <Card 
-            title="Recent Bookings" 
-            className="h-full shadow-sm border-0 mt-6"
-            style={{ borderRadius: '12px' }}
-          >
-            {bookingsLoading ? (
-              <Skeleton active paragraph={{ rows: 4 }} />
-            ) : bookings.length === 0 ? (
-              <div className="text-center py-8">
-                <CalendarOutlined className="text-4xl text-gray-300 mb-2" />
-                <p className="text-gray-500">No bookings found</p>
-              </div>
-            ) : (
-            <div className="space-y-3">
-                {bookings.slice(0, 5).map((booking) => (
-                  <div key={booking._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-blue-50 transition-colors duration-200">
-                    <div>
-                      <p className="font-medium text-gray-800">{booking.fullName}</p>
-                      <p className="text-sm text-gray-500">
-                        {dayjs(booking.checkInDate).format('DD MMM YYYY')} - {dayjs(booking.checkOutDate).format('DD MMM YYYY')}
-                      </p>
-                  </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-800">৳{booking.totalBill?.toLocaleString()}</p>
-                      <p className="text-sm text-gray-500">{booking.nights} night{booking.nights > 1 ? 's' : ''}</p>
-                    </div>
-                </div>
-              ))}
-            </div>
-            )}
-          </Card>
         </div>
       );
     }
@@ -1022,7 +881,7 @@ const DashboardContent = ({ sliders }) => {
   const renderMenuItems = (isCollapsed = false) => {
     return (
       <Menu
-        theme="light"
+        theme={darkMode ? "dark" : "light"}
         mode="inline"
         inlineCollapsed={isCollapsed}
         selectedKeys={[selectedMenu]}
@@ -1032,7 +891,7 @@ const DashboardContent = ({ sliders }) => {
           borderRight: "none",
           padding: "8px 4px",
         }}
-        className="custom-sidebar-menu"
+        className={`custom-sidebar-menu ${darkMode ? 'dark-menu' : ''}`}
       >
         {menuItems.map((item) => (
           <Menu.Item
@@ -1050,14 +909,29 @@ const DashboardContent = ({ sliders }) => {
               alignItems: "center",
               justifyContent: isCollapsed ? "center" : "flex-start",
               transition: "all 0.3s ease",
-              color: selectedMenu === item.key ? "#ffffff" : "#64748b",
+              color: selectedMenu === item.key 
+                ? "#ffffff" 
+                : darkMode ? "#d1d5db" : "#64748b",
               background: selectedMenu === item.key 
-                ? "linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)" 
+                ? "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)" 
                 : "transparent",
             }}
-            className="hover:bg-gradient-to-r hover:from-cyan-50 hover:to-blue-50"
+            className={darkMode 
+              ? "hover:!bg-gray-700/50 dark:hover:!bg-gray-700/50" 
+              : "hover:bg-gradient-to-r hover:from-amber-50 hover:to-yellow-50"}
           >
-            {!isCollapsed && <span className="ml-2">{item.label}</span>}
+            {!isCollapsed && (
+              <span 
+                className="ml-2"
+                style={{
+                  color: selectedMenu === item.key 
+                    ? "#ffffff" 
+                    : darkMode ? "#d1d5db" : "#64748b",
+                }}
+              >
+                {item.label}
+              </span>
+            )}
           </Menu.Item>
         ))}
       </Menu>
@@ -1088,7 +962,7 @@ const DashboardContent = ({ sliders }) => {
   ];
 
   return (
-    <Layout className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-teal-50">
+    <Layout className={`min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900`}>
       {/* Desktop Sidebar */}
       <Sider
         collapsible
@@ -1098,9 +972,15 @@ const DashboardContent = ({ sliders }) => {
         breakpoint="lg"
         collapsedWidth={60}
         style={{
-          background: "linear-gradient(180deg, #ffffff 0%, #f8fcff 100%)",
-          boxShadow: "2px 0 15px rgba(14, 165, 233, 0.1)",
-          borderRight: "1px solid rgba(14, 165, 233, 0.08)",
+          background: darkMode 
+            ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
+            : "linear-gradient(180deg, #ffffff 0%, #fffbeb 100%)",
+          boxShadow: darkMode 
+            ? "2px 0 15px rgba(0, 0, 0, 0.3)" 
+            : "2px 0 15px rgba(217, 119, 6, 0.1)",
+          borderRight: darkMode 
+            ? "1px solid rgba(255, 255, 255, 0.1)" 
+            : "1px solid rgba(217, 119, 6, 0.08)",
           overflow: "hidden",
           height: "100vh",
           position: "fixed",
@@ -1111,22 +991,12 @@ const DashboardContent = ({ sliders }) => {
         }}
         className="hidden lg:block"
       >
-        <div className="flex items-center justify-center py-3 h-14 border-b border-cyan-100">
-          <div className={`transition-all duration-200 ${collapsed ? 'w-8' : 'w-36'}`}>
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-7 h-7 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center shadow-sm">
-                <div className="text-white text-sm font-bold">S</div>
-              </div>
-              {!collapsed && (
-                <div className="text-left">
-                  <h2 className="text-sm font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">
-                    Sea Shore
-                  </h2>
-                  <p className="text-[10px] text-gray-400 leading-none">Hotel</p>
-                </div>
-              )}
-            </div>
-          </div>
+        <div className={`flex items-center justify-center py-3 h-14 border-b ${darkMode ? 'border-gray-700' : 'border-amber-100'}`}>
+          <img 
+            src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
+            alt="Hotel Sea Shore Logo" 
+            className="h-14 w-auto object-contain"
+          />
         </div>
 
         <div className="py-1 px-0 h-[calc(100vh-56px)] overflow-y-auto">
@@ -1137,13 +1007,14 @@ const DashboardContent = ({ sliders }) => {
       {/* Main Layout */}
       <Layout style={{ 
         marginLeft: collapsed ? 60 : 200,
-        transition: "margin-left 0.2s ease",
+        marginRight: settingsSidebarCollapsed ? 0 : 200,
+        transition: "all 0.2s ease",
         minHeight: "100vh",
       }}>
         {/* Header */}
         <Header
           style={{
-            background: "linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)",
+            background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
             padding: "0 16px",
             height: topbarCollapsed ? "40px" : "56px",
             backdropFilter: "blur(10px)",
@@ -1151,7 +1022,7 @@ const DashboardContent = ({ sliders }) => {
             position: "fixed",
             top: 0,
             left: collapsed ? 60 : 200,
-            right: 0,
+            right: settingsSidebarCollapsed ? 0 : 200,
             zIndex: 99,
             transition: "all 0.3s ease",
           }}
@@ -1166,7 +1037,7 @@ const DashboardContent = ({ sliders }) => {
                   src={userInfo.image}
                   icon={!userInfo.image && <UserOutlined />}
                   style={{ 
-                    backgroundColor: "#0ea5e9",
+                    backgroundColor: "#d97706",
                     border: "2px solid white",
                     boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
                   }}
@@ -1175,7 +1046,7 @@ const DashboardContent = ({ sliders }) => {
                   <p className="text-white font-semibold m-0 text-sm">
                     {userInfo.username || userInfo.name || "User"}
                   </p>
-                  <p className="text-cyan-100 text-xs m-0">
+                  <p className="text-amber-100 text-xs m-0">
                     {userInfo.role?.label || "User"}
                   </p>
                 </div>
@@ -1193,7 +1064,7 @@ const DashboardContent = ({ sliders }) => {
                   src={userInfo.image}
                   icon={!userInfo.image && <UserOutlined />}
                   style={{ 
-                    backgroundColor: "#0ea5e9",
+                    backgroundColor: "#d97706",
                     border: "2px solid white"
                   }}
                 />
@@ -1230,6 +1101,16 @@ const DashboardContent = ({ sliders }) => {
             </Tooltip>
 
             {!topbarCollapsed && (
+              <>
+                <Tooltip title={settingsSidebarCollapsed ? "Open Settings" : "Close Settings"}>
+                  <Button
+                    type="text"
+                    icon={<SettingOutlined className="text-white text-base" />}
+                    onClick={toggleSettingsSidebar}
+                    className="hover:bg-white/10 p-2"
+                    style={{ color: "white" }}
+                  />
+                </Tooltip>
               <Dropdown
                 menu={{
                   items: userMenuItems,
@@ -1239,11 +1120,12 @@ const DashboardContent = ({ sliders }) => {
               >
                 <Button
                   type="text"
-                  icon={<SettingOutlined className="text-white text-base" />}
+                    icon={<UserOutlined className="text-white text-base" />}
                   className="hover:bg-white/10 p-2"
                   style={{ color: "white" }}
                 />
               </Dropdown>
+              </>
             )}
           </div>
         </Header>
@@ -1259,20 +1141,28 @@ const DashboardContent = ({ sliders }) => {
           }}
           className="responsive-content"
         >
-          <div className="p-3 sm:p-4 md:p-5 bg-white rounded-lg shadow-sm border border-gray-100 min-h-[calc(100vh-110px)]">
+          <div className={`p-3 sm:p-4 md:p-5 rounded-lg shadow-sm border min-h-[calc(100vh-110px)] ${
+            darkMode 
+              ? 'bg-gray-800 border-gray-700' 
+              : 'bg-white border-gray-100'
+          }`}>
             {renderContent()}
           </div>
         </Content>
 
         {/* Status Bar */}
-        <div className="px-2 sm:px-3 py-1.5 bg-white/90 backdrop-blur-sm border-t border-gray-100 flex justify-between items-center">
+        <div className={`px-2 sm:px-3 py-1.5 backdrop-blur-sm border-t flex justify-between items-center ${
+          darkMode 
+            ? 'bg-gray-800/90 border-gray-700' 
+            : 'bg-white/90 border-gray-100'
+        }`}>
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-[10px] sm:text-xs text-gray-600">System Online</span>
+            <span className={`text-[10px] sm:text-xs ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>System Online</span>
           </div>
-          <div className="text-[10px] sm:text-xs text-gray-500">
+          <div className={`text-[10px] sm:text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             <span className="hidden sm:inline">Hotel Name: </span>
-            <span className="font-semibold text-cyan-600">{"Hotel Sea Shore"}</span>
+            <span className={`font-semibold ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>{"Hotel Sea Shore"}</span>
           </div>
         </div>
       </Layout>
@@ -1285,22 +1175,22 @@ const DashboardContent = ({ sliders }) => {
         width={240}
         bodyStyle={{ 
           padding: 0,
-          background: "linear-gradient(180deg, #ffffff 0%, #f8fcff 100%)",
+          background: darkMode 
+            ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
+            : "linear-gradient(180deg, #ffffff 0%, #fffbeb 100%)",
         }}
         headerStyle={{ 
           padding: "12px",
-          background: "linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)",
+          background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
           borderBottom: "none"
         }}
         title={
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/30">
-              <div className="text-white text-base font-bold">S</div>
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white m-0">Sea Shore</h2>
-              <p className="text-xs text-cyan-100 m-0">Hotel Management</p>
-            </div>
+          <div className="flex items-center justify-center">
+            <img 
+              src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
+              alt="Hotel Sea Shore Logo" 
+              className="h-14 w-auto object-contain"
+            />
           </div>
         }
       >
@@ -1309,6 +1199,305 @@ const DashboardContent = ({ sliders }) => {
 
       {/* Detail Modal */}
       <DetailModal />
+
+      {/* Settings Sidebar */}
+      {!settingsSidebarCollapsed && (
+        <Sider
+          width={200}
+          style={{
+            background: darkMode 
+              ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
+              : "linear-gradient(180deg, #ffffff 0%, #fffbeb 100%)",
+            boxShadow: darkMode 
+              ? "-2px 0 15px rgba(0, 0, 0, 0.3)" 
+              : "-2px 0 15px rgba(217, 119, 6, 0.15)",
+            borderLeft: darkMode 
+              ? "1px solid rgba(255, 255, 255, 0.1)" 
+              : "1px solid rgba(217, 119, 6, 0.1)",
+            overflow: "hidden",
+            height: "100vh",
+            position: "fixed",
+            right: 0,
+            top: 0,
+            bottom: 0,
+            zIndex: 100,
+          }}
+          className="hidden lg:block"
+        >
+          {/* Header with Gradient */}
+          <div 
+            className="flex items-center justify-between px-4"
+            style={{
+              background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+              boxShadow: "0 2px 8px rgba(217, 119, 6, 0.2)",
+              height: "56px",
+              padding: "0 16px",
+            }}
+          >
+            <div className="flex items-center gap-2.5">
+              <div 
+                className="p-1.5 rounded-lg"
+                style={{
+                  background: "rgba(255, 255, 255, 0.2)",
+                  backdropFilter: "blur(10px)",
+                }}
+              >
+                <SettingOutlined className="text-white text-base" />
+              </div>
+              <span className="text-sm font-bold text-white">Settings</span>
+            </div>
+            <Button
+              type="text"
+              icon={<CloseOutlined className="text-white" />}
+              onClick={toggleSettingsSidebar}
+              className="hover:bg-white/20"
+              size="small"
+              style={{ color: "white" }}
+            />
+          </div>
+
+          <div className="py-3 px-3 h-[calc(100vh-56px)] overflow-y-auto custom-scrollbar">
+            <div className="space-y-3">
+              {/* Dark Mode Toggle */}
+              <div 
+                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                style={{
+                  background: darkMode 
+                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
+                    : "linear-gradient(135deg, #ffffff 0%, #fef9f3 100%)",
+                  borderColor: darkMode ? "#4b5563" : "#fef3c7",
+                  boxShadow: darkMode 
+                    ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
+                    : "0 2px 4px rgba(217, 119, 6, 0.08)",
+                }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2.5">
+                    <div 
+                      className="p-1.5 rounded-lg"
+                      style={{
+                        background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                        boxShadow: "0 2px 4px rgba(251, 191, 36, 0.3)",
+                      }}
+                    >
+                      <ThunderboltOutlined className="text-white text-xs" />
+                    </div>
+                    <Text className={`text-xs font-bold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Dark Mode</Text>
+                  </div>
+                  <Switch
+                    checked={darkMode}
+                    onChange={handleDarkModeToggle}
+                    checkedChildren="ON"
+                    unCheckedChildren="OFF"
+                    size="small"
+                    style={{
+                      background: darkMode ? "#d97706" : undefined,
+                    }}
+                  />
+                </div>
+                <Text className={`text-[10px] leading-tight ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Toggle between light and dark theme
+                </Text>
+              </div>
+
+              {/* Theme Color Selection */}
+              <div 
+                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                style={{
+                  background: darkMode 
+                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
+                    : "linear-gradient(135deg, #ffffff 0%, #fef9f3 100%)",
+                  borderColor: darkMode ? "#4b5563" : "#fef3c7",
+                  boxShadow: darkMode 
+                    ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
+                    : "0 2px 4px rgba(217, 119, 6, 0.08)",
+                }}
+              >
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div 
+                    className="p-1.5 rounded-lg"
+                    style={{
+                      background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                      boxShadow: "0 2px 4px rgba(251, 191, 36, 0.3)",
+                    }}
+                  >
+                    <AppstoreOutlined className="text-white text-xs" />
+                  </div>
+                  <Text className={`text-xs font-bold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Theme Color</Text>
+                </div>
+                <Radio.Group
+                  value={themeColor}
+                  onChange={(e) => handleThemeColorChange(e.target.value)}
+                  className="w-full"
+                >
+                  <Space direction="vertical" className="w-full" size={4}>
+                    <Radio value="golden" className="w-full !m-0">
+                      <div className="flex items-center gap-2 py-1">
+                        <div 
+                          className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                          style={{
+                            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                            boxShadow: "0 2px 4px rgba(217, 119, 6, 0.4)",
+                          }}
+                        ></div>
+                        <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Golden</span>
+                      </div>
+                    </Radio>
+                    <Radio value="blue" className="w-full !m-0">
+                      <div className="flex items-center gap-2 py-1">
+                        <div 
+                          className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                          style={{
+                            background: "linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)",
+                            boxShadow: "0 2px 4px rgba(59, 130, 246, 0.4)",
+                          }}
+                        ></div>
+                        <span className="text-[10px] font-medium text-gray-700">Blue</span>
+                      </div>
+                    </Radio>
+                    <Radio value="green" className="w-full !m-0">
+                      <div className="flex items-center gap-2 py-1">
+                        <div 
+                          className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                          style={{
+                            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                            boxShadow: "0 2px 4px rgba(16, 185, 129, 0.4)",
+                          }}
+                        ></div>
+                        <span className="text-[10px] font-medium text-gray-700">Green</span>
+                      </div>
+                    </Radio>
+                    <Radio value="purple" className="w-full !m-0">
+                      <div className="flex items-center gap-2 py-1">
+                        <div 
+                          className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                          style={{
+                            background: "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)",
+                            boxShadow: "0 2px 4px rgba(168, 85, 247, 0.4)",
+                          }}
+                        ></div>
+                        <span className="text-[10px] font-medium text-gray-700">Purple</span>
+                      </div>
+                    </Radio>
+                    <Radio value="red" className="w-full !m-0">
+                      <div className="flex items-center gap-2 py-1">
+                        <div 
+                          className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                          style={{
+                            background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                            boxShadow: "0 2px 4px rgba(239, 68, 68, 0.4)",
+                          }}
+                        ></div>
+                        <span className="text-[10px] font-medium text-gray-700">Red</span>
+                      </div>
+                    </Radio>
+                  </Space>
+                </Radio.Group>
+              </div>
+
+              {/* Card Color Scheme */}
+              <div 
+                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                style={{
+                  background: darkMode 
+                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
+                    : "linear-gradient(135deg, #ffffff 0%, #fef9f3 100%)",
+                  borderColor: darkMode ? "#4b5563" : "#fef3c7",
+                  boxShadow: darkMode 
+                    ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
+                    : "0 2px 4px rgba(217, 119, 6, 0.08)",
+                }}
+              >
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div 
+                    className="p-1.5 rounded-lg"
+                    style={{
+                      background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                      boxShadow: "0 2px 4px rgba(251, 191, 36, 0.3)",
+                    }}
+                  >
+                    <BgColorsOutlined className="text-white text-xs" />
+                  </div>
+                  <Text className={`text-xs font-bold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Card Style</Text>
+                </div>
+                <Radio.Group
+                  value={cardColorScheme}
+                  onChange={(e) => handleCardColorSchemeChange(e.target.value)}
+                  className="w-full"
+                >
+                  <Space direction="vertical" className="w-full" size={4}>
+                    <Radio value="gradient" className="w-full !m-0">
+                      <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Gradient</span>
+                    </Radio>
+                    <Radio value="solid" className="w-full !m-0">
+                      <span className="text-[10px] font-medium text-gray-700">Solid</span>
+                    </Radio>
+                    <Radio value="minimal" className="w-full !m-0">
+                      <span className="text-[10px] font-medium text-gray-700">Minimal</span>
+                    </Radio>
+                  </Space>
+                </Radio.Group>
+              </div>
+
+              {/* Additional Settings */}
+              <div 
+                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                style={{
+                  background: darkMode 
+                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
+                    : "linear-gradient(135deg, #ffffff 0%, #fef9f3 100%)",
+                  borderColor: darkMode ? "#4b5563" : "#fef3c7",
+                  boxShadow: darkMode 
+                    ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
+                    : "0 2px 4px rgba(217, 119, 6, 0.08)",
+                }}
+              >
+                <Text className={`text-xs font-bold mb-3 block ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Preferences</Text>
+                <Space direction="vertical" className="w-full" size={6}>
+                  <div className="flex items-center justify-between w-full py-1">
+                    <Text className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Compact View</Text>
+                    <Switch size="small" />
+                  </div>
+                  <div className="flex items-center justify-between w-full py-1">
+                    <Text className="text-[10px] font-medium text-gray-600">Animations</Text>
+                    <Switch size="small" defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between w-full py-1">
+                    <Text className="text-[10px] font-medium text-gray-600">Auto Refresh</Text>
+                    <Switch size="small" defaultChecked />
+                  </div>
+                </Space>
+              </div>
+
+              {/* Reset Button */}
+              <Button
+                type="default"
+                block
+                onClick={() => {
+                  setDarkMode(false);
+                  setThemeColor('golden');
+                  setCardColorScheme('gradient');
+                  localStorage.setItem('darkMode', 'false');
+                  localStorage.setItem('themeColor', 'golden');
+                  localStorage.setItem('cardColorScheme', 'gradient');
+                  document.documentElement.classList.remove('dark');
+                }}
+                className="mt-2"
+                size="small"
+                style={{
+                  background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+                  border: "none",
+                  color: "white",
+                  fontWeight: 600,
+                  boxShadow: "0 2px 4px rgba(217, 119, 6, 0.3)",
+                }}
+              >
+                Reset Defaults
+              </Button>
+            </div>
+          </div>
+        </Sider>
+      )}
     </Layout>
   );
 };
@@ -1316,14 +1505,14 @@ const DashboardContent = ({ sliders }) => {
 const Dashboard = ({ sliders }) => {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cyan-50 via-blue-50 to-teal-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50">
         <div className="text-center">
           <div className="w-12 h-12 mx-auto mb-3">
-            <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl animate-spin flex items-center justify-center">
+            <div className="w-full h-full bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl animate-spin flex items-center justify-center">
               <div className="text-white text-lg font-bold">S</div>
             </div>
           </div>
-          <p className="text-sm text-cyan-600 font-medium">Loading Dashboard...</p>
+          <p className="text-sm text-amber-600 font-medium">Loading Dashboard...</p>
         </div>
       </div>
     }>

@@ -41,6 +41,7 @@ import {
 } from "@ant-design/icons";
 import { useFormik } from "formik";
 import coreAxios from "@/utils/axiosInstance";
+import { uploadMultipleImagesToImgbb } from "@/utils/imgbbUpload";
 
 const { Panel } = Collapse;
 const { TextArea } = Input;
@@ -165,51 +166,67 @@ const HotelInformation = () => {
     onSubmit: async (values) => {
       try {
         setSubmitting(true);
-        const formData = new FormData();
         
-        // Append all form fields
-        formData.append("hotelName", values.hotelName);
-        formData.append("hotelDescription", values.hotelDescription);
-        formData.append("status", values.status);
+        // First, upload new images to imgbb
+        const newImageFiles = hotelImages
+          .filter((file) => file.originFileObj)
+          .map((file) => file.originFileObj);
         
-        // Append address
-        if (values.address.street) formData.append("address[street]", values.address.street);
-        if (values.address.city) formData.append("address[city]", values.address.city);
-        if (values.address.state) formData.append("address[state]", values.address.state);
-        if (values.address.zipCode) formData.append("address[zipCode]", values.address.zipCode);
-        if (values.address.country) formData.append("address[country]", values.address.country);
-        
-        // Append contact
-        if (values.contact.phone) formData.append("contact[phone]", values.contact.phone);
-        if (values.contact.email) formData.append("contact[email]", values.contact.email);
-        if (values.contact.website) formData.append("contact[website]", values.contact.website);
-        
-        // Append images - handle new files and existing URLs
-        const existingImageUrls = [];
-        hotelImages.forEach((file) => {
-          if (file.originFileObj) {
-            // New file upload - append as file
-            formData.append("images", file.originFileObj);
-          } else if (file.url && !file.originFileObj) {
-            // Existing image URL (not a new upload)
-            existingImageUrls.push(file.url);
+        let uploadedImageUrls = [];
+        if (newImageFiles.length > 0) {
+          const loadingMessage = message.loading("Uploading images...", 0);
+          try {
+            const uploadResult = await uploadMultipleImagesToImgbb(newImageFiles);
+            message.destroy(loadingMessage);
+            
+            uploadedImageUrls = uploadResult.urls;
+            
+            // Show warnings if some images failed
+            if (uploadResult.errors.length > 0) {
+              if (uploadedImageUrls.length > 0) {
+                message.warning(
+                  `${uploadResult.errors.length} image(s) failed to upload, but ${uploadedImageUrls.length} uploaded successfully.`
+                );
+              } else {
+                message.error(
+                  `Failed to upload images: ${uploadResult.errors.join(", ")}`
+                );
+                setSubmitting(false);
+                return;
+              }
+            }
+          } catch (error) {
+            message.destroy(loadingMessage);
+            console.error("Image upload error:", error);
+            message.error(
+              error.message || "Failed to upload images. Please check your API key and try again."
+            );
+            setSubmitting(false);
+            return;
           }
-        });
-        // If there are existing URLs and no new files, send them in body
-        // Note: Backend prioritizes req.files over req.body.images
-        // So if we have new files, they'll be used. Otherwise, use existing URLs.
-        if (existingImageUrls.length > 0 && hotelImages.every(f => !f.originFileObj)) {
-          // All images are existing URLs, send as JSON string
-          formData.append("images", JSON.stringify(existingImageUrls));
         }
+        
+        // Collect existing image URLs
+        const existingImageUrls = hotelImages
+          .filter((file) => !file.originFileObj && file.url)
+          .map((file) => file.url);
+        
+        // Combine all image URLs
+        const allImageUrls = [...existingImageUrls, ...uploadedImageUrls];
+        
+        // Prepare JSON payload
+        const payload = {
+          hotelName: values.hotelName,
+          hotelDescription: values.hotelDescription,
+          status: values.status,
+          address: values.address,
+          contact: values.contact,
+          images: allImageUrls.length > 0 ? allImageUrls : undefined,
+        };
 
         if (isCreatingHotel) {
           // Create new hotel
-          const response = await coreAxios.post(`/hotels`, formData, {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          });
+          const response = await coreAxios.post(`/hotels`, payload);
           if (response.status === 200 || response.status === 201) {
             if (response.data.success) {
               message.success("Hotel created successfully!");
@@ -230,11 +247,7 @@ const HotelInformation = () => {
             message.error("Please select a hotel first");
             return;
           }
-          const response = await coreAxios.put(`/hotels/${selectedHotelId}`, formData, {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          });
+          const response = await coreAxios.put(`/hotels/${selectedHotelId}`, payload);
           if (response.status === 200 && response.data.success) {
             message.success("Hotel information updated successfully!");
             await fetchHotelData(selectedHotelId);
@@ -269,30 +282,66 @@ const HotelInformation = () => {
     onSubmit: async (values) => {
       try {
         setSubmitting(true);
-        const formData = new FormData();
         
-        // Append all form fields
-        formData.append("name", values.name);
-        formData.append("description", values.description || "");
-        formData.append("basePrice", values.basePrice || 0);
-        formData.append("maxOccupancy[adults]", values.maxOccupancy.adults || 2);
-        formData.append("maxOccupancy[children]", values.maxOccupancy.children || 0);
-        formData.append("isActive", values.isActive);
+        // First, upload new images to imgbb
+        const newImageFiles = categoryImages
+          .filter((file) => file.originFileObj)
+          .map((file) => file.originFileObj);
         
-        // Append images
-        categoryImages.forEach((file) => {
-          if (file.originFileObj) {
-            formData.append("images", file.originFileObj);
+        let uploadedImageUrls = [];
+        if (newImageFiles.length > 0) {
+          const loadingMessage = message.loading("Uploading images...", 0);
+          try {
+            const uploadResult = await uploadMultipleImagesToImgbb(newImageFiles);
+            message.destroy(loadingMessage);
+            
+            uploadedImageUrls = uploadResult.urls;
+            
+            // Show warnings if some images failed
+            if (uploadResult.errors.length > 0) {
+              if (uploadedImageUrls.length > 0) {
+                message.warning(
+                  `${uploadResult.errors.length} image(s) failed to upload, but ${uploadedImageUrls.length} uploaded successfully.`
+                );
+              } else {
+                message.error(
+                  `Failed to upload images: ${uploadResult.errors.join(", ")}`
+                );
+                setSubmitting(false);
+                return;
+              }
+            }
+          } catch (error) {
+            message.destroy(loadingMessage);
+            console.error("Image upload error:", error);
+            message.error(
+              error.message || "Failed to upload images. Please check your API key and try again."
+            );
+            setSubmitting(false);
+            return;
           }
-        });
-        
-        // Handle existing image URLs
-        const existingImageUrls = categoryImages
-          .filter((f) => !f.originFileObj && f.url)
-          .map((f) => f.url);
-        if (existingImageUrls.length > 0 && categoryImages.every(f => !f.originFileObj)) {
-          formData.append("images", JSON.stringify(existingImageUrls));
         }
+        
+        // Collect existing image URLs
+        const existingImageUrls = categoryImages
+          .filter((file) => !file.originFileObj && file.url)
+          .map((file) => file.url);
+        
+        // Combine all image URLs
+        const allImageUrls = [...existingImageUrls, ...uploadedImageUrls];
+        
+        // Prepare JSON payload
+        const payload = {
+          name: values.name,
+          description: values.description || "",
+          basePrice: values.basePrice || 0,
+          maxOccupancy: {
+            adults: values.maxOccupancy.adults || 2,
+            children: values.maxOccupancy.children || 0,
+          },
+          isActive: values.isActive,
+          images: allImageUrls.length > 0 ? allImageUrls : undefined,
+        };
 
         if (!selectedHotelId) {
           message.error("Please select a hotel first");
@@ -301,12 +350,7 @@ const HotelInformation = () => {
         if (isEditingCategory) {
           const response = await coreAxios.put(
             `/hotels/${selectedHotelId}/categories/${editingCategoryId}`,
-            formData,
-            {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              },
-            }
+            payload
           );
           if (response.status === 200 && response.data.success) {
             message.success("Category updated successfully!");
@@ -320,12 +364,7 @@ const HotelInformation = () => {
         } else {
           const response = await coreAxios.post(
             `/hotels/${selectedHotelId}/categories`,
-            formData,
-            {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              },
-            }
+            payload
           );
           if (response.status === 200 || response.status === 201) {
             if (response.data.success) {
@@ -363,31 +402,67 @@ const HotelInformation = () => {
     onSubmit: async (values) => {
       try {
         setSubmitting(true);
-        const formData = new FormData();
         
-        // Append all form fields
-        formData.append("name", values.name);
-        formData.append("roomId", values.roomId || "");
-        formData.append("status", values.status);
-        formData.append("price", values.price || 0);
-        formData.append("capacity[adults]", values.capacity.adults || 2);
-        formData.append("capacity[children]", values.capacity.children || 0);
-        formData.append("description", values.description || "");
+        // First, upload new images to imgbb
+        const newImageFiles = roomImages
+          .filter((file) => file.originFileObj)
+          .map((file) => file.originFileObj);
         
-        // Append images
-        roomImages.forEach((file) => {
-          if (file.originFileObj) {
-            formData.append("images", file.originFileObj);
+        let uploadedImageUrls = [];
+        if (newImageFiles.length > 0) {
+          const loadingMessage = message.loading("Uploading images...", 0);
+          try {
+            const uploadResult = await uploadMultipleImagesToImgbb(newImageFiles);
+            message.destroy(loadingMessage);
+            
+            uploadedImageUrls = uploadResult.urls;
+            
+            // Show warnings if some images failed
+            if (uploadResult.errors.length > 0) {
+              if (uploadedImageUrls.length > 0) {
+                message.warning(
+                  `${uploadResult.errors.length} image(s) failed to upload, but ${uploadedImageUrls.length} uploaded successfully.`
+                );
+              } else {
+                message.error(
+                  `Failed to upload images: ${uploadResult.errors.join(", ")}`
+                );
+                setSubmitting(false);
+                return;
+              }
+            }
+          } catch (error) {
+            message.destroy(loadingMessage);
+            console.error("Image upload error:", error);
+            message.error(
+              error.message || "Failed to upload images. Please check your API key and try again."
+            );
+            setSubmitting(false);
+            return;
           }
-        });
-        
-        // Handle existing image URLs
-        const existingImageUrls = roomImages
-          .filter((f) => !f.originFileObj && f.url)
-          .map((f) => f.url);
-        if (existingImageUrls.length > 0 && roomImages.every(f => !f.originFileObj)) {
-          formData.append("images", JSON.stringify(existingImageUrls));
         }
+        
+        // Collect existing image URLs
+        const existingImageUrls = roomImages
+          .filter((file) => !file.originFileObj && file.url)
+          .map((file) => file.url);
+        
+        // Combine all image URLs
+        const allImageUrls = [...existingImageUrls, ...uploadedImageUrls];
+        
+        // Prepare JSON payload
+        const payload = {
+          name: values.name,
+          roomId: values.roomId || "",
+          status: values.status,
+          price: values.price || 0,
+          capacity: {
+            adults: values.capacity.adults || 2,
+            children: values.capacity.children || 0,
+          },
+          description: values.description || "",
+          images: allImageUrls.length > 0 ? allImageUrls : undefined,
+        };
 
         if (!selectedHotelId || !selectedCategoryId) {
           message.error("Please select a hotel and category first");
@@ -396,12 +471,7 @@ const HotelInformation = () => {
         if (isEditingRoom) {
           const response = await coreAxios.put(
             `/hotels/${selectedHotelId}/categories/${selectedCategoryId}/rooms/${editingRoomId}`,
-            formData,
-            {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              },
-            }
+            payload
           );
           if (response.status === 200 && response.data.success) {
             message.success("Room updated successfully!");
@@ -416,12 +486,7 @@ const HotelInformation = () => {
         } else {
           const response = await coreAxios.post(
             `/hotels/${selectedHotelId}/categories/${selectedCategoryId}/rooms`,
-            formData,
-            {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              },
-            }
+            payload
           );
           if (response.status === 200 || response.status === 201) {
             if (response.data.success) {

@@ -101,6 +101,45 @@ const HotelCalendar = ({ hotelID }) => {
     }).length;
   };
 
+  // Calculate total booking amount for a date
+  const calculateDayTotalAmount = (dateStr) => {
+    const selectedDate = dayjs(dateStr);
+    return allBookings
+      .filter(booking => {
+        if (!booking.checkInDate || !booking.checkOutDate) return false;
+        const checkIn = dayjs(booking.checkInDate);
+        const checkOut = dayjs(booking.checkOutDate);
+        return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
+      })
+      .reduce((sum, booking) => sum + (Number(booking.totalBill) || 0), 0);
+  };
+
+  // Calculate paid amount for a date
+  const calculateDayPaidAmount = (dateStr) => {
+    const selectedDate = dayjs(dateStr);
+    return allBookings
+      .filter(booking => {
+        if (!booking.checkInDate || !booking.checkOutDate) return false;
+        const checkIn = dayjs(booking.checkInDate);
+        const checkOut = dayjs(booking.checkOutDate);
+        return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
+      })
+      .reduce((sum, booking) => sum + (Number(booking.advancePayment) || 0), 0);
+  };
+
+  // Calculate due amount for a date
+  const calculateDayDueAmount = (dateStr) => {
+    const selectedDate = dayjs(dateStr);
+    return allBookings
+      .filter(booking => {
+        if (!booking.checkInDate || !booking.checkOutDate) return false;
+        const checkIn = dayjs(booking.checkInDate);
+        const checkOut = dayjs(booking.checkOutDate);
+        return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
+      })
+      .reduce((sum, booking) => sum + (Number(booking.duePayment) || 0), 0);
+  };
+
   // Get booking color - green for all bookings
   const getBookingColor = (value) => {
     if (!value) return "#ffffff";
@@ -1036,7 +1075,7 @@ const HotelCalendar = ({ hotelID }) => {
                                   className="text-center bg-gray-100 font-semibold border"
                                   style={{ padding: '8px 4px', fontSize: '10px', position: 'sticky', left: 0, zIndex: 5, background: '#f3f4f6' }}
                                 >
-                                  Total
+                                  Ratio
                                 </td>
                                 {dates.map((date) => {
                                   const dateStr = date.format("YYYY-MM-DD");
@@ -1045,12 +1084,11 @@ const HotelCalendar = ({ hotelID }) => {
                                   const ratio = totalRooms > 0 ? `${bookedQty}/${totalRooms}` : '0/0';
                                   return (
                                     <td
-                                      key={dateStr}
+                                      key={`ratio-${dateStr}`}
                                       className="text-center bg-gray-50 border"
                                       style={{ padding: '8px 4px', fontSize: '10px' }}
                                     >
-                                      <div className="font-semibold text-gray-800">{bookedQty}</div>
-                                      <div className="text-xs text-gray-600 mt-1">{ratio}</div>
+                                      <div className="font-semibold text-gray-800">{ratio}</div>
                                     </td>
                                   );
                                 })}
@@ -1077,11 +1115,21 @@ const HotelCalendar = ({ hotelID }) => {
       {/* Booking History Modal */}
       <Modal
         title={
-          <div>
-            <div className="font-semibold text-base sm:text-lg">Booking History</div>
-            <div className="text-xs sm:text-sm text-gray-500 font-normal">
-              {selectedRoomKey && roomList.find(r => r.key === selectedRoomKey)?.flatNo} - {selectedDateStr && dayjs(selectedDateStr).format("DD/MM/YYYY")}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-base flex items-center gap-2">
+                <CalendarOutlined className="text-blue-600" />
+                Booking History
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {selectedRoomKey && roomList.find(r => r.key === selectedRoomKey)?.flatNo} • {selectedDateStr && dayjs(selectedDateStr).format("DD/MM/YYYY")}
+              </div>
             </div>
+            {bookingHistory.length > 0 && (
+              <Tag color="blue" className="text-xs">
+                {bookingHistory.length} {bookingHistory.length === 1 ? 'Booking' : 'Bookings'}
+              </Tag>
+            )}
           </div>
         }
         open={historyModalVisible}
@@ -1111,62 +1159,207 @@ const HotelCalendar = ({ hotelID }) => {
               }
             }}
           >
-            <span className="hidden sm:inline">Add New Booking</span>
-            <span className="sm:hidden">Add</span>
+            Add Booking
           </Button>
         ]}
-        width="90%"
-        style={{ maxWidth: '800px' }}
+        width={700}
+        className="booking-history-modal"
       >
-        <div className="mt-2 sm:mt-4">
+        <div className="mt-2">
           {bookingHistory.length > 0 ? (
-            <div className="space-y-2 sm:space-y-3">
+            <div className="space-y-3">
               {bookingHistory.map((booking) => (
                 <div
                   key={booking._id}
-                  className="border rounded-lg p-2 sm:p-3 md:p-4 hover:bg-gray-50 transition-colors"
+                  className="bg-white border rounded-lg p-3 hover:shadow-md transition-shadow"
+                  style={{
+                    borderLeft: `4px solid ${booking.statusID === 1 ? '#10b981' : '#ef4444'}`
+                  }}
                 >
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-2 mb-2">
+                  <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <div className="font-semibold text-sm sm:text-base text-gray-900">{booking.bookingNo}</div>
-                      <div className="text-xs sm:text-sm text-gray-600 flex items-center mt-1">
-                        <UserOutlined className="mr-1" />
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="font-semibold text-sm text-gray-900">{booking.bookingNo}</span>
+                        <Tag 
+                          color={booking.statusID === 1 ? "green" : "red"} 
+                          className="text-xs"
+                        >
+                          {booking.statusID === 1 ? "Active" : "Cancelled"}
+                        </Tag>
+                      </div>
+                      {(booking.hotelName || booking.roomNumberName) && (
+                        <div className="text-xs text-gray-600 mb-1.5">
+                          {booking.hotelName && <span className="font-medium">{booking.hotelName}</span>}
+                          {booking.hotelName && booking.roomNumberName && <span className="mx-1">•</span>}
+                          {booking.roomNumberName && <span>{booking.roomNumberName}</span>}
+                          {booking.roomCategoryName && <span className="text-gray-500"> ({booking.roomCategoryName})</span>}
+                        </div>
+                      )}
+                      <div className="text-sm font-medium text-gray-900 flex items-center gap-1.5 mb-1">
+                        <UserOutlined className="text-gray-400 text-xs" />
                         {booking.fullName}
                       </div>
-                      <div className="text-xs sm:text-sm text-gray-600 flex items-center mt-1">
-                        <PhoneOutlined className="mr-1" />
+                      <div className="text-xs text-gray-600 flex items-center gap-1.5">
+                        <PhoneOutlined className="text-gray-400" />
                         {booking.phone}
                       </div>
-                    </div>
-                    <Tag color={booking.statusID === 1 ? "green" : "red"} className="text-xs">
-                      {booking.statusID === 1 ? "Active" : "Cancelled"}
-                    </Tag>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mt-2 sm:mt-3 text-xs sm:text-sm">
-                    <div>
-                      <span className="text-gray-600">Check-in:</span>{" "}
-                      <span className="font-medium">
-                        {booking.checkInDate ? dayjs(booking.checkInDate).format("DD/MM/YYYY") : "N/A"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Check-out:</span>{" "}
-                      <span className="font-medium">
-                        {booking.checkOutDate ? dayjs(booking.checkOutDate).format("DD/MM/YYYY") : "N/A"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Total Bill:</span>{" "}
-                      <span className="font-medium">৳{booking.totalBill ? booking.totalBill.toLocaleString() : "0"}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Advance:</span>{" "}
-                      <span className="font-medium text-green-600">
-                        ৳{booking.advancePayment ? booking.advancePayment.toLocaleString() : "0"}
-                      </span>
+                      {booking.email && (
+                        <div className="text-xs text-gray-600 flex items-center gap-1.5 mt-0.5">
+                          <span className="text-gray-400">📧</span>
+                          {booking.email}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="mt-2 sm:mt-3 flex justify-end">
+
+                  {/* Guest Information */}
+                  <div className="border-t border-gray-100 pt-2 mb-2">
+                    <div className="text-xs font-semibold text-gray-700 mb-1.5">Guest Information</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {booking.nidPassport && (
+                        <div>
+                          <span className="text-gray-500">NID/Passport:</span>{" "}
+                          <span className="font-medium text-gray-900">{booking.nidPassport}</span>
+                        </div>
+                      )}
+                      {booking.address && (
+                        <div className="col-span-2">
+                          <span className="text-gray-500">Address:</span>{" "}
+                          <span className="font-medium text-gray-900">{booking.address}</span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-gray-500">Adults:</span>{" "}
+                        <span className="font-medium text-gray-900">{booking.adults || 1}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Children:</span>{" "}
+                        <span className="font-medium text-gray-900">{booking.children || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Booking Dates */}
+                  <div className="border-t border-gray-100 pt-2 mb-2">
+                    <div className="text-xs font-semibold text-gray-700 mb-1.5">Booking Details</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-500">Check-in:</span>{" "}
+                        <span className="font-medium text-gray-900">
+                          {booking.checkInDate ? dayjs(booking.checkInDate).format("DD/MM/YYYY") : "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Check-out:</span>{" "}
+                        <span className="font-medium text-gray-900">
+                          {booking.checkOutDate ? dayjs(booking.checkOutDate).format("DD/MM/YYYY") : "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Nights:</span>{" "}
+                        <span className="font-medium text-gray-900">{booking.nights || 1}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Room Price:</span>{" "}
+                        <span className="font-medium text-gray-900">
+                          ৳{booking.roomPrice ? booking.roomPrice.toLocaleString() : "0"}/night
+                        </span>
+                      </div>
+                      {booking.bookedBy && (
+                        <div className="col-span-2">
+                          <span className="text-gray-500">Booked By:</span>{" "}
+                          <span className="font-medium text-gray-900">{booking.bookedBy}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Services */}
+                  {(booking.isKitchen || booking.extraBed) && (
+                    <div className="border-t border-gray-100 pt-2 mb-2">
+                      <div className="text-xs font-semibold text-gray-700 mb-1.5">Additional Services</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {booking.isKitchen && (
+                          <div>
+                            <span className="text-gray-500">Kitchen:</span>{" "}
+                            <span className="font-medium text-green-600">
+                              ৳{booking.kitchenTotalBill ? booking.kitchenTotalBill.toLocaleString() : "0"}
+                            </span>
+                          </div>
+                        )}
+                        {booking.extraBed && (
+                          <div>
+                            <span className="text-gray-500">Extra Bed:</span>{" "}
+                            <span className="font-medium text-green-600">
+                              ৳{booking.extraBedTotalBill ? booking.extraBedTotalBill.toLocaleString() : "0"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Payment Information */}
+                  <div className="border-t border-gray-100 pt-2 mb-2">
+                    <div className="text-xs font-semibold text-gray-700 mb-1.5">Payment Information</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs mb-1">
+                      <div>
+                        <span className="text-gray-500">Total Bill:</span>{" "}
+                        <span className="font-semibold text-gray-900">
+                          ৳{booking.totalBill ? booking.totalBill.toLocaleString() : "0"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Paid:</span>{" "}
+                        <span className="font-semibold text-green-600">
+                          ৳{booking.advancePayment ? booking.advancePayment.toLocaleString() : "0"}
+                        </span>
+                      </div>
+                      {booking.duePayment > 0 && (
+                        <div>
+                          <span className="text-gray-500">Due:</span>{" "}
+                          <span className="font-semibold text-orange-600">
+                            ৳{booking.duePayment ? booking.duePayment.toLocaleString() : "0"}
+                          </span>
+                        </div>
+                      )}
+                      {booking.paymentMethod && (
+                        <div>
+                          <span className="text-gray-500">Method:</span>{" "}
+                          <span className="font-medium text-gray-900">{booking.paymentMethod}</span>
+                        </div>
+                      )}
+                      {booking.transactionId && (
+                        <div className="col-span-2">
+                          <span className="text-gray-500">Transaction ID:</span>{" "}
+                          <span className="font-medium text-gray-900">{booking.transactionId}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Additional Notes */}
+                  {(booking.note || booking.reference) && (
+                    <div className="border-t border-gray-100 pt-2 mb-2">
+                      <div className="text-xs font-semibold text-gray-700 mb-1.5">Additional Information</div>
+                      <div className="text-xs">
+                        {booking.note && (
+                          <div className="mb-1">
+                            <span className="text-gray-500">Note:</span>{" "}
+                            <span className="font-medium text-gray-900">{booking.note}</span>
+                          </div>
+                        )}
+                        {booking.reference && (
+                          <div>
+                            <span className="text-gray-500">Reference:</span>{" "}
+                            <span className="font-medium text-gray-900">{booking.reference}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-2 border-t border-gray-100">
                     <Button
                       size="small"
                       icon={<EditOutlined />}
@@ -1182,9 +1375,22 @@ const HotelCalendar = ({ hotelID }) => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-6 sm:py-8 text-gray-500">
-              <div className="text-base sm:text-lg mb-2">No booking history found</div>
-              <div className="text-xs sm:text-sm">This room is available for this date</div>
+            <div className="text-center py-8">
+              <CalendarOutlined className="text-3xl text-gray-300 mb-3" />
+              <div className="text-sm font-medium text-gray-600 mb-1">No Booking Found</div>
+              <div className="text-xs text-gray-500 mb-4">This room is available for this date</div>
+              <Button 
+                type="primary"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  if (selectedRoomKey && selectedDateStr) {
+                    handleEditClick(selectedRoomKey, selectedDateStr, null);
+                  }
+                }}
+              >
+                Create New Booking
+              </Button>
             </div>
           )}
         </div>
@@ -1590,6 +1796,18 @@ const HotelCalendar = ({ hotelID }) => {
         .calendar-cell.holiday-cell:hover {
           border-color: #f97316 !important;
           box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3) !important;
+        }
+        
+        .booking-history-modal .ant-modal-content {
+          border-radius: 8px;
+        }
+        
+        .booking-history-modal .ant-modal-body {
+          padding: 16px;
+        }
+        
+        .booking-history-modal .ant-modal-footer {
+          padding: 12px 16px;
         }
       `}</style>
     </div>
