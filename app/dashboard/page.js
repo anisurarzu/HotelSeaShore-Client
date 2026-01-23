@@ -44,6 +44,8 @@ import {
   EyeOutlined,
   CloseOutlined,
   ThunderboltOutlined,
+  MenuOutlined,
+  MenuFoldOutlined,
   AppstoreOutlined,
   BgColorsOutlined,
 } from "@ant-design/icons";
@@ -272,6 +274,7 @@ const DashboardContent = ({ sliders }) => {
   const [collapsed, setCollapsed] = useState(true);
   const [topbarCollapsed, setTopbarCollapsed] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState("1");
+  const [isMobile, setIsMobile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [settingsSidebarCollapsed, setSettingsSidebarCollapsed] = useState(true);
@@ -419,6 +422,17 @@ const DashboardContent = ({ sliders }) => {
       setBookingsLoading(false);
     }
   }, [hotelID, calculateDashboardStats]);
+
+  // Handle window resize for responsive layout
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -1005,33 +1019,58 @@ const DashboardContent = ({ sliders }) => {
       </Sider>
 
       {/* Main Layout */}
-      <Layout style={{ 
-        marginLeft: collapsed ? 60 : 200,
-        marginRight: settingsSidebarCollapsed ? 0 : 200,
-        transition: "all 0.2s ease",
+      <Layout 
+        className="lg:ml-0"
+        style={{ 
+          marginLeft: isMobile ? 0 : (collapsed ? 60 : 200),
+          marginRight: isMobile ? 0 : (settingsSidebarCollapsed ? 0 : 200),
+          transition: "all 0.2s ease",
         minHeight: "100vh",
-      }}>
+        }}
+      >
         {/* Header */}
         <Header
+          className="flex justify-between items-center shadow-sm transition-all duration-300"
           style={{
             background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
-            padding: "0 16px",
+            padding: "0 12px",
             height: topbarCollapsed ? "40px" : "56px",
             backdropFilter: "blur(10px)",
             borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
             position: "fixed",
             top: 0,
-            left: collapsed ? 60 : 200,
-            right: settingsSidebarCollapsed ? 0 : 200,
+            left: isMobile ? 0 : (collapsed ? 60 : 200),
+            right: isMobile ? 0 : (settingsSidebarCollapsed ? 0 : 200),
             zIndex: 99,
             transition: "all 0.3s ease",
+            width: isMobile 
+              ? "100%"
+              : `calc(100% - ${collapsed ? 60 : 200}px - ${settingsSidebarCollapsed ? 0 : 200}px)`,
           }}
-          className="flex justify-between items-center shadow-sm transition-all duration-300"
         >
-          {/* Left side */}
-          <div className="flex items-center justify-center flex-1">
+          {/* Left side - Mobile Menu Button + User Info */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* Mobile Menu Button */}
+            <Button
+              type="text"
+              icon={<MenuOutlined className="text-white text-lg" />}
+              onClick={showDrawer}
+              className="lg:hidden hover:bg-white/10 p-2"
+              style={{ color: "white", minWidth: "auto" }}
+            />
+            
+            {/* Logo on Mobile */}
+            <div className="lg:hidden flex items-center">
+              <img 
+                src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
+                alt="Logo" 
+                className="h-8 w-auto object-contain"
+              />
+            </div>
+
+            {/* User Info - Hidden on mobile when topbar collapsed, shown on desktop */}
             {userInfo && !topbarCollapsed && (
-              <div className="flex items-center gap-3">
+              <div className="hidden md:flex items-center gap-2 lg:gap-3 flex-1 min-w-0">
                 <Avatar
                   size={36}
                   src={userInfo.image}
@@ -1042,23 +1081,23 @@ const DashboardContent = ({ sliders }) => {
                     boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
                   }}
                 />
-                <div className="text-left">
-                  <p className="text-white font-semibold m-0 text-sm">
+                <div className="text-left min-w-0">
+                  <p className="text-white font-semibold m-0 text-xs lg:text-sm truncate">
                     {userInfo.username || userInfo.name || "User"}
                   </p>
-                  <p className="text-amber-100 text-xs m-0">
+                  <p className="text-amber-100 text-[10px] lg:text-xs m-0 truncate">
                     {userInfo.role?.label || "User"}
                   </p>
                 </div>
-                <div className="h-6 w-px bg-white/30 mx-2" />
-                <div className="text-left">
+                <div className="hidden lg:block h-6 w-px bg-white/30 mx-2" />
+                <div className="hidden lg:block text-left">
                   <p className="text-white text-xs m-0">Hotel:</p>
                   <p className="text-white font-bold m-0 text-sm">{'Hotel Sea Shore'}</p>
                 </div>
               </div>
             )}
             {topbarCollapsed && userInfo && (
-              <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2">
                 <Avatar
                   size={28}
                   src={userInfo.image}
@@ -1076,12 +1115,12 @@ const DashboardContent = ({ sliders }) => {
           </div>
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 lg:gap-2">
             {!topbarCollapsed && (
               <Button
                 type="text"
                 icon={<BellOutlined className="text-white text-base" />}
-                className="hover:bg-white/10 relative p-2"
+                className="hidden md:flex hover:bg-white/10 relative p-2"
                 style={{ color: "white" }}
               >
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-semibold">
@@ -1095,53 +1134,55 @@ const DashboardContent = ({ sliders }) => {
                 type="text"
                 icon={topbarCollapsed ? <DownOutlined /> : <UpOutlined />}
                 onClick={toggleTopbar}
+                className="hidden lg:flex hover:bg-white/10 p-2"
+                style={{ color: "white" }}
+              />
+            </Tooltip>
+
+            {/* Settings Button - Always visible */}
+            <Tooltip title={settingsSidebarCollapsed ? "Open Settings" : "Close Settings"}>
+              <Button
+                type="text"
+                icon={<SettingOutlined className="text-white text-base" />}
+                onClick={toggleSettingsSidebar}
                 className="hover:bg-white/10 p-2"
                 style={{ color: "white" }}
               />
             </Tooltip>
 
+            {/* User Menu - Desktop only when not collapsed */}
             {!topbarCollapsed && (
-              <>
-                <Tooltip title={settingsSidebarCollapsed ? "Open Settings" : "Close Settings"}>
-                  <Button
-                    type="text"
-                    icon={<SettingOutlined className="text-white text-base" />}
-                    onClick={toggleSettingsSidebar}
-                    className="hover:bg-white/10 p-2"
-                    style={{ color: "white" }}
-                  />
-                </Tooltip>
               <Dropdown
                 menu={{
                   items: userMenuItems,
                 }}
                 placement="bottomRight"
                 trigger={['click']}
+                className="hidden lg:block"
               >
                 <Button
                   type="text"
-                    icon={<UserOutlined className="text-white text-base" />}
+                  icon={<UserOutlined className="text-white text-base" />}
                   className="hover:bg-white/10 p-2"
                   style={{ color: "white" }}
                 />
               </Dropdown>
-              </>
             )}
           </div>
         </Header>
 
         {/* Main Content */}
         <Content
+          className="responsive-content"
           style={{
-            margin: "8px",
-            marginTop: topbarCollapsed ? "48px" : "64px",
+            margin: isMobile ? "4px" : "8px",
+            marginTop: topbarCollapsed ? "48px" : "56px",
             padding: 0,
-            minHeight: "calc(100vh - 90px)",
+            minHeight: "calc(100vh - 70px)",
             transition: "margin-top 0.3s ease",
           }}
-          className="responsive-content"
         >
-          <div className={`p-3 sm:p-4 md:p-5 rounded-lg shadow-sm border min-h-[calc(100vh-110px)] ${
+          <div className={`p-2 sm:p-3 md:p-4 lg:p-5 rounded-lg shadow-sm border min-h-[calc(100vh-80px)] ${
             darkMode 
               ? 'bg-gray-800 border-gray-700' 
               : 'bg-white border-gray-100'
@@ -1200,8 +1241,8 @@ const DashboardContent = ({ sliders }) => {
       {/* Detail Modal */}
       <DetailModal />
 
-      {/* Settings Sidebar */}
-      {!settingsSidebarCollapsed && (
+      {/* Settings Sidebar - Desktop */}
+      {!settingsSidebarCollapsed && !isMobile && (
         <Sider
           width={200}
           style={{
@@ -1498,6 +1539,242 @@ const DashboardContent = ({ sliders }) => {
           </div>
         </Sider>
       )}
+
+      {/* Settings Drawer - Mobile */}
+      <Drawer
+        title={
+          <div className="flex items-center gap-2">
+            <SettingOutlined className="text-white" />
+            <span className="text-base font-semibold text-white">Settings</span>
+          </div>
+        }
+        placement="right"
+        onClose={() => setSettingsSidebarCollapsed(true)}
+        open={!settingsSidebarCollapsed && isMobile}
+        width={280}
+        bodyStyle={{ 
+          padding: "16px",
+          background: darkMode 
+            ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
+            : "linear-gradient(180deg, #ffffff 0%, #fffbeb 100%)",
+        }}
+        headerStyle={{ 
+          background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+          borderBottom: "none",
+        }}
+        styles={{
+          header: { color: "white" },
+        }}
+      >
+        <div className="space-y-3">
+          {/* Dark Mode Toggle */}
+          <div 
+            className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+            style={{
+              background: darkMode 
+                ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
+                : "linear-gradient(135deg, #ffffff 0%, #fef9f3 100%)",
+              borderColor: darkMode ? "#4b5563" : "#fef3c7",
+              boxShadow: darkMode 
+                ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
+                : "0 2px 4px rgba(217, 119, 6, 0.08)",
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2.5">
+                <div 
+                  className="p-1.5 rounded-lg"
+                  style={{
+                    background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                    boxShadow: "0 2px 4px rgba(251, 191, 36, 0.3)",
+                  }}
+                >
+                  <ThunderboltOutlined className="text-white text-xs" />
+                </div>
+                <Text className={`text-xs font-bold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Dark Mode</Text>
+              </div>
+              <Switch
+                checked={darkMode}
+                onChange={handleDarkModeToggle}
+                checkedChildren="ON"
+                unCheckedChildren="OFF"
+                size="small"
+                style={{
+                  background: darkMode ? "#d97706" : undefined,
+                }}
+              />
+            </div>
+            <Text className={`text-[10px] leading-tight ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              Toggle between light and dark theme
+            </Text>
+          </div>
+
+          {/* Theme Color Selection */}
+          <div 
+            className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+            style={{
+              background: darkMode 
+                ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
+                : "linear-gradient(135deg, #ffffff 0%, #fef9f3 100%)",
+              borderColor: darkMode ? "#4b5563" : "#fef3c7",
+              boxShadow: darkMode 
+                ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
+                : "0 2px 4px rgba(217, 119, 6, 0.08)",
+            }}
+          >
+            <div className="flex items-center gap-2.5 mb-3">
+              <div 
+                className="p-1.5 rounded-lg"
+                style={{
+                  background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                  boxShadow: "0 2px 4px rgba(251, 191, 36, 0.3)",
+                }}
+              >
+                <AppstoreOutlined className="text-white text-xs" />
+              </div>
+              <Text className={`text-xs font-bold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Theme Color</Text>
+            </div>
+            <Radio.Group
+              value={themeColor}
+              onChange={(e) => handleThemeColorChange(e.target.value)}
+              className="w-full"
+            >
+              <Space direction="vertical" className="w-full" size={4}>
+                <Radio value="golden" className="w-full !m-0">
+                  <div className="flex items-center gap-2 py-1">
+                    <div 
+                      className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                      style={{
+                        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                        boxShadow: "0 2px 4px rgba(217, 119, 6, 0.4)",
+                      }}
+                    ></div>
+                    <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Golden</span>
+                  </div>
+                </Radio>
+                <Radio value="blue" className="w-full !m-0">
+                  <div className="flex items-center gap-2 py-1">
+                    <div 
+                      className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                      style={{
+                        background: "linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)",
+                        boxShadow: "0 2px 4px rgba(59, 130, 246, 0.4)",
+                      }}
+                    ></div>
+                    <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Blue</span>
+                  </div>
+                </Radio>
+                <Radio value="green" className="w-full !m-0">
+                  <div className="flex items-center gap-2 py-1">
+                    <div 
+                      className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                      style={{
+                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                        boxShadow: "0 2px 4px rgba(16, 185, 129, 0.4)",
+                      }}
+                    ></div>
+                    <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Green</span>
+                  </div>
+                </Radio>
+                <Radio value="purple" className="w-full !m-0">
+                  <div className="flex items-center gap-2 py-1">
+                    <div 
+                      className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                      style={{
+                        background: "linear-gradient(135deg, #a855f7 0%, #ec4899 100%)",
+                        boxShadow: "0 2px 4px rgba(168, 85, 247, 0.4)",
+                      }}
+                    ></div>
+                    <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Purple</span>
+                  </div>
+                </Radio>
+                <Radio value="red" className="w-full !m-0">
+                  <div className="flex items-center gap-2 py-1">
+                    <div 
+                      className="w-4 h-4 rounded-full border-2 border-white shadow-md"
+                      style={{
+                        background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                        boxShadow: "0 2px 4px rgba(239, 68, 68, 0.4)",
+                      }}
+                    ></div>
+                    <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Red</span>
+                  </div>
+                </Radio>
+              </Space>
+            </Radio.Group>
+          </div>
+
+          {/* Card Color Scheme */}
+          <div 
+            className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+            style={{
+              background: darkMode 
+                ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
+                : "linear-gradient(135deg, #ffffff 0%, #fef9f3 100%)",
+              borderColor: darkMode ? "#4b5563" : "#fef3c7",
+              boxShadow: darkMode 
+                ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
+                : "0 2px 4px rgba(217, 119, 6, 0.08)",
+            }}
+          >
+            <div className="flex items-center gap-2.5 mb-3">
+              <div 
+                className="p-1.5 rounded-lg"
+                style={{
+                  background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                  boxShadow: "0 2px 4px rgba(251, 191, 36, 0.3)",
+                }}
+              >
+                <BgColorsOutlined className="text-white text-xs" />
+              </div>
+              <Text className={`text-xs font-bold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>Card Style</Text>
+            </div>
+            <Radio.Group
+              value={cardColorScheme}
+              onChange={(e) => handleCardColorSchemeChange(e.target.value)}
+              className="w-full"
+            >
+              <Space direction="vertical" className="w-full" size={4}>
+                <Radio value="gradient" className="w-full !m-0">
+                  <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Gradient</span>
+                </Radio>
+                <Radio value="solid" className="w-full !m-0">
+                  <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Solid</span>
+                </Radio>
+                <Radio value="minimal" className="w-full !m-0">
+                  <span className={`text-[10px] font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Minimal</span>
+                </Radio>
+              </Space>
+            </Radio.Group>
+          </div>
+
+          {/* Reset Button */}
+          <Button
+            type="default"
+            block
+            onClick={() => {
+              setDarkMode(false);
+              setThemeColor('golden');
+              setCardColorScheme('gradient');
+              localStorage.setItem('darkMode', 'false');
+              localStorage.setItem('themeColor', 'golden');
+              localStorage.setItem('cardColorScheme', 'gradient');
+              document.documentElement.classList.remove('dark');
+            }}
+            className="mt-2"
+            size="small"
+            style={{
+              background: "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)",
+              border: "none",
+              color: "white",
+              fontWeight: 600,
+              boxShadow: "0 2px 4px rgba(217, 119, 6, 0.3)",
+            }}
+          >
+            Reset Defaults
+          </Button>
+        </div>
+      </Drawer>
     </Layout>
   );
 };
