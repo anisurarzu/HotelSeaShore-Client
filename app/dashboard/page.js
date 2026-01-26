@@ -849,7 +849,7 @@ const DashboardContent = ({ sliders }) => {
               Dashboard
             </Title>
             <Text className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Overview of your hotel's performance
+              Overview of your hotel&apos;s performance
             </Text>
           </div>
 
