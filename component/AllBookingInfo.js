@@ -1,12 +1,18 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Select, DatePicker, Button, Spin, Alert, message } from "antd";
-import { DownloadOutlined } from "@ant-design/icons";
+import { Select, DatePicker, Button, Spin, Alert, message, Table } from "antd";
+import { DownloadOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import coreAxios from "@/utils/axiosInstance";
+
+// Extend dayjs with plugins
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
@@ -21,6 +27,7 @@ const AllBookingInfo = ({ hotelID }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [dates, setDates] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [tableLoading, setTableLoading] = useState(false);
 
   useEffect(() => {
     fetchHotelInformation();
@@ -29,30 +36,48 @@ const AllBookingInfo = ({ hotelID }) => {
 
   const fetchHotelInformation = async () => {
     try {
-      setLoading(true);
-
-      const userInfo = JSON.parse(localStorage.getItem("userInfo"));
+      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const userRole = userInfo?.role?.value;
-      const userHotelID = hotelID;
+      const userHotelID = Number(hotelID);
 
-      const res = await coreAxios.get(`/hotels`);
-      setLoading(false);
+      // Fetch hotels using API - same structure as BookingInfo
+      const response = await coreAxios.get("/hotels");
 
-      if (res?.status === 200) {
-        let hotelData = res?.data;
+      if (response.status === 200) {
+        const responseData = response.data;
+        let hotelsData = [];
+        
+        // Extract hotels array from response - same pattern as BookingInfo
+        if (responseData?.hotels && Array.isArray(responseData.hotels)) {
+          hotelsData = responseData.hotels;
+        } else if (responseData?.success && responseData?.data?.hotels && Array.isArray(responseData.data.hotels)) {
+          hotelsData = responseData.data.hotels;
+        } else if (responseData?.data?.hotels && Array.isArray(responseData.data.hotels)) {
+          hotelsData = responseData.data.hotels;
+        } else if (Array.isArray(responseData?.data)) {
+          hotelsData = responseData.data;
+        } else if (Array.isArray(responseData)) {
+          hotelsData = responseData;
+        }
 
+        // Ensure it's an array
+        if (!Array.isArray(hotelsData)) {
+          hotelsData = [];
+        }
+
+        // Filter bookings if the role is "hoteladmin"
         if (userRole === "hoteladmin" && userHotelID) {
-          hotelData = hotelData.filter(
-            (hotel) => hotel.hotelID === userHotelID
+          hotelsData = hotelsData.filter(
+            (hotel) => hotel && hotel.hotelID === userHotelID
           );
         }
 
-        setHotels(hotelData);
+        setHotels(hotelsData);
       }
     } catch (error) {
-      setLoading(false);
       console.error("Failed to fetch hotel data", error);
-      message.error("Failed to load hotels. Please try again.");
+      message.error(error.response?.data?.message || "Failed to load hotels. Please try again.");
+      setHotels([]);
     }
   };
 
@@ -60,7 +85,7 @@ const AllBookingInfo = ({ hotelID }) => {
     try {
       const response = await coreAxios.get("auth/users");
       if (response.status === 200) {
-        setUsers(response.data?.users);
+        setUsers(response.data?.users || []);
       }
     } catch (error) {
       console.error("Failed to fetch users", error);
@@ -69,42 +94,37 @@ const AllBookingInfo = ({ hotelID }) => {
   };
 
   const fetchBookings = async () => {
-    setLoading(true);
+    setTableLoading(true);
     try {
-      const userLoginID = selectedUser; // Use selected user for login ID
-
-      // Fetch bookings from API
-      const response = await coreAxios.get("bookings");
+      // Fetch bookings from API - same structure as BookingInfo
+      const response = await coreAxios.get("/bookings");
 
       if (response.status === 200) {
-        const filtered = response.data.filter((data) => data.statusID !== 255); // Filter out statusID 255
+        // API returns direct array of bookings
+        let bookingsData = Array.isArray(response.data) ? response.data : [];
 
-        const [startDate, endDate] = dates.map((date) =>
-          dayjs(date).format("YYYY-MM-DD")
-        );
+        // Filter out statusID 255 (cancelled/deleted)
+        bookingsData = bookingsData.filter((data) => data.statusID !== 255);
 
         // Apply filters based on the provided criteria
-        const filteredByCriteria = filtered.filter((booking) => {
+        const [startDate, endDate] = dates.length > 0 
+          ? dates.map((date) => dayjs(date).format("YYYY-MM-DD"))
+          : [null, null];
+
+        const filteredByCriteria = bookingsData.filter((booking) => {
           const matchHotel = selectedHotel
             ? booking.hotelID === selectedHotel
             : true;
           const matchUser = selectedUser
             ? booking.bookedByID === selectedUser
             : true;
-          const matchLoginID = userLoginID
-            ? booking.bookedByID === userLoginID
-            : true;
           const matchDate =
-            dates.length > 0
-              ? dayjs(booking.checkInDate).isBetween(
-                  startDate,
-                  endDate,
-                  "day",
-                  "[]"
-                )
+            startDate && endDate
+              ? dayjs(booking.checkInDate).isSameOrAfter(startDate, "day") &&
+                dayjs(booking.checkInDate).isSameOrBefore(endDate, "day")
               : true;
 
-          return matchHotel && matchUser && matchLoginID && matchDate;
+          return matchHotel && matchUser && matchDate;
         });
 
         // Sort the bookings by checkInDate (sequential order)
@@ -112,13 +132,16 @@ const AllBookingInfo = ({ hotelID }) => {
           dayjs(a.checkInDate).isBefore(dayjs(b.checkInDate)) ? -1 : 1
         );
 
+        setBookings(sortedBookings);
         setFilteredBookings(sortedBookings);
       }
     } catch (error) {
-      message.error("Failed to fetch bookings.");
-      console.error(error);
+      console.error("Error fetching bookings:", error);
+      message.error(error.response?.data?.message || "Failed to fetch bookings.");
+      setBookings([]);
+      setFilteredBookings([]);
     } finally {
-      setLoading(false);
+      setTableLoading(false);
     }
   };
 
@@ -132,6 +155,7 @@ const AllBookingInfo = ({ hotelID }) => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Bookings");
     XLSX.writeFile(workbook, `Bookings_${dayjs().format("YYYYMMDD")}.xlsx`);
+    message.success("Excel file exported successfully!");
   };
 
   const exportToPDF = () => {
@@ -153,11 +177,11 @@ const AllBookingInfo = ({ hotelID }) => {
     const hotelName = selectedHotelName || "All Hotels";
 
     // Header Section
-    doc.setFontSize(14); // Reduced font size
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text("Booking Information", 14, 15);
 
-    doc.setFontSize(10); // Reduced font size
+    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(`Hotel: ${hotelName}`, 14, 22);
     doc.text(`User: ${userName}`, 14, 27);
@@ -187,59 +211,58 @@ const AllBookingInfo = ({ hotelID }) => {
       dayjs(booking.checkInDate).format("DD MMM YYYY"),
       dayjs(booking.checkOutDate).format("DD MMM YYYY"),
       booking.nights,
-      `${booking.roomCategoryName} (${booking.roomNumberName})`,
-      booking.paymentMethod,
-      booking.transactionId,
-      booking.totalBill.toFixed(2),
+      `${booking.roomCategoryName || ""} (${booking.roomNumberName || ""})`,
+      booking.paymentMethod || "",
+      booking.transactionId || "",
+      (booking.totalBill || 0).toFixed(2),
     ]);
 
-    // Auto table (add the table data below the header)
+    // Auto table
     doc.autoTable({
       head: [columns],
       body: rows,
       startY: 38,
-      theme: "grid", // Modern grid theme
+      theme: "grid",
       headStyles: {
-        fillColor: [22, 160, 133], // Header background color
-        textColor: [255, 255, 255], // Header text color
-        fontSize: 9, // Reduced header font size
+        fillColor: [22, 160, 133],
+        textColor: [255, 255, 255],
+        fontSize: 9,
       },
       bodyStyles: {
-        fontSize: 8, // Reduced body font size
-        halign: "center", // Center align text
+        fontSize: 8,
+        halign: "center",
       },
-      alternateRowStyles: { fillColor: [240, 240, 240] }, // Row striping
+      alternateRowStyles: { fillColor: [240, 240, 240] },
       columnStyles: {
         7: {
-          // TrxID column settings
-          fontSize: 6, // Reduced font size
-          cellWidth: 40, // Narrow width for TrxID column
-          halign: "center", // Center align text
-          textColor: [0, 0, 0], // Black text color
-          valign: "middle", // Vertically align text
-          overflow: "linebreak", // Enable word breaking in TrxID column
+          fontSize: 6,
+          cellWidth: 40,
+          halign: "center",
+          textColor: [0, 0, 0],
+          valign: "middle",
+          overflow: "linebreak",
         },
       },
-      margin: { top: 10, bottom: 10 }, // Reduced row height
+      margin: { top: 10, bottom: 10 },
     });
 
     // Totals Row
     const totals = {
       totalBill: filteredBookings
-        .reduce((acc, b) => acc + b.totalBill, 0)
+        .reduce((acc, b) => acc + (b.totalBill || 0), 0)
         .toFixed(2),
       advancePayment: filteredBookings
-        .reduce((acc, b) => acc + b.advancePayment, 0)
+        .reduce((acc, b) => acc + (b.advancePayment || 0), 0)
         .toFixed(2),
       duePayment: filteredBookings
-        .reduce((acc, b) => acc + b.duePayment, 0)
+        .reduce((acc, b) => acc + (b.duePayment || 0), 0)
         .toFixed(2),
     };
 
-    // Add Totals Section with bold black text
-    doc.setFontSize(9); // Reduced font size
+    // Add Totals Section
+    doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(0, 0, 0); // Black text color for totals
+    doc.setTextColor(0, 0, 0);
     const finalY = doc.lastAutoTable.finalY + 7;
 
     doc.text(`Summary`, 14, finalY);
@@ -259,17 +282,17 @@ const AllBookingInfo = ({ hotelID }) => {
       ],
       startY: finalY + 4,
       styles: {
-        fillColor: [240, 240, 240], // Background color for totals row
-        fontSize: 9, // Adjusted font size
+        fillColor: [240, 240, 240],
+        fontSize: 9,
         halign: "center",
-        textColor: [0, 0, 0], // Set text color to black for totals
+        textColor: [0, 0, 0],
       },
-      columnStyles: { 5: { fontStyle: "bold" } }, // Bold "Totals" label
+      columnStyles: { 5: { fontStyle: "bold" } },
     });
 
     // Footer
     const pageHeight = doc.internal.pageSize.height;
-    doc.setFontSize(8); // Reduced font size
+    doc.setFontSize(8);
     const timestamp = dayjs().format("DD MMM YYYY HH:mm:ss");
     doc.text(`Generated on: ${timestamp}`, 14, pageHeight - 10);
     doc.text(`Page 1 of 1`, 190, pageHeight - 10, { align: "right" });
@@ -281,261 +304,223 @@ const AllBookingInfo = ({ hotelID }) => {
         "_"
       );
     doc.save(fileName);
+    message.success("PDF file exported successfully!");
+  };
+
+  // Table columns configuration
+  const columns = [
+    {
+      title: "Booking No",
+      dataIndex: "bookingNo",
+      key: "bookingNo",
+      responsive: ["md"],
+    },
+    {
+      title: "Full Name",
+      dataIndex: "fullName",
+      key: "fullName",
+    },
+    {
+      title: "Check-In",
+      dataIndex: "checkInDate",
+      key: "checkInDate",
+      render: (date) => dayjs(date).format("DD MMM YYYY"),
+      responsive: ["md"],
+    },
+    {
+      title: "Check-Out",
+      dataIndex: "checkOutDate",
+      key: "checkOutDate",
+      render: (date) => dayjs(date).format("DD MMM YYYY"),
+      responsive: ["md"],
+    },
+    {
+      title: "Room",
+      key: "room",
+      render: (_, record) =>
+        `${record.roomCategoryName || ""} (${record.roomNumberName || ""})`,
+      responsive: ["lg"],
+    },
+    {
+      title: "Nights",
+      dataIndex: "nights",
+      key: "nights",
+      responsive: ["sm"],
+    },
+    {
+      title: "Method",
+      dataIndex: "paymentMethod",
+      key: "paymentMethod",
+      responsive: ["md"],
+    },
+    {
+      title: "TrxID",
+      dataIndex: "transactionId",
+      key: "transactionId",
+      responsive: ["lg"],
+    },
+    {
+      title: "Total Bill",
+      dataIndex: "totalBill",
+      key: "totalBill",
+      render: (value) => (value || 0).toFixed(2),
+      responsive: ["sm"],
+    },
+    {
+      title: "Advance",
+      dataIndex: "advancePayment",
+      key: "advancePayment",
+      render: (value) => (value || 0).toFixed(2),
+      responsive: ["md"],
+    },
+    {
+      title: "Due",
+      dataIndex: "duePayment",
+      key: "duePayment",
+      render: (value) => (value || 0).toFixed(2),
+      responsive: ["md"],
+    },
+  ];
+
+  // Calculate totals
+  const totals = {
+    totalBill: filteredBookings.reduce((acc, b) => acc + (b.totalBill || 0), 0),
+    advancePayment: filteredBookings.reduce((acc, b) => acc + (b.advancePayment || 0), 0),
+    duePayment: filteredBookings.reduce((acc, b) => acc + (b.duePayment || 0), 0),
   };
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h3
-        style={{
-          color: "#38a169",
-          fontWeight: "bold",
-          textAlign: "center",
-          fontSize: "24px",
-          marginBottom: "20px",
-        }}
-      >
+    <div className="p-4 sm:p-6">
+      <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-6" style={{ color: "#38a169" }}>
         Booking Information
       </h3>
 
-      <div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
-        <Select
-          placeholder="Select Hotel"
-          style={{ width: "25%" }}
-          value={selectedHotel}
-          onChange={(value) => {
-            setSelectedHotel(value);
+      {/* Filters Section - Responsive */}
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap">
+          <Select
+            placeholder="Select Hotel"
+            className="w-full sm:w-auto sm:flex-1 min-w-[150px]"
+            value={selectedHotel}
+            onChange={(value) => {
+              setSelectedHotel(value);
+              const selectedHotelObj = hotels.find(
+                (hotel) => hotel.hotelID === value
+              );
+              setSelectedHotelName(
+                selectedHotelObj ? selectedHotelObj.hotelName || selectedHotelObj.name : ""
+              );
+            }}
+            allowClear
+          >
+            {hotels.map((hotel) => (
+              <Option key={hotel.hotelID} value={hotel.hotelID}>
+                {hotel.hotelName || hotel.name}
+              </Option>
+            ))}
+          </Select>
 
-            // Find the selected hotel name
-            const selectedHotelObj = hotels.find(
-              (hotel) => hotel.hotelID === value
-            );
-            setSelectedHotelName(
-              selectedHotelObj ? selectedHotelObj.hotelName : ""
-            );
-          }}
-        >
-          {hotels.map((hotel) => (
-            <Option key={hotel.hotelID} value={hotel.hotelID}>
-              {hotel.hotelName}
-            </Option>
-          ))}
-        </Select>
+          <Select
+            placeholder="Select User"
+            className="w-full sm:w-auto sm:flex-1 min-w-[150px]"
+            value={selectedUser}
+            onChange={(value) => setSelectedUser(value)}
+            allowClear
+          >
+            {users.map((user) => (
+              <Option key={user.id || user._id} value={user.loginID}>
+                {user.loginID || user.username}
+              </Option>
+            ))}
+          </Select>
 
-        <Select
-          placeholder="Select User"
-          style={{ width: "25%" }}
-          value={selectedUser}
-          onChange={(value) => setSelectedUser(value)}
-        >
-          {users.map((user) => (
-            <Option key={user.id} value={user.loginID}>
-              {user.loginID}
-            </Option>
-          ))}
-        </Select>
+          <RangePicker
+            value={dates}
+            onChange={(dates) => setDates(dates || [])}
+            className="w-full sm:w-auto sm:flex-1"
+            format="MMM D, YYYY"
+          />
 
-        <RangePicker
-          value={dates}
-          onChange={(dates) => setDates(dates || [])}
-          style={{ width: "40%" }}
-        />
+          <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+            <Button 
+              type="primary" 
+              onClick={fetchBookings}
+              className="w-full sm:w-auto"
+              loading={tableLoading}
+            >
+              Apply Filters
+            </Button>
 
-        <Button type="primary" onClick={fetchBookings}>
-          Apply Filters
-        </Button>
+            <div className="w-full sm:w-auto grid grid-cols-2 sm:flex gap-2">
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={exportToExcel}
+                disabled={!filteredBookings.length}
+                className="w-full sm:w-auto"
+              >
+                <span className="hidden sm:inline">Export Excel</span>
+                <span className="sm:hidden">Excel</span>
+              </Button>
 
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={exportToExcel}
-          disabled={!filteredBookings.length}
-        >
-          Export to Excel
-        </Button>
-
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={exportToPDF}
-          disabled={!filteredBookings.length}
-        >
-          Export to PDF
-        </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={exportToPDF}
+                disabled={!filteredBookings.length}
+                className="w-full sm:w-auto"
+              >
+                <span className="hidden sm:inline">Export PDF</span>
+                <span className="sm:hidden">PDF</span>
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {loading ? (
-        <Spin style={{ marginTop: "20px" }} tip="Loading, please wait...">
-          <Alert
-            message="Fetching booking data"
-            description="This may take a moment, thank you for your patience."
-            type="info"
-          />
+      {/* Table Section */}
+      {tableLoading ? (
+        <Spin tip="Loading bookings..." size="large">
+          <div style={{ minHeight: "200px" }} />
         </Spin>
       ) : (
-        <table border="1" style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Booking No
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Full Name
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Check-In
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Check-Out
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Room
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                No. Of Nights
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Method
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                TrxID
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Total Bill
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Advance
-              </th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>
-                Due
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredBookings.length ? (
-              filteredBookings.map((booking) => (
-                <tr key={booking._id}>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.bookingNo}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.fullName}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {dayjs(booking.checkInDate).format("DD MMM YYYY")}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {dayjs(booking.checkOutDate).format("DD MMM YYYY")}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.roomCategoryName} ({booking.roomNumberName})
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.nights}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.paymentMethod}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.transactionId}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.totalBill}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.advancePayment}
-                  </td>
-                  <td
-                    style={{ border: "1px solid black", textAlign: "center" }}
-                  >
-                    {booking.duePayment}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td
-                  colSpan="11"
-                  style={{
-                    textAlign: "center",
-                    border: "1px solid black",
-                  }}
-                >
-                  No bookings available.
-                </td>
-              </tr>
-            )}
-
-            {/* Summary Row for Totals */}
-            {filteredBookings.length > 0 && (
-              <tr>
-                <td
-                  colSpan="8"
-                  style={{
-                    textAlign: "right",
-                    fontWeight: "bold",
-                    border: "1px solid black",
-                  }}
-                >
-                  Total:
-                </td>
-                <td
-                  style={{
-                    border: "1px solid black",
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {filteredBookings.reduce(
-                    (sum, booking) => sum + booking.totalBill,
-                    0
-                  )}
-                </td>
-                <td
-                  style={{
-                    border: "1px solid black",
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {filteredBookings.reduce(
-                    (sum, booking) => sum + booking.advancePayment,
-                    0
-                  )}
-                </td>
-                <td
-                  style={{
-                    border: "1px solid black",
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {filteredBookings.reduce(
-                    (sum, booking) => sum + booking.duePayment,
-                    0
-                  )}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <>
+          <div className="overflow-x-auto">
+            <Table
+              columns={columns}
+              dataSource={filteredBookings}
+              rowKey={(record) => record._id || record.bookingNo}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total) => `Total ${total} bookings`,
+              }}
+              scroll={{ x: "max-content" }}
+              loading={tableLoading}
+              locale={{
+                emptyText: "No bookings available.",
+              }}
+              summary={() => (
+                filteredBookings.length > 0 ? (
+                  <Table.Summary fixed>
+                    <Table.Summary.Row>
+                      <Table.Summary.Cell index={0} colSpan={8} align="right">
+                        <strong>Total:</strong>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={8} align="center">
+                        <strong>{totals.totalBill.toFixed(2)}</strong>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={9} align="center">
+                        <strong>{totals.advancePayment.toFixed(2)}</strong>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={10} align="center">
+                        <strong>{totals.duePayment.toFixed(2)}</strong>
+                      </Table.Summary.Cell>
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                ) : null
+              )}
+            />
+          </div>
+        </>
       )}
     </div>
   );

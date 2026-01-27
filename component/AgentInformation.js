@@ -65,12 +65,37 @@ const AgentInformation = () => {
 
   const fetchHotels = async () => {
     try {
-      const response = await coreAxios.get("/hotel");
+      // Fetch hotels using API - same structure as BookingInfo
+      const response = await coreAxios.get("/hotels");
+
       if (response.status === 200) {
-        setHotels(response.data);
+        const responseData = response.data;
+        let hotelsData = [];
+        
+        // Extract hotels array from response - same pattern as BookingInfo
+        if (responseData?.hotels && Array.isArray(responseData.hotels)) {
+          hotelsData = responseData.hotels;
+        } else if (responseData?.success && responseData?.data?.hotels && Array.isArray(responseData.data.hotels)) {
+          hotelsData = responseData.data.hotels;
+        } else if (responseData?.data?.hotels && Array.isArray(responseData.data.hotels)) {
+          hotelsData = responseData.data.hotels;
+        } else if (Array.isArray(responseData?.data)) {
+          hotelsData = responseData.data;
+        } else if (Array.isArray(responseData)) {
+          hotelsData = responseData;
+        }
+
+        // Ensure it's an array
+        if (!Array.isArray(hotelsData)) {
+          hotelsData = [];
+        }
+
+        setHotels(hotelsData);
       }
     } catch (error) {
-      message.error("Failed to fetch hotels. Please try again.");
+      console.error("Failed to fetch hotels:", error);
+      message.error(error.response?.data?.message || "Failed to fetch hotels. Please try again.");
+      setHotels([]);
     }
   };
 
@@ -244,6 +269,7 @@ const AgentInformation = () => {
       title: "Image",
       dataIndex: "image",
       key: "image",
+      width: 60,
       render: (image, record) => {
         const defaultMaleImage =
           "https://static.vecteezy.com/system/resources/thumbnails/003/773/576/small/business-man-icon-free-vector.jpg";
@@ -260,6 +286,7 @@ const AgentInformation = () => {
             width={40}
             height={40}
             style={{ borderRadius: "50%" }}
+            preview={false}
           />
         );
       },
@@ -268,63 +295,75 @@ const AgentInformation = () => {
       title: "Username",
       dataIndex: "username",
       key: "username",
-      width: "15%",
+      width: 120,
     },
     {
       title: "User ID",
       dataIndex: "loginID",
       key: "loginID",
-      width: "20%",
+      width: 120,
+      responsive: ["sm"],
     },
     {
       title: "Email",
       dataIndex: "email",
       key: "email",
-      width: "20%",
+      width: 180,
+      responsive: ["md"],
     },
     {
       title: "Phone",
       dataIndex: "phoneNumber",
       key: "phoneNumber",
-      width: "15%",
+      width: 120,
+      responsive: ["lg"],
     },
     {
       title: "Address",
       dataIndex: "currentAddress",
       key: "currentAddress",
-      width: "20%",
+      width: 150,
+      responsive: ["xl"],
+      ellipsis: true,
     },
     {
       title: "Gender",
       dataIndex: "gender",
       key: "gender",
-      width: "10%",
+      width: 80,
+      responsive: ["md"],
     },
     {
       title: "Role",
       dataIndex: ["role", "label"],
       key: "role",
-      width: "10%",
+      width: 120,
     },
     {
       title: "Permission",
       dataIndex: ["permission", "permissionName"],
       key: "permission",
-      width: "15%",
+      width: 120,
+      responsive: ["lg"],
+      ellipsis: true,
     },
     {
       title: "Hotels",
       key: "hotelID",
+      width: 150,
+      responsive: ["xl"],
+      ellipsis: true,
       render: (_, record) => (
         <span>
           {record.hotelID?.map((item) => item.hotelName || item).join(", ")}
         </span>
       ),
-      width: "15%",
     },
     {
       title: "Actions",
       key: "actions",
+      width: 100,
+      fixed: "right",
       render: (_, record) => {
         const menu = (
           <Menu>
@@ -337,8 +376,10 @@ const AgentInformation = () => {
             </Menu.Item>
             <Menu.Item key="delete" icon={<DeleteOutlined />}>
               <Popconfirm
-                title="Are you sure you want to delete this category?"
+                title="Are you sure you want to delete this user?"
                 onConfirm={() => handleDelete(record)}
+                okText="Yes"
+                cancelText="No"
               >
                 Delete
               </Popconfirm>
@@ -347,9 +388,11 @@ const AgentInformation = () => {
         );
 
         return (
-          <Dropdown overlay={menu} trigger={["click"]}>
-            <Button>
-              Actions <DownOutlined />
+          <Dropdown menu={menu} trigger={["click"]}>
+            <Button size="small" className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">Actions</span>
+              <span className="sm:hidden">...</span>
+              <DownOutlined className="ml-1" />
             </Button>
           </Dropdown>
         );
@@ -358,7 +401,7 @@ const AgentInformation = () => {
   ];
 
   return (
-    <div className="">
+    <div className="p-2 sm:p-4">
       <Button
         type="primary"
         onClick={() => {
@@ -366,34 +409,45 @@ const AgentInformation = () => {
           formik.resetForm();
           setVisible(true);
         }}
-        className="mb-4 bg-[#8ABF55] hover:bg-[#7DA54E] text-white"
+        className="mb-4 w-full sm:w-auto bg-[#8ABF55] hover:bg-[#7DA54E] text-white"
+        size="small"
       >
-        Add New User
+        <span className="hidden sm:inline">Add New User</span>
+       
       </Button>
       <Spin spinning={loading}>
-        <Table
-          columns={columns}
-          dataSource={users?.users}
-          pagination={false}
-          rowKey="key"
-          scroll={{ x: true }}
-        />
-        <Pagination
-          current={pagination.current}
-          pageSize={pagination.pageSize}
-          total={users?.users?.length}
-          onChange={(page, pageSize) =>
-            setPagination({ ...pagination, current: page, pageSize })
-          }
-        />
+        <div className="overflow-x-auto">
+          <Table
+            columns={columns}
+            dataSource={users?.users}
+            pagination={false}
+            rowKey="key"
+            scroll={{ x: "max-content" }}
+            size="small"
+          />
+        </div>
+        <div className="mt-4 flex justify-center sm:justify-start">
+          <Pagination
+            current={pagination.current}
+            pageSize={pagination.pageSize}
+            total={users?.users?.length}
+            onChange={(page, pageSize) =>
+              setPagination({ ...pagination, current: page, pageSize })
+            }
+            showSizeChanger
+            showTotal={(total) => `Total ${total} users`}
+            responsive
+          />
+        </div>
       </Spin>
 
       <Modal
         title={isEditing ? "Edit User" : "Add New User"}
-        visible={visible}
+        open={visible}
         onCancel={() => setVisible(false)}
         footer={null}
-        width={800}
+        width="95%"
+        style={{ maxWidth: "800px" }}
       >
         <form onSubmit={formik.handleSubmit}>
           <div className="mb-4">
@@ -486,6 +540,7 @@ const AgentInformation = () => {
               required
               onChange={(e) => formik.setFieldValue("gender", e.target.value)}
               value={formik.values.gender}
+              className="flex flex-col sm:flex-row gap-2"
             >
               <Radio value="male">Male</Radio>
               <Radio value="female">Female</Radio>
@@ -548,11 +603,17 @@ const AgentInformation = () => {
               value={formik.values.hotelID}
               onChange={(value) => formik.setFieldValue("hotelID", value)}
             >
-              {hotels.map((hotel) => (
-                <Select.Option key={hotel?.hotelID} value={hotel?.hotelID}>
-                  {hotel?.hotelName}
+              {Array.isArray(hotels) && hotels.length > 0 ? (
+                hotels.map((hotel) => (
+                  <Select.Option key={hotel?.hotelID} value={hotel?.hotelID}>
+                    {hotel?.hotelName || hotel?.name}
+                  </Select.Option>
+                ))
+              ) : (
+                <Select.Option value="" disabled>
+                  No hotels available
                 </Select.Option>
-              ))}
+              )}
             </Select>
           </div>
 

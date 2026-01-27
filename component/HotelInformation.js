@@ -720,6 +720,7 @@ const HotelInformation = () => {
       dataIndex: "roomId",
       key: "roomId",
       width: 100,
+      responsive: ["sm"],
     },
     {
       title: "Status",
@@ -727,6 +728,7 @@ const HotelInformation = () => {
       key: "status",
       width: 100,
       render: (status) => getStatusTag(status),
+      responsive: ["md"],
     },
     {
       title: "Price",
@@ -741,20 +743,24 @@ const HotelInformation = () => {
       width: 120,
       render: (_, record) =>
         `${record.capacity?.adults || 0} Adults, ${record.capacity?.children || 0} Children`,
+      responsive: ["lg"],
     },
     {
       title: "Actions",
       key: "actions",
       width: 150,
+      fixed: "right",
       render: (_, record) => (
-        <Space>
+        <Space size="small" className="flex-wrap">
           <Button
             type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEditRoom(categoryId, record)}
+            className="p-0 text-xs"
           >
-            Edit
+            <span className="hidden sm:inline">Edit</span>
+            <span className="sm:hidden">E</span>
           </Button>
           <Popconfirm
             title="Are you sure you want to delete this room?"
@@ -762,8 +768,9 @@ const HotelInformation = () => {
             okText="Yes"
             cancelText="No"
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              Delete
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} className="p-0 text-xs">
+              <span className="hidden sm:inline">Delete</span>
+              <span className="sm:hidden">Del</span>
             </Button>
           </Popconfirm>
         </Space>
@@ -792,6 +799,7 @@ const HotelInformation = () => {
       dataIndex: "hotelID",
       key: "hotelID",
       width: 80,
+      responsive: ["md"],
     },
     {
       title: "Hotel Name",
@@ -804,6 +812,7 @@ const HotelInformation = () => {
       dataIndex: ["address", "city"],
       key: "city",
       width: 150,
+      responsive: ["sm"],
     },
     {
       title: "Status",
@@ -811,6 +820,7 @@ const HotelInformation = () => {
       key: "status",
       width: 120,
       render: (status) => getStatusTag(status),
+      responsive: ["md"],
     },
     {
       title: "Total Rooms",
@@ -818,6 +828,7 @@ const HotelInformation = () => {
       key: "totalRooms",
       width: 120,
       render: (rooms) => rooms || 0,
+      responsive: ["lg"],
     },
     {
       title: "Available Rooms",
@@ -825,6 +836,7 @@ const HotelInformation = () => {
       key: "availableRooms",
       width: 140,
       render: (rooms) => rooms || 0,
+      responsive: ["lg"],
     },
     {
       title: "Actions",
@@ -832,23 +844,30 @@ const HotelInformation = () => {
       width: 200,
       fixed: "right",
       render: (_, record) => (
-        <Space>
+        <Space size="small" className="flex-wrap">
           <Button
             type="link"
             size="small"
             icon={<EyeOutlined />}
-            onClick={() => handleViewDetails(record)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewDetails(record);
+            }}
+            className="p-0"
           >
-            Details
+            <span className="hidden sm:inline">Details</span>
+            <span className="sm:hidden">View</span>
           </Button>
           <Button
             type="link"
             size="small"
             icon={<EditOutlined />}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setSelectedHotelId(record.hotelID);
               fetchHotelData(record.hotelID);
             }}
+            className="p-0"
           >
             Select
           </Button>
@@ -870,11 +889,11 @@ const HotelInformation = () => {
       <Card
         className="mb-6 shadow-sm"
         title={
-          <div className="flex items-center justify-between">
-            <span>Hotels List</span>
-            <Space>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
+            <span className="text-base sm:text-lg">Hotels List</span>
+            <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
               <Input.Search
-                placeholder="Search by name, description, or city"
+                placeholder="Search hotels..."
                 allowClear
                 onSearch={handleSearch}
                 onChange={(e) => {
@@ -882,23 +901,29 @@ const HotelInformation = () => {
                     handleSearch("");
                   }
                 }}
-                style={{ width: 250 }}
+                className="w-full sm:w-auto"
+                style={{ minWidth: "200px" }}
               />
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleCreateHotel}
-              >
-                Create Hotel
-              </Button>
-              <Button
-                type="default"
-                onClick={() => fetchHotels(pagination.current, pagination.pageSize, searchText)}
-                loading={loading}
-              >
-                Refresh
-              </Button>
-            </Space>
+              <div className="w-full sm:w-auto grid grid-cols-2 sm:flex gap-2">
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={handleCreateHotel}
+                  className="w-full sm:w-auto"
+                >
+                  <span className="hidden sm:inline">Create Hotel</span>
+               
+                </Button>
+                <Button
+                  type="default"
+                  onClick={() => fetchHotels(pagination.current, pagination.pageSize, searchText)}
+                  loading={loading}
+                  className="w-full sm:w-auto"
+                >
+                  Refresh
+                </Button>
+              </div>
+            </div>
           </div>
         }
       >
@@ -919,7 +944,8 @@ const HotelInformation = () => {
                 fetchHotels(page, pageSize, searchText);
               },
             }}
-            scroll={{ x: true }}
+            scroll={{ x: "max-content" }}
+            size="small"
             onRow={(record) => ({
               onClick: () => {
                 setSelectedHotelId(record.hotelID);
@@ -951,8 +977,15 @@ const HotelInformation = () => {
               </div>
             }
             extra={
-              <Button type="primary" icon={<EditOutlined />} onClick={handleEditHotel}>
-                Edit Hotel
+              <Button 
+                type="primary" 
+                icon={<EditOutlined />} 
+                onClick={handleEditHotel}
+                className="w-full sm:w-auto"
+                size="small"
+              >
+                <span className="hidden sm:inline">Edit Hotel</span>
+               
               </Button>
             }
           >
@@ -1025,9 +1058,9 @@ const HotelInformation = () => {
           <Card
         className="shadow-sm"
         title={
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
             <div className="flex items-center gap-2">
-              <span>Room Categories & Rooms</span>
+              <span className="text-base sm:text-lg">Room Categories & Rooms</span>
             </div>
             <Button
               type="primary"
@@ -1038,8 +1071,11 @@ const HotelInformation = () => {
                 setEditingCategoryId(null);
                 setCategoryModalVisible(true);
               }}
+              className="w-full sm:w-auto"
+              size="small"
             >
-              Add Category
+              <span className="hidden sm:inline">Add Category</span>
+              
             </Button>
           </div>
         }
@@ -1059,22 +1095,24 @@ const HotelInformation = () => {
                 <Panel
                   key={category._id}
                   header={
-                    <div className="flex items-center justify-between w-full pr-4">
-                      <div className="flex items-center gap-3">
-                        <Text strong>{category.name}</Text>
-                        {!category.isActive && <Tag color="red">Inactive</Tag>}
-                        <Text type="secondary">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full pr-2 sm:pr-4 gap-2 sm:gap-0">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <Text strong className="text-sm sm:text-base">{category.name}</Text>
+                        {!category.isActive && <Tag color="red" className="text-xs">Inactive</Tag>}
+                        <Text type="secondary" className="text-xs sm:text-sm">
                           ({category.roomNumbers?.length || 0} rooms)
                         </Text>
                       </div>
-                      <Space onClick={(e) => e.stopPropagation()}>
+                      <Space onClick={(e) => e.stopPropagation()} className="flex-wrap">
                         <Button
                           type="link"
                           size="small"
                           icon={<EditOutlined />}
                           onClick={() => handleEditCategory(category)}
+                          className="text-xs sm:text-sm"
                         >
-                          Edit
+                          <span className="hidden sm:inline">Edit</span>
+                  
                         </Button>
                         <Popconfirm
                           title="Are you sure you want to delete this category?"
@@ -1082,8 +1120,9 @@ const HotelInformation = () => {
                           okText="Yes"
                           cancelText="No"
                         >
-                          <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                            Delete
+                          <Button type="link" size="small" danger icon={<DeleteOutlined />} className="text-xs sm:text-sm">
+                            <span className="hidden sm:inline">Delete</span>
+                         
                           </Button>
                         </Popconfirm>
                         <Button
@@ -1091,8 +1130,10 @@ const HotelInformation = () => {
                           size="small"
                           icon={<PlusOutlined />}
                           onClick={() => handleAddRoom(category._id)}
+                          className="text-xs sm:text-sm"
                         >
-                          Add Room
+                          <span className="hidden sm:inline">Add Room</span>
+                         
                         </Button>
                       </Space>
                     </div>
@@ -1121,7 +1162,7 @@ const HotelInformation = () => {
                       rowKey="_id"
                       pagination={false}
                       size="small"
-                      scroll={{ x: true }}
+                      scroll={{ x: "max-content" }}
                     />
                   ) : (
                     <div className="text-center py-4 text-gray-500">
@@ -1148,7 +1189,8 @@ const HotelInformation = () => {
           hotelFormik.resetForm();
         }}
         footer={null}
-        width={800}
+        width="95%"
+        style={{ maxWidth: "800px" }}
       >
         <Form layout="vertical" onFinish={hotelFormik.handleSubmit}>
           <Form.Item label="Hotel Name" required>
@@ -1305,12 +1347,13 @@ const HotelInformation = () => {
             </Select>
           </Form.Item>
           <Form.Item>
-            <Space>
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button
                 type="primary"
                 htmlType="submit"
                 loading={submitting}
                 icon={<SaveOutlined />}
+                className="w-full sm:w-auto"
               >
                 {isCreatingHotel ? "Create Hotel" : "Save Changes"}
               </Button>
@@ -1323,10 +1366,11 @@ const HotelInformation = () => {
                   setHotelImages([]);
                 }}
                 icon={<CloseOutlined />}
+                className="w-full sm:w-auto"
               >
                 Cancel
               </Button>
-            </Space>
+            </div>
           </Form.Item>
         </Form>
       </Modal>
@@ -1361,7 +1405,8 @@ const HotelInformation = () => {
             </Button>
           ),
         ]}
-        width={900}
+        width="95%"
+        style={{ maxWidth: "900px" }}
       >
         {selectedHotelForDetails && (
           <div>
@@ -1474,7 +1519,8 @@ const HotelInformation = () => {
           setCategoryImages([]);
         }}
         footer={null}
-        width={600}
+        width="95%"
+        style={{ maxWidth: "600px" }}
       >
         <Form layout="vertical" onFinish={categoryFormik.handleSubmit}>
           <Form.Item label="Category Name" required>
@@ -1565,8 +1611,8 @@ const HotelInformation = () => {
             </Upload>
           </Form.Item>
           <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={submitting}>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button type="primary" htmlType="submit" loading={submitting} className="w-full sm:w-auto">
                 {isEditingCategory ? "Update" : "Create"}
               </Button>
               <Button
@@ -1577,10 +1623,11 @@ const HotelInformation = () => {
                   categoryFormik.resetForm();
                   setCategoryImages([]);
                 }}
+                className="w-full sm:w-auto"
               >
                 Cancel
               </Button>
-            </Space>
+            </div>
           </Form.Item>
         </Form>
       </Modal>
@@ -1597,7 +1644,8 @@ const HotelInformation = () => {
           roomFormik.resetForm();
         }}
         footer={null}
-        width={600}
+        width="95%"
+        style={{ maxWidth: "600px" }}
       >
         <Form layout="vertical" onFinish={roomFormik.handleSubmit}>
           <Form.Item label="Room Name" required>
@@ -1704,8 +1752,8 @@ const HotelInformation = () => {
             </Upload>
           </Form.Item>
           <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={submitting}>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button type="primary" htmlType="submit" loading={submitting} className="w-full sm:w-auto">
                 {isEditingRoom ? "Update" : "Create"}
               </Button>
               <Button
@@ -1717,10 +1765,11 @@ const HotelInformation = () => {
                   roomFormik.resetForm();
                   setRoomImages([]);
                 }}
+                className="w-full sm:w-auto"
               >
                 Cancel
               </Button>
-            </Space>
+            </div>
           </Form.Item>
         </Form>
       </Modal>

@@ -925,53 +925,86 @@ const HotelCalendar = ({ hotelID }) => {
     <div className="bg-gray-50 p-2">
       <div className="mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm mb-2 p-2 sm:p-3">
+        <div 
+          className="bg-white rounded-lg shadow-sm mb-2 calendar-header-container"
+          style={{ 
+            padding: '12px',
+            paddingTop: '8px'
+          }}
+        >
           <div className="flex flex-row items-center justify-between gap-2 sm:gap-3">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-800 truncate">
-                Booking Calendar ({dateRange[0].format("DD/MM/YYYY")} - {dateRange[1].format("DD/MM/YYYY")})
+            <div 
+              className="flex-1 min-w-0 calendar-title-container"
+              style={{ paddingTop: '0', paddingBottom: '0' }}
+            >
+              <h1 className="text-sm sm:text-lg md:text-xl lg:text-xl font-bold text-gray-800 truncate" >
+                <span className="hidden sm:inline">Booking Calendar </span>
+                ({dateRange[0].format("MMM D")} - {dateRange[1].format("D MMM")})
               </h1>
             </div>
             
             {/* Navigation Controls - Aligned to the right */}
-            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" style={{ paddingTop: '0' }}>
               <Button
-                icon={<LeftOutlined />}
+                icon={<LeftOutlined className="text-[10px] sm:text-xs" />}
                 onClick={goToPreviousMonth}
                 size="small"
-                className="text-xs"
+                className="text-[8px] sm:text-[10px]"
+                style={{ 
+                  minHeight: '24px',
+                  minWidth: '28px',
+                  padding: '2px 4px',
+                  fontSize: '8px'
+                }}
               >
-                <span className="hidden sm:inline">Prev</span>
-                <span className="sm:hidden">‹</span>
+                <span className="hidden sm:inline text-[10px]">Prev</span>
+                <span className="sm:hidden text-[10px]">‹</span>
               </Button>
               
               <Button
                 onClick={goToToday}
                 size="small"
-                className="text-xs"
+                className="text-[8px] sm:text-[10px]"
+                style={{ 
+                  minHeight: '24px',
+                  minWidth: '32px',
+                  padding: '2px 4px',
+                  fontSize: '8px'
+                }}
               >
-                Today
+                <span className="text-[8px] sm:text-[10px]">Today</span>
               </Button>
               
               <Button
-                icon={<RightOutlined />}
+                icon={<RightOutlined className="text-[10px] sm:text-xs" />}
                 onClick={goToNextMonth}
                 size="small"
-                className="text-xs"
+                className="text-[8px] sm:text-[10px]"
+                style={{ 
+                  minHeight: '24px',
+                  minWidth: '28px',
+                  padding: '2px 4px',
+                  fontSize: '8px'
+                }}
               >
-                <span className="hidden sm:inline">Next</span>
-                <span className="sm:hidden">›</span>
+                <span className="hidden sm:inline text-[10px]">Next</span>
+                <span className="sm:hidden text-[10px]">›</span>
               </Button>
               
               <Button
                 type={showDateRange ? "primary" : "default"}
-                icon={<CalendarOutlined />}
+                icon={<CalendarOutlined className="text-xs" />}
                 onClick={() => setShowDateRange(!showDateRange)}
                 size="small"
-                className="text-xs"
+                className="text-[10px] hidden sm:flex"
+                style={{ 
+                  minHeight: '28px', 
+                  padding: '2px 6px',
+                  fontSize: '10px'
+                }}
               >
-                <span className="hidden md:inline">Custom Range</span>
-                <span className="md:hidden">Range</span>
+                <span className="hidden md:inline text-[10px]">Custom Range</span>
+                <span className="sm:inline md:hidden text-[10px]">Range</span>
               </Button>
             </div>
           </div>
@@ -1746,6 +1779,42 @@ const HotelCalendar = ({ hotelID }) => {
           
           .calendar-table .ant-table-tbody > tr > td {
             font-size: 8px !important;
+          }
+          
+          .calendar-header-container {
+            padding: 8px 12px !important;
+            padding-top: 8px !important;
+          }
+          
+          .calendar-title-container {
+            padding-top: 0 !important;
+          }
+          
+          .calendar-title-container h1 {
+            font-size: 14px !important;
+          }
+          
+          .calendar-header-container .ant-btn {
+            min-height: 24px !important;
+            min-width: 28px !important;
+            padding: 2px 4px !important;
+            font-size: 8px !important;
+          }
+          
+          .calendar-header-container .ant-btn-sm {
+            height: 24px !important;
+            line-height: 22px !important;
+          }
+        }
+        
+        @media (min-width: 640px) {
+          .calendar-header-container {
+            padding: 12px 12px !important;
+            padding-top: 8px !important;
+          }
+          
+          .calendar-title-container {
+            padding-top: 0 !important;
           }
         }
         

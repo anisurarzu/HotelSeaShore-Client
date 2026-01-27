@@ -1039,77 +1039,87 @@ const BookingInfo = ({ hotelID }) => {
             <div className="space-y-4">
                 {/* Header Section */}
                 <div className="mb-3">
-                  <div className="flex flex-row items-center justify-between gap-2 flex-wrap">
-                    <h1 className="text-2xl font-bold text-gray-800">Bookings</h1>
-                    <div className="flex flex-row items-center gap-2 flex-1 justify-end min-w-0">
-                      {/* Search and Date Filter - Same Row */}
-                      <Input
-                        placeholder="Search bookings..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        allowClear
-                        style={{ height: "40px", width: "150px", flex: "0 0 auto" }}
-                        prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
-                      />
-                      <DatePicker
-                        value={checkInDate}
-                        onChange={(date) => setCheckInDate(date)}
-                        format="MMM D, YYYY"
-                        allowClear
-                        placeholder="Check-in Date"
-                        style={{ height: "40px", width: "160px", flex: "0 0 auto" }}
-                      />
-                      {(searchTerm || checkInDate) && (
-                        <Button
-                          onClick={() => {
-                            setSearchTerm("");
-                            setCheckInDate(null);
-                          }}
-                          style={{ height: "40px", flex: "0 0 auto" }}
-                        >
-                          Clear
-                        </Button>
-                      )}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Bookings</h1>
+                    <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 sm:items-center">
+                      {/* Search and Date Filter Row */}
+                      <div className="w-full sm:w-auto flex flex-row gap-2 flex-wrap sm:flex-nowrap">
+                        <Input
+                          placeholder="Search bookings..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          allowClear
+                          className="flex-1 sm:flex-initial"
+                          style={{ height: "40px", minWidth: "150px" }}
+                          prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
+                        />
+                        <DatePicker
+                          value={checkInDate}
+                          onChange={(date) => setCheckInDate(date)}
+                          format="MMM D, YYYY"
+                          allowClear
+                          placeholder="Check-in Date"
+                          className="flex-1 sm:flex-initial"
+                          style={{ height: "40px", minWidth: "130px", width: "130px" }}
+                        />
+                        {(searchTerm || checkInDate) && (
+                          <Button
+                            onClick={() => {
+                              setSearchTerm("");
+                              setCheckInDate(null);
+                            }}
+                            className="w-full sm:w-auto sm:flex-initial"
+                            style={{ height: "40px" }}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
                       
-                      {/* Action Buttons */}
-                      <Button
-                        icon={<ReloadOutlined />}
-                        onClick={() => {
-                          fetchBookings();
-                          fetchHotelInfo();
-                        }}
-                        loading={tableLoading}
-                        style={{ height: "40px", flex: "0 0 auto" }}
-                      >
-                        Refresh
-                      </Button>
-                      {bookingPermissions?.insertAccess && (
+                      {/* Action Buttons - Two per row on mobile */}
+                      <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:flex-row gap-2">
                         <Button
-                          type="primary"
-                          icon={<PlusOutlined />}
+                          icon={<ReloadOutlined />}
                           onClick={() => {
-                            formik.resetForm();
-                            setVisible(true);
-                            setIsEditing(false);
-                            setEditingKey(null);
-                            setPrevData(null);
-                            // Clear category and room selections
-                            setRoomCategories([]);
-                            setRoomNumbers([]);
-                            // Reset query params ref when manually opening modal
-                            hasHandledQueryParams.current = false;
-                            // Clear query params from URL if they exist
-                            if (searchParams.get("room") || searchParams.get("date")) {
-                              router.replace("/dashboard?menu=6");
-                            }
-                            // Fetch hotel info to set default hotel
+                            fetchBookings();
                             fetchHotelInfo();
                           }}
-                          style={{ height: "40px", flex: "0 0 auto" }}
+                          loading={tableLoading}
+                          className="w-full sm:w-auto"
+                          style={{ height: "40px" }}
                         >
-                          Create Booking
+                          Refresh
                         </Button>
-                      )}
+                        {bookingPermissions?.insertAccess && (
+                          <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={() => {
+                              formik.resetForm();
+                              setVisible(true);
+                              setIsEditing(false);
+                              setEditingKey(null);
+                              setPrevData(null);
+                              // Clear category and room selections
+                              setRoomCategories([]);
+                              setRoomNumbers([]);
+                              // Reset query params ref when manually opening modal
+                              hasHandledQueryParams.current = false;
+                              // Clear query params from URL if they exist
+                              if (searchParams.get("room") || searchParams.get("date")) {
+                                router.replace("/dashboard?menu=6");
+                              }
+                              // Fetch hotel info to set default hotel
+                              fetchHotelInfo();
+                            }}
+                            className="w-full sm:w-auto"
+                            style={{ height: "40px" }}
+                          >
+                            <span className="hidden sm:inline">Create Booking</span>
+                          
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
