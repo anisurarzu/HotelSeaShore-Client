@@ -551,6 +551,8 @@ const BookingInfo = ({ hotelID }) => {
             checkInDate: checkInDate,
             checkOutDate: checkOutDate,
             nights: nights,
+            adults: foundRoom.capacity?.adults || formik.values.adults || 1,
+            children: foundRoom.capacity?.children !== undefined ? (foundRoom.capacity.children || 0) : (formik.values.children || 0),
             totalBill: (nights * (foundRoom.price || foundCategory.basePrice || 0)),
             advancePayment: 0,
             duePayment: (nights * (foundRoom.price || foundCategory.basePrice || 0)),
@@ -605,6 +607,37 @@ const BookingInfo = ({ hotelID }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotelInfo.length, searchParams]);
+
+  // Set default hotel (hotelID 1) when modal opens for new booking
+  useEffect(() => {
+    // Only set default hotel if:
+    // 1. Modal is visible
+    // 2. Not in editing mode
+    // 3. Hotels are loaded
+    // 4. No hotel is currently selected (to avoid overriding pre-filled data)
+    // 5. No query params (to avoid interfering with calendar pre-fill)
+    const roomNumberId = searchParams.get("room");
+    const dateStr = searchParams.get("date");
+    
+    if (
+      visible &&
+      !isEditing &&
+      hotelInfo.length > 0 &&
+      (!formik.values.hotelID || formik.values.hotelID === 0) &&
+      !formik.values.hotelName &&
+      !roomNumberId &&
+      !dateStr
+    ) {
+      // Find hotel with hotelID === 1
+      const defaultHotel = hotelInfo.find((hotel) => hotel.hotelID === 1);
+      
+      if (defaultHotel) {
+        // Set the default hotel using the same handler to trigger category extraction
+        handleHotelInfo(defaultHotel.hotelName);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, isEditing, hotelInfo.length]);
 
   const handleHotelInfo = (value) => {
     // Find hotel by hotelName
@@ -1109,7 +1142,7 @@ const BookingInfo = ({ hotelID }) => {
                               if (searchParams.get("room") || searchParams.get("date")) {
                                 router.replace("/dashboard?menu=6");
                               }
-                              // Fetch hotel info to set default hotel
+                              // Fetch hotel info (default hotel will be set by useEffect)
                               fetchHotelInfo();
                             }}
                             className="w-full sm:w-auto"
@@ -1941,6 +1974,17 @@ const BookingInfo = ({ hotelID }) => {
                                   "roomNumberName",
                                   selectedRoom ? selectedRoom.name || selectedRoom.roomId : ""
                                 );
+                                
+                                // Set adults and children from room capacity if available
+                                if (selectedRoom) {
+                                  if (selectedRoom.capacity?.adults) {
+                                    formik.setFieldValue("adults", selectedRoom.capacity.adults);
+                                  }
+                                  if (selectedRoom.capacity?.children !== undefined) {
+                                    formik.setFieldValue("children", selectedRoom.capacity.children || 0);
+                                  }
+                                }
+                                
                                 // Set room price from selected room if available
                                 if (selectedRoom && selectedRoom.price) {
                                   formik.setFieldValue("roomPrice", selectedRoom.price);

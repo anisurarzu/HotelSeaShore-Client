@@ -48,6 +48,10 @@ import {
   MenuFoldOutlined,
   AppstoreOutlined,
   BgColorsOutlined,
+  ShoppingCartOutlined,
+  CoffeeOutlined,
+  ShopOutlined,
+  AppstoreAddOutlined,
 } from "@ant-design/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useCallback } from "react";
@@ -61,6 +65,11 @@ import RoomAvailabilityPage from "@/component/RoomSearchPage";
 import AllBookingInfo from "@/component/AllBookingInfo";
 import ExpenseInfo from "@/component/Expense/ExpenseInfo";
 import PermissionManagement from "@/component/Permission/PermissionManagement";
+// Restaurant components
+import RestaurantDashboard from "@/component/restaurant/RestaurantDashboard";
+import Orders from "@/component/restaurant/Orders";
+import RestaurantMenu from "@/component/restaurant/Menu";
+import Tables from "@/component/restaurant/Tables";
 import coreAxios from "@/utils/axiosInstance";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -78,8 +87,8 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const { useToken } = theme;
 
-// Menu items with appropriate icons
-const menuItems = [
+// Hotel menu items
+const hotelMenuItems = [
   {
     key: "1",
     label: "Dashboard",
@@ -92,12 +101,6 @@ const menuItems = [
     icon: <CalendarOutlined className="text-base" />,
     component: (props) => <Calender {...props} />,
   },
-  // {
-  //   key: "9",
-  //   label: "Room Availability",
-  //   icon: <CheckSquareOutlined className="text-base" />,
-  //   component: (props) => <RoomAvailabilityPage {...props} />,
-  // },
   {
     key: "6",
     label: "Booking Info",
@@ -121,6 +124,58 @@ const menuItems = [
     label: "Hotel Info",
     icon: <BankOutlined className="text-base" />,
     component: () => <HotelInformation />,
+  },
+  {
+    key: "2",
+    label: "Users",
+    icon: <TeamOutlined className="text-base" />,
+    component: () => <AgentInformation />,
+  },
+  {
+    key: "8",
+    label: "Settings",
+    icon: <SettingOutlined className="text-base" />,
+    component: () => <PermissionManagement />,
+  },
+];
+
+// Restaurant menu items
+const restaurantMenuItems = [
+  {
+    key: "1",
+    label: "Dashboard",
+    icon: <DashboardOutlined className="text-base" />,
+    component: (props) => <RestaurantDashboard {...props} />,
+  },
+  {
+    key: "20",
+    label: "Orders",
+    icon: <ShoppingCartOutlined className="text-base" />,
+    component: () => <Orders />,
+  },
+  {
+    key: "21",
+    label: "Menu",
+    icon: <AppstoreAddOutlined className="text-base" />,
+    component: () => <RestaurantMenu />,
+  },
+  {
+    key: "22",
+    label: "Tables",
+    icon: <ShopOutlined className="text-base" />,
+    component: () => <Tables />,
+  },
+  {
+    key: "23",
+    label: "Reports",
+    icon: <BarChartOutlined className="text-base" />,
+    component: () => <div className="p-6"><h2 className="text-xl font-bold">Restaurant Reports</h2><p>Restaurant reports and analytics will be displayed here.</p></div>,
+  },
+  {
+    key: "101",
+    label: "Expense",
+    icon: <WalletOutlined className="text-base" />,
+    component: () => <ExpenseInfo />,
   },
   {
     key: "2",
@@ -317,8 +372,19 @@ const DashboardContent = ({ sliders }) => {
     currentMonthOccupancyRate: 0,
   });
 
+  // Check if restaurant portal
+  const [isRestaurant, setIsRestaurant] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('isRestaurant') === 'true';
+    }
+    return false;
+  });
+
   // Get hotelID from URL
   const hotelID = searchParams.get("hotelID");
+
+  // Get menu items based on portal type
+  const menuItems = isRestaurant ? restaurantMenuItems : hotelMenuItems;
 
   // Calculate dashboard statistics from bookings API data
   const calculateDashboardStats = useCallback((bookingsData) => {
@@ -473,7 +539,7 @@ const DashboardContent = ({ sliders }) => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userInfo");
-    router.push("/login");
+    router.push("/");
   };
 
   const showDrawer = () => setDrawerVisible(true);
@@ -796,7 +862,54 @@ const DashboardContent = ({ sliders }) => {
       // Dashboard View - Only 6 cards
       const currentMonthName = dayjs().format("MMMM");
       
-      const dashboardCards = [
+      // Restaurant dashboard cards - Light green theme
+      const restaurantDashboardCards = [
+        {
+          title: "Today's Revenue",
+          value: `৳${dashboardStats.todayBookingAmount.toLocaleString()}`,
+          icon: <DollarOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)",
+        },
+        {
+          title: `Current Month (${currentMonthName}) Revenue`,
+          value: `৳${dashboardStats.currentMonthBookingAmount.toLocaleString()}`,
+          icon: <DollarOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%)",
+        },
+        {
+          title: "Today's Orders",
+          value: dashboardStats.todayCheckIns.toString(),
+          icon: <ShoppingCartOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #14b8a6 0%, #0d9488 50%, #0f766e 100%)",
+        },
+        {
+          title: "Active Tables",
+          value: dashboardStats.todayCheckOuts.toString(),
+          icon: <ShopOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)",
+        },
+        {
+          title: "Today's Table Occupancy",
+          value: `${dashboardStats.todayOccupancyRate}%`,
+          icon: <CoffeeOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)",
+        },
+        {
+          title: "Current Month Occupancy",
+          value: `${dashboardStats.currentMonthOccupancyRate}%`,
+          icon: <CoffeeOutlined className="text-xl" />,
+          color: "#ffffff",
+          bgGradient: "linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%)",
+        },
+      ];
+
+      // Hotel dashboard cards
+      const hotelDashboardCards = [
         {
           title: "Today's Booking Amount",
           value: `৳${dashboardStats.todayBookingAmount.toLocaleString()}`,
@@ -840,6 +953,8 @@ const DashboardContent = ({ sliders }) => {
           bgGradient: "linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1e40af 100%)",
         },
       ];
+
+      const dashboardCards = isRestaurant ? restaurantDashboardCards : hotelDashboardCards;
 
       return (
         <div className="space-y-6">
@@ -932,12 +1047,16 @@ const DashboardContent = ({ sliders }) => {
                 ? "#ffffff" 
                 : darkMode ? "#d1d5db" : "#64748b",
               background: selectedMenu === item.key 
-                ? "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)" 
+                ? (isRestaurant 
+                    ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                    : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)")
                 : "transparent",
             }}
             className={darkMode 
               ? "hover:!bg-gray-700/50 dark:hover:!bg-gray-700/50" 
-              : "hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50"}
+              : (isRestaurant
+                  ? "hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50"
+                  : "hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50")}
           >
             {!isCollapsed && (
               <span 
@@ -993,13 +1112,19 @@ const DashboardContent = ({ sliders }) => {
         style={{
           background: darkMode 
             ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
-            : "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)",
+            : (isRestaurant
+                ? "linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%)"
+                : "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)"),
           boxShadow: darkMode 
             ? "2px 0 15px rgba(0, 0, 0, 0.3)" 
-            : "2px 0 15px rgba(59, 130, 246, 0.1)",
+            : (isRestaurant
+                ? "2px 0 15px rgba(16, 185, 129, 0.1)"
+                : "2px 0 15px rgba(59, 130, 246, 0.1)"),
           borderRight: darkMode 
             ? "1px solid rgba(255, 255, 255, 0.1)" 
-            : "1px solid rgba(59, 130, 246, 0.08)",
+            : (isRestaurant
+                ? "1px solid rgba(16, 185, 129, 0.08)"
+                : "1px solid rgba(59, 130, 246, 0.08)"),
           overflow: "hidden",
           height: "100vh",
           position: "fixed",
@@ -1037,7 +1162,9 @@ const DashboardContent = ({ sliders }) => {
         <Header
           className="flex justify-between items-center shadow-sm transition-all duration-300"
           style={{
-            background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+            background: isRestaurant 
+              ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+              : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
             padding: isMobile ? "0 6px" : "0 10px",
             height: isMobile ? (topbarCollapsed ? "40px" : "52px") : (topbarCollapsed ? "36px" : "48px"),
             backdropFilter: "blur(10px)",
@@ -1101,8 +1228,8 @@ const DashboardContent = ({ sliders }) => {
                 </div>
                 <div className="hidden lg:block h-5 w-px bg-white/30 mx-2" />
                 <div className="hidden lg:block text-left">
-                  <p className="text-white text-[10px] m-0">Hotel:</p>
-                  <p className="text-white font-bold m-0 text-xs">{'Hotel Sea Shore'}</p>
+                  <p className="text-white text-[10px] m-0">{isRestaurant ? 'Restaurant:' : 'Hotel:'}</p>
+                  <p className="text-white font-bold m-0 text-xs">{isRestaurant ? 'Sea Shore Restaurant' : 'Hotel Sea Shore'}</p>
                 </div>
               </div>
             )}
@@ -1241,8 +1368,10 @@ const DashboardContent = ({ sliders }) => {
             <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>System Online</span>
           </div>
           <div className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
-            <span className="hidden sm:inline">Hotel Name: </span>
-            <span className={`font-semibold ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>{"Hotel Sea Shore"}</span>
+            <span className="hidden sm:inline">{isRestaurant ? 'Restaurant: ' : 'Hotel Name: '}</span>
+            <span className={`font-semibold ${darkMode ? (isRestaurant ? 'text-emerald-400' : 'text-blue-400') : (isRestaurant ? 'text-emerald-600' : 'text-blue-600')}`}>
+              {isRestaurant ? "Sea Shore Restaurant" : "Hotel Sea Shore"}
+            </span>
           </div>
         </div>
       </Layout>
@@ -1261,7 +1390,9 @@ const DashboardContent = ({ sliders }) => {
         }}
         headerStyle={{ 
           padding: isMobile ? "16px" : "12px",
-          background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+          background: isRestaurant
+            ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+            : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
           borderBottom: "none"
         }}
         title={
@@ -1287,13 +1418,19 @@ const DashboardContent = ({ sliders }) => {
           style={{
             background: darkMode 
               ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
-              : "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)",
+              : (isRestaurant
+                  ? "linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%)"
+                  : "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)"),
             boxShadow: darkMode 
               ? "-2px 0 15px rgba(0, 0, 0, 0.3)" 
-              : "-2px 0 15px rgba(217, 119, 6, 0.15)",
+              : (isRestaurant
+                  ? "-2px 0 15px rgba(16, 185, 129, 0.15)"
+                  : "-2px 0 15px rgba(217, 119, 6, 0.15)"),
             borderLeft: darkMode 
               ? "1px solid rgba(255, 255, 255, 0.1)" 
-              : "1px solid rgba(217, 119, 6, 0.1)",
+              : (isRestaurant
+                  ? "1px solid rgba(16, 185, 129, 0.1)"
+                  : "1px solid rgba(217, 119, 6, 0.1)"),
             overflow: "hidden",
             height: "100vh",
             position: "fixed",
@@ -1308,8 +1445,12 @@ const DashboardContent = ({ sliders }) => {
           <div 
             className="flex items-center justify-between px-4"
             style={{
-              background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-              boxShadow: "0 2px 8px rgba(59, 130, 246, 0.2)",
+              background: isRestaurant
+                ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+              boxShadow: isRestaurant
+                ? "0 2px 8px rgba(16, 185, 129, 0.2)"
+                : "0 2px 8px rgba(59, 130, 246, 0.2)",
               height: "56px",
               padding: "0 16px",
             }}
@@ -1674,7 +1815,9 @@ const DashboardContent = ({ sliders }) => {
         }}
         headerStyle={{ 
           padding: isMobile ? "12px 16px" : "16px",
-          background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+          background: isRestaurant
+            ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+            : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
           borderBottom: "none",
         }}
         styles={{

@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import * as Yup from "yup";
-import { Eye, EyeOff, Lock, Waves, Shell, Anchor, User, Globe } from "lucide-react";
+import { Eye, EyeOff, Lock, Waves, Shell, Anchor, User, Globe, UtensilsCrossed } from "lucide-react";
 import dayjs from "dayjs";
 import coreAxios from "@/utils/axiosInstance";
 
-const HotelSeaShoreLogin = () => {
+const RestaurantLogin = () => {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
@@ -18,24 +18,22 @@ const HotelSeaShoreLogin = () => {
 
   const translations = {
     bn: {
-      title: "হোটেল সি শোর এ স্বাগতম",
-      subtitle: "আপনার সম্পূর্ণ হোটেল ব্যবস্থাপনা সমাধান",
+      title: "সি শোর রেস্তোরাঁতে স্বাগতম",
+      subtitle: "আপনার সম্পূর্ণ রেস্তোরাঁ ব্যবস্থাপনা সমাধান",
       userID: "ইউজার আইডি",
       password: "পাসওয়ার্ড",
       login: "লগইন করুন",
-      loginIDPlaceholder: "HSS-1234",
+      loginIDPlaceholder: "RSS-1234",
       passwordPlaceholder: "আপনার পাসওয়ার্ড লিখুন",
       helpText: "আপনার ইউজার আইডি এবং পাসওয়ার্ড ব্যবহার করুন",
       required: "এই ফিল্ডটি প্রয়োজনীয়",
       loggingIn: "লগইন হচ্ছে...",
       signingIn: "Signing in..",
-      selectHotel: "হোটেল নির্বাচন করুন",
-      noHotels: "আপনার অ্যাকাউন্টে কোনো হোটেল নেই। অ্যাডমিনিস্ট্রেটর সাথে যোগাযোগ করুন।",
       logout: "লগআউট",
     },
     en: {
-      title: "Welcome to Hotel Sea Shore",
-      subtitle: "Your Complete Hotel Management Solution",
+      title: "Welcome to Sea Shore Restaurant",
+      subtitle: "Your Complete Restaurant Management Solution",
       userID: "User ID",
       password: "Password",
       login: "Sign In",
@@ -45,8 +43,6 @@ const HotelSeaShoreLogin = () => {
       required: "This field is required",
       loggingIn: "Logging in...",
       signingIn: "Signing in...",
-      selectHotel: "SELECT YOUR HOTEL",
-      noHotels: "No hotels assigned to your account. Please contact administrator.",
       logout: "LOGOUT",
     },
   };
@@ -82,9 +78,9 @@ const HotelSeaShoreLogin = () => {
       if (response.status === 200) {
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("userInfo", JSON.stringify(response.data.user));
-        localStorage.setItem("portalType", "hotel");
+        localStorage.setItem("portalType", "restaurant");
 
-        // Redirect to dashboard without hardcoded hotelID
+        // Redirect to dashboard
         router.push(`/dashboard`);
         
       } else {
@@ -102,66 +98,66 @@ const HotelSeaShoreLogin = () => {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute bottom-0 left-0 right-0 h-96 opacity-15">
           <svg className="absolute bottom-0 w-full h-full" viewBox="0 0 1440 320" preserveAspectRatio="none">
-            <path fill="url(#wave-gradient)" fillOpacity="0.3" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,144C960,149,1056,139,1152,122.7C1248,107,1344,85,1392,74.7L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z">
+            <path fill="url(#wave-gradient-restaurant)" fillOpacity="0.3" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,144C960,149,1056,139,1152,122.7C1248,107,1344,85,1392,74.7L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z">
               <animate attributeName="d" dur="8s" repeatCount="indefinite" values="
                 M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,144C960,149,1056,139,1152,122.7C1248,107,1344,85,1392,74.7L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z;
                 M0,160L48,154.7C96,149,192,139,288,154.7C384,171,480,213,576,213.3C672,213,768,171,864,138.7C960,107,1056,85,1152,90.7C1248,96,1344,128,1392,144L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z;
                 M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,144C960,149,1056,139,1152,122.7C1248,107,1344,85,1392,74.7L1440,64L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z" />
             </path>
             <defs>
-              <linearGradient id="wave-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#1e40af" />
-                <stop offset="50%" stopColor="#2563eb" />
-                <stop offset="100%" stopColor="#3b82f6" />
+              <linearGradient id="wave-gradient-restaurant" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#10b981" />
+                <stop offset="50%" stopColor="#14b8a6" />
+                <stop offset="100%" stopColor="#22c55e" />
               </linearGradient>
             </defs>
           </svg>
         </div>
 
         <div className="absolute top-20 left-[10%] animate-float">
-          <Shell className="w-12 h-12 text-blue-300 opacity-30" />
+          <UtensilsCrossed className="w-12 h-12 text-emerald-300 opacity-30" />
         </div>
         <div className="absolute top-40 right-[15%] animate-float-delayed">
-          <Waves className="w-16 h-16 text-indigo-300 opacity-25" />
+          <Shell className="w-16 h-16 text-teal-300 opacity-25" />
         </div>
         <div className="absolute bottom-40 left-[20%] animate-float-slow">
-          <Anchor className="w-12 h-12 text-slate-300 opacity-30" />
+          <Anchor className="w-12 h-12 text-green-300 opacity-30" />
         </div>
         
-        <div className="absolute top-1/4 left-1/4 w-4 h-4 bg-blue-200 rounded-full opacity-30 animate-bubble" />
-        <div className="absolute top-1/3 right-1/3 w-6 h-6 bg-indigo-200 rounded-full opacity-25 animate-bubble-delayed" />
-        <div className="absolute bottom-1/3 left-1/2 w-5 h-5 bg-slate-200 rounded-full opacity-30 animate-bubble-slow" />
+        <div className="absolute top-1/4 left-1/4 w-4 h-4 bg-emerald-200 rounded-full opacity-30 animate-bubble" />
+        <div className="absolute top-1/3 right-1/3 w-6 h-6 bg-teal-200 rounded-full opacity-25 animate-bubble-delayed" />
+        <div className="absolute bottom-1/3 left-1/2 w-5 h-5 bg-green-200 rounded-full opacity-30 animate-bubble-slow" />
       </div>
 
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden">
             {/* Header */}
-            <div className="relative bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-700 p-6 text-white">
-              <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxNCAwIDYg২.৬৮৬gNiA২s-২.৬৮৬g৬-৬g৬-৬-২.৬৮৬-৬-৬ ২.৬৮৬-৬g৬-৬n৪০g৩z৬s৩.৩১৪g০g৬g২.৬৮৬g৬-৬g৬-৬-২.৬৮৬-৬-৬ ২.৬৮৬-৬g৬-৬ZoiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9Ii4wMyIvPjwvZz48L3N2Zz4=')] opacity-50" />
+            <div className="relative bg-gradient-to-br from-emerald-500 via-teal-500 to-green-600 p-6 text-white">
+              <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxNCAwIDYgMi42ODYgNiA2cy0yLjY4NiA2LTYgNi02LTIuNjg2LTYtNiAyLjY4Ni02IDYtNnY0MGczLjMxNCAwIDYgMi42ODYgNiA2cy0yLjY4NiA2LTYgNi02LTIuNjg2LTYtNiAyLjY4Ni02IDYtNloiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iLjAzIi8+PC9nPjwvc3ZnPg==')] opacity-50" />
               
               <div className="relative flex items-center justify-center mb-3">
                 <div className="bg-white/95 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg border border-white/30 p-2">
                   <img 
                     src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
-                    alt="Hotel Sea Shore Logo" 
+                    alt="Sea Shore Restaurant Logo" 
                     className="h-16 w-auto object-contain"
                   />
                 </div>
               </div>
               
               <h1 className="text-2xl font-bold text-center mb-1">
-                Hotel Sea Shore
+                Sea Shore Restaurant
               </h1>
-              <p className="text-center text-blue-50 text-xs font-medium">
+              <p className="text-center text-emerald-50 text-xs font-medium">
                 Management Portal
               </p>
               
-              <div className="mt-3 text-center text-xs text-blue-100 font-medium">
+              <div className="mt-3 text-center text-xs text-emerald-100 font-medium">
                 {currentTime.toLocaleDateString('en-US', { 
                   month: 'short', 
                   day: 'numeric',
@@ -176,17 +172,17 @@ const HotelSeaShoreLogin = () => {
             </div>
 
             <div className="p-6">
-              {/* Back to Portal & Language Toggle */}
+              {/* Back to Portal Button */}
               <div className="flex justify-between items-center mb-4">
                 <button
                   onClick={() => router.push('/')}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors text-blue-700 font-medium text-xs"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors text-emerald-700 font-medium text-xs"
                 >
                   ← Back to Portal
                 </button>
                 <button
                   onClick={() => setLang(lang === "bn" ? "en" : "bn")}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors text-blue-700 font-medium text-xs"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors text-emerald-700 font-medium text-xs"
                 >
                   <Globe className="w-3 h-3" />
                   <span>{lang === "bn" ? "EN" : "BN"}</span>
@@ -231,7 +227,7 @@ const HotelSeaShoreLogin = () => {
                           as="input"
                           type="text"
                           placeholder={t.loginIDPlaceholder}
-                          className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white transition-all text-sm text-gray-900"
+                          className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 focus:bg-white transition-all text-sm text-gray-900"
                           onChange={(e) => {
                             handleChange(e);
                             setLoginError("");
@@ -260,7 +256,7 @@ const HotelSeaShoreLogin = () => {
                           as="input"
                           type={showPassword ? "text" : "password"}
                           placeholder={t.passwordPlaceholder}
-                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white transition-all text-sm text-gray-900"
+                          className="w-full pl-10 pr-10 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 focus:bg-white transition-all text-sm text-gray-900"
                           onChange={(e) => {
                             handleChange(e);
                             setLoginError("");
@@ -292,13 +288,13 @@ const HotelSeaShoreLogin = () => {
                         <Field
                           type="checkbox"
                           name="remember"
-                          className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                          className="w-3 h-3 text-emerald-600 border-gray-300 rounded focus:ring-1 focus:ring-emerald-500 cursor-pointer"
                         />
                         <span className="text-xs text-gray-600">Remember me</span>
                       </label>
                       <button
                         type="button"
-                        className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
                       >
                         Forgot password?
                       </button>
@@ -308,7 +304,7 @@ const HotelSeaShoreLogin = () => {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-700 hover:from-blue-700 hover:via-indigo-700 hover:to-slate-800 text-white font-bold py-3 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none text-sm"
+                      className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-green-600 hover:from-emerald-600 hover:via-teal-600 hover:to-green-700 text-white font-bold py-3 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none text-sm"
                     >
                       {isLoading ? (
                         <div className="flex items-center justify-center gap-2">
@@ -324,7 +320,6 @@ const HotelSeaShoreLogin = () => {
                   </Form>
                 )}
               </Formik>
-
             </div>
 
             <div className="bg-gray-50 px-6 py-3 border-t border-gray-100">
@@ -333,7 +328,7 @@ const HotelSeaShoreLogin = () => {
                   Developed by <span className="font-semibold text-gray-700">Cox Web Solutions</span>
                 </p>
                 <p className="text-xs text-gray-600">
-                  Contact support: <span className="font-semibold text-blue-600">+880 1515‑604845</span>
+                  Contact support: <span className="font-semibold text-emerald-600">+880 1515‑604845</span>
                 </p>
               </div>
             </div>
@@ -414,4 +409,4 @@ const HotelSeaShoreLogin = () => {
   );
 };
 
-export default HotelSeaShoreLogin;
+export default RestaurantLogin;

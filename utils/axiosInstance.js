@@ -21,7 +21,7 @@ coreAxios.interceptors.response.use(
     if (error?.response?.status === 401) {
       // Redirecting on client-side
       if (typeof window !== "undefined") {
-        window.location.href = "/login";
+        window.location.href = "/";
         localStorage.clear();
       }
       return Promise.reject(error);
