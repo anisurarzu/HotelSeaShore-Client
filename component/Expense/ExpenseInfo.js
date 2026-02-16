@@ -13,6 +13,9 @@ import {
   Spin,
   Pagination,
   DatePicker,
+  Select,
+  Row,
+  Col,
 } from "antd";
 import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { useFormik } from "formik";
@@ -27,7 +30,13 @@ const ExpenseInfo = () => {
   const [expenses, setExpenses] = useState([]);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [loading, setLoading] = useState(false);
-  const [nextExpenseNo, setNextExpenseNo] = useState(1);
+  
+  // Expense Category states
+  const [categories, setCategories] = useState([]);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [editingCategoryKey, setEditingCategoryKey] = useState(null);
+  const [categoryLoading, setCategoryLoading] = useState(false);
 
   const fetchExpenses = async () => {
     try {
@@ -35,17 +44,6 @@ const ExpenseInfo = () => {
       const response = await coreAxios.get("/expenses");
       if (response.status === 200) {
         setExpenses(response.data);
-        // Calculate next expense number
-        if (response.data.length > 0) {
-          const maxNo = Math.max(
-            ...response.data.map(
-              (e) => parseInt(e.expenseNo.replace("EXP-", "")) || 0
-            )
-          );
-          setNextExpenseNo(maxNo + 1);
-        }
-        // Call dashboard API after fetching expenses
-
       }
     } catch (error) {
       console.error("Error fetching expenses:", error);
@@ -55,13 +53,50 @@ const ExpenseInfo = () => {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      setCategoryLoading(true);
+      // Try to fetch from API, if not available, use localStorage
+      try {
+        const response = await coreAxios.get("/expense-categories");
+        if (response.status === 200) {
+          setCategories(response.data || []);
+          return;
+        }
+      } catch (apiError) {
+        // If API doesn't exist, use localStorage
+        const storedCategories = localStorage.getItem("expenseCategories");
+        if (storedCategories) {
+          setCategories(JSON.parse(storedCategories));
+        } else {
+          // Initialize with default categories
+          const defaultCategories = [
+            { _id: "1", name: "Food & Beverage" },
+            { _id: "2", name: "Utilities" },
+            { _id: "3", name: "Maintenance" },
+            { _id: "4", name: "Staff Salary" },
+            { _id: "5", name: "Marketing" },
+            { _id: "6", name: "Other" },
+          ];
+          setCategories(defaultCategories);
+          localStorage.setItem("expenseCategories", JSON.stringify(defaultCategories));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchExpenses();
+    fetchCategories();
   }, []);
 
   const formik = useFormik({
     initialValues: {
-      expenseNo: `EXP-${nextExpenseNo}`,
+      expenseCategory: "",
       expenseReason: "",
       expenseAmount: 0,
       expenseDate: dayjs(),
@@ -72,7 +107,9 @@ const ExpenseInfo = () => {
       try {
         // Format dates before sending to API
         const payload = {
-          ...values,
+          expenseCategory: values.expenseCategory,
+          expenseReason: values.expenseReason,
+          expenseAmount: values.expenseAmount,
           expenseDate: values.expenseDate.format("YYYY-MM-DD"),
           createdAt: values.createdAt.format("YYYY-MM-DD HH:mm:ss"),
         };
@@ -89,13 +126,12 @@ const ExpenseInfo = () => {
           const response = await coreAxios.post("/expenses", payload);
           if (response?.status === 200) {
             toast.success("Expense created successfully!");
-            setNextExpenseNo(nextExpenseNo + 1);
           }
         }
 
         resetForm({
           values: {
-            expenseNo: `EXP-${nextExpenseNo + (isEditing ? 0 : 1)}`,
+            expenseCategory: "",
             expenseReason: "",
             expenseAmount: 0,
             expenseDate: dayjs(),
@@ -116,10 +152,65 @@ const ExpenseInfo = () => {
     },
   });
 
+  const categoryFormik = useFormik({
+    initialValues: {
+      name: "",
+    },
+    onSubmit: async (values, { resetForm }) => {
+      try {
+        setCategoryLoading(true);
+        let updatedCategories = [...categories];
+
+        if (isEditingCategory) {
+          // Update category
+          updatedCategories = categories.map((cat) =>
+            cat._id === editingCategoryKey
+              ? { ...cat, name: values.name }
+              : cat
+          );
+          try {
+            await coreAxios.put(`/expense-categories/${editingCategoryKey}`, {
+              name: values.name,
+            });
+          } catch (apiError) {
+            // If API doesn't exist, just update localStorage
+            localStorage.setItem("expenseCategories", JSON.stringify(updatedCategories));
+          }
+          toast.success("Category updated successfully!");
+        } else {
+          // Add new category
+          const newCategory = {
+            _id: `cat-${Date.now()}`,
+            name: values.name,
+          };
+          updatedCategories.push(newCategory);
+          try {
+            await coreAxios.post("/expense-categories", { name: values.name });
+          } catch (apiError) {
+            // If API doesn't exist, just update localStorage
+            localStorage.setItem("expenseCategories", JSON.stringify(updatedCategories));
+          }
+          toast.success("Category added successfully!");
+        }
+
+        setCategories(updatedCategories);
+        resetForm();
+        setCategoryModalVisible(false);
+        setIsEditingCategory(false);
+        setEditingCategoryKey(null);
+      } catch (error) {
+        console.error("Error saving category:", error);
+        toast.error("Failed to save category");
+      } finally {
+        setCategoryLoading(false);
+      }
+    },
+  });
+
   const handleEdit = (record) => {
     setEditingKey(record?._id);
     formik.setValues({
-      expenseNo: record.expenseNo,
+      expenseCategory: record.expenseCategory || "",
       expenseReason: record.expenseReason,
       expenseAmount: record.expenseAmount,
       expenseDate: dayjs(record.expenseDate),
@@ -127,6 +218,35 @@ const ExpenseInfo = () => {
     });
     setVisible(true);
     setIsEditing(true);
+  };
+
+  const handleEditCategory = (record) => {
+    setEditingCategoryKey(record._id);
+    categoryFormik.setValues({
+      name: record.name,
+    });
+    setCategoryModalVisible(true);
+    setIsEditingCategory(true);
+  };
+
+  const handleDeleteCategory = async (record) => {
+    try {
+      setCategoryLoading(true);
+      const updatedCategories = categories.filter((cat) => cat._id !== record._id);
+      setCategories(updatedCategories);
+      localStorage.setItem("expenseCategories", JSON.stringify(updatedCategories));
+      try {
+        await coreAxios.delete(`/expense-categories/${record._id}`);
+      } catch (apiError) {
+        // If API doesn't exist, that's fine, we already updated localStorage
+      }
+      toast.success("Category deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      toast.error("Failed to delete category");
+    } finally {
+      setCategoryLoading(false);
+    }
   };
 
   const handleDelete = async (record) => {
@@ -145,15 +265,15 @@ const ExpenseInfo = () => {
     }
   };
 
-  const columns = [
+  const expenseColumns = [
     {
-      title: "Expense No",
-      dataIndex: "expenseNo",
-      key: "expenseNo",
-      sorter: (a, b) => a.expenseNo.localeCompare(b.expenseNo),
+      title: "Category",
+      dataIndex: "expenseCategory",
+      key: "expenseCategory",
+      render: (category) => category || "N/A",
     },
     {
-      title: "Expense Name",
+      title: "Expense Reason",
       dataIndex: "expenseReason",
       key: "expenseReason",
     },
@@ -161,8 +281,8 @@ const ExpenseInfo = () => {
       title: "Amount (BDT)",
       dataIndex: "expenseAmount",
       key: "expenseAmount",
-      render: (amount) => `৳${amount.toFixed(2)}`,
-      sorter: (a, b) => a.expenseAmount - b.expenseAmount,
+      render: (amount) => `৳${amount?.toFixed(2) || 0}`,
+      sorter: (a, b) => (a.expenseAmount || 0) - (b.expenseAmount || 0),
     },
     {
       title: "Expense Date",
@@ -187,7 +307,7 @@ const ExpenseInfo = () => {
             type="primary"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
-            className="bg-blue-500 hover:bg-blue-600"
+            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
           />
           <Popconfirm
             title="Are you sure to delete this expense?"
@@ -197,7 +317,40 @@ const ExpenseInfo = () => {
             <Button
               danger
               icon={<DeleteOutlined />}
-              className="hover:bg-red-500"
+            />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  const categoryColumns = [
+    {
+      title: "Category Name",
+      dataIndex: "name",
+      key: "name",
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      render: (_, record) => (
+        <Space size="small">
+          <Button
+            type="primary"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEditCategory(record)}
+            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
+          />
+          <Popconfirm
+            title="Are you sure to delete this category?"
+            onConfirm={() => handleDeleteCategory(record)}
+            okText="Yes"
+            cancelText="No">
+            <Button
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
             />
           </Popconfirm>
         </Space>
@@ -211,49 +364,98 @@ const ExpenseInfo = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <Button
-        type="primary"
-        onClick={() => {
-          setIsEditing(false);
-          formik.resetForm({
-            values: {
-              expenseNo: `EXP-${nextExpenseNo}`,
-              expenseReason: "",
-              expenseAmount: 0,
-              expenseDate: dayjs(),
-              createdAt: dayjs(),
-            },
-          });
-          setVisible(true);
-        }}
-        className="mb-4 bg-[#8ABF55] hover:bg-[#7DA54E] text-white"
-        icon={<PlusOutlined />}>
-        Add New Expense
-      </Button>
+      <div className="mb-4 flex justify-between items-center">
+        <Button
+          type="primary"
+          onClick={() => {
+            setIsEditing(false);
+            formik.resetForm({
+              values: {
+                expenseCategory: "",
+                expenseReason: "",
+                expenseAmount: 0,
+                expenseDate: dayjs(),
+                createdAt: dayjs(),
+              },
+            });
+            setVisible(true);
+          }}
+          style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
+          icon={<PlusOutlined />}>
+          Add New Expense
+        </Button>
+      </div>
 
-      <Spin spinning={loading}>
-        <Table
-          columns={columns}
-          dataSource={expenses}
-          pagination={false}
-          rowKey="id"
-          onChange={handleTableChange}
-          scroll={{ x: true }}
-          bordered
-          className="shadow-md"
-        />
+      <Row gutter={16}>
+        {/* Expense Info Table - 2/3 width */}
+        <Col xs={24} lg={16}>
+          <Spin spinning={loading}>
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table
+                  columns={expenseColumns}
+                  dataSource={expenses}
+                  pagination={false}
+                  rowKey={(record) => record._id || record.id}
+                  onChange={handleTableChange}
+                  scroll={{ x: true }}
+                  bordered
+                  size="small"
+                />
+              </div>
+            </div>
 
-        <Pagination
-          current={pagination.current}
-          pageSize={pagination.pageSize}
-          total={expenses?.length}
-          onChange={(page, pageSize) =>
-            setPagination({ ...pagination, current: page, pageSize })
-          }
-          className="mt-4"
-        />
-      </Spin>
+            <Pagination
+              current={pagination.current}
+              pageSize={pagination.pageSize}
+              total={expenses?.length}
+              onChange={(page, pageSize) =>
+                setPagination({ ...pagination, current: page, pageSize })
+              }
+              className="mt-4"
+            />
+          </Spin>
+        </Col>
 
+        {/* Expense Category Table - 1/3 width */}
+        <Col xs={24} lg={8}>
+          <div className="mb-2">
+            <Button
+              type="primary"
+              size="small"
+              onClick={() => {
+                setIsEditingCategory(false);
+                categoryFormik.resetForm({
+                  values: {
+                    name: "",
+                  },
+                });
+                setCategoryModalVisible(true);
+              }}
+              style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
+              icon={<PlusOutlined />}>
+              Add Category
+            </Button>
+          </div>
+          <Spin spinning={categoryLoading}>
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table
+                  columns={categoryColumns}
+                  dataSource={categories}
+                  pagination={false}
+                  rowKey={(record) => record._id}
+                  scroll={{ x: true }}
+                  bordered
+                  size="small"
+                />
+              </div>
+            </div>
+          </Spin>
+        </Col>
+      </Row>
+
+      {/* Expense Modal */}
       <Modal
         title={isEditing ? "Edit Expense" : "Add New Expense"}
         open={visible}
@@ -261,7 +463,7 @@ const ExpenseInfo = () => {
           setVisible(false);
           formik.resetForm({
             values: {
-              expenseNo: `EXP-${nextExpenseNo}`,
+              expenseCategory: "",
               expenseReason: "",
               expenseAmount: 0,
               expenseDate: dayjs(),
@@ -272,16 +474,28 @@ const ExpenseInfo = () => {
         footer={null}>
         <form onSubmit={formik.handleSubmit}>
           <div className="mb-4">
-            <label className="block mb-1">Expense Number</label>
-            <Input value={formik.values.expenseNo} disabled />
+            <label className="block mb-1 font-medium">Expense Category</label>
+            <Select
+              name="expenseCategory"
+              style={{ width: "100%" }}
+              placeholder="Select expense category"
+              value={formik.values.expenseCategory}
+              onChange={(value) => formik.setFieldValue("expenseCategory", value)}
+              required>
+              {categories.map((cat) => (
+                <Select.Option key={cat._id} value={cat.name}>
+                  {cat.name}
+                </Select.Option>
+              ))}
+            </Select>
           </div>
 
           <div className="mb-4">
-            <label className="block mb-1">Expense Name</label>
+            <label className="block mb-1 font-medium">Expense Reason</label>
             <Input.TextArea
               name="expenseReason"
               rows={3}
-              placeholder="Enter expense name"
+              placeholder="Enter expense reason"
               value={formik.values.expenseReason}
               onChange={formik.handleChange}
               required
@@ -289,7 +503,7 @@ const ExpenseInfo = () => {
           </div>
 
           <div className="mb-4">
-            <label className="block mb-1">Amount (BDT)</label>
+            <label className="block mb-1 font-medium">Amount (BDT)</label>
             <InputNumber
               name="expenseAmount"
               style={{ width: "100%" }}
@@ -307,19 +521,20 @@ const ExpenseInfo = () => {
           </div>
 
           <div className="mb-4">
-            <label className="block mb-1">Expense Date</label>
+            <label className="block mb-1 font-medium">Expense Date</label>
             <DatePicker
               name="expenseDate"
               style={{ width: "100%" }}
               value={formik.values.expenseDate}
               onChange={(date) => formik.setFieldValue("expenseDate", date)}
+              disabled
               required
             />
           </div>
 
           {isEditing && (
             <div className="mb-4">
-              <label className="block mb-1">Created At</label>
+              <label className="block mb-1 font-medium">Created At</label>
               <DatePicker
                 name="createdAt"
                 style={{ width: "100%" }}
@@ -335,8 +550,45 @@ const ExpenseInfo = () => {
             type="primary"
             loading={loading}
             htmlType="submit"
-            className="w-full bg-[#8ABF55] hover:bg-[#7DA54E] mt-2">
+            style={{ width: "100%", backgroundColor: "#2563eb", borderColor: "#2563eb" }}
+            className="mt-2">
             {isEditing ? "Update Expense" : "Add Expense"}
+          </Button>
+        </form>
+      </Modal>
+
+      {/* Category Modal */}
+      <Modal
+        title={isEditingCategory ? "Edit Category" : "Add New Category"}
+        open={categoryModalVisible}
+        onCancel={() => {
+          setCategoryModalVisible(false);
+          categoryFormik.resetForm({
+            values: {
+              name: "",
+            },
+          });
+        }}
+        footer={null}>
+        <form onSubmit={categoryFormik.handleSubmit}>
+          <div className="mb-4">
+            <label className="block mb-1 font-medium">Category Name</label>
+            <Input
+              name="name"
+              placeholder="Enter category name"
+              value={categoryFormik.values.name}
+              onChange={categoryFormik.handleChange}
+              required
+            />
+          </div>
+
+          <Button
+            type="primary"
+            loading={categoryLoading}
+            htmlType="submit"
+            style={{ width: "100%", backgroundColor: "#2563eb", borderColor: "#2563eb" }}
+            className="mt-2">
+            {isEditingCategory ? "Update Category" : "Add Category"}
           </Button>
         </form>
       </Modal>

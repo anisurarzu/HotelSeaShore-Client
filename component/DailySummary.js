@@ -92,69 +92,72 @@ const DailySummary = ({ selectedDate, dailyIncome }) => {
   };
 
   return (
-    <div className="mt-8">
-      <h3 className="text-lg font-semibold mb-4">Daily Summary</h3>
-      <table className="w-full max-w-md border border-green-600">
-        <thead>
-          <tr style={{ backgroundColor: "#4CAF50", color: "white" }}>
-            <th className="border border-green-600 p-2 text-left">Item</th>
-            <th className="border border-green-600 p-2 text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td className="border border-green-600 p-2">Opening Balance</td>
-            <td className="border border-green-600 p-2 text-right">
-              {openingBalance}
-            </td>
-          </tr>
-          <tr>
-            <td className="border border-green-600 p-2">Daily Income</td>
-            <td className="border border-green-600 p-2 text-right">
-              {dailyIncome}
-            </td>
-          </tr>
-          <tr>
-            <td className="border border-green-600 p-2 font-bold">
-              Total Balance
-            </td>
-            <td className="border border-green-600 p-2 text-right font-bold">
-              {totalBalance}
-            </td>
-          </tr>
-          <tr>
-            <td className="border border-green-600 p-2">Daily Expenses</td>
-            <td className="border border-green-600 p-2 text-right">
-              {dailyExpenses}
-              {/* {expenseLoading ? (
-                <span>Loading...</span>
-              ) : (
-                <InputNumber
-                  min={0}
-                  value={dailyExpenses}
-                  disabled={true}
-                  style={{ width: "100%", color: "black" }}
-                />
-              )} */}
-            </td>
-          </tr>
-          <tr>
-            <td className="border border-green-600 p-2 font-bold">
-              Closing Balance
-            </td>
-            <td className="border border-green-600 p-2 text-right font-bold">
-              {closingBalance}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div className="mt-6">
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
+            <thead>
+              <tr style={{ backgroundColor: '#2563eb' }}>
+                <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                  Item
+                </th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                  Amount
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="hover:bg-gray-50 transition-colors">
+                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
+                  Opening Balance
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
+                  {openingBalance}
+                </td>
+              </tr>
+              <tr className="hover:bg-gray-50 transition-colors">
+                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
+                  Daily Income
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
+                  {dailyIncome}
+                </td>
+              </tr>
+              <tr className="bg-gray-100 hover:bg-gray-50 transition-colors">
+                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-semibold border border-gray-300">
+                  Total Balance
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
+                  {totalBalance}
+                </td>
+              </tr>
+              <tr className="hover:bg-gray-50 transition-colors">
+                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
+                  Daily Expenses
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
+                  {dailyExpenses}
+                </td>
+              </tr>
+              <tr className="bg-gray-100 hover:bg-gray-50 transition-colors">
+                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-semibold border border-gray-300">
+                  Closing Balance
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
+                  {closingBalance}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="mt-4">
         <Button
           type="primary"
           onClick={handleSave}
           loading={loading}
-          style={{ backgroundColor: "#4CAF50" }}>
+          style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}>
           Save Summary
         </Button>
       </div>

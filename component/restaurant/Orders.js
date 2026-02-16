@@ -48,6 +48,12 @@ const Orders = () => {
   const [editingOrder, setEditingOrder] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
+  const [instantCreateVisible, setInstantCreateVisible] = useState(false);
+  const [instantCreateForm] = Form.useForm();
+  const [categories, setCategories] = useState([]);
+  const [currentItemFieldIndex, setCurrentItemFieldIndex] = useState(null);
+  const [taxType, setTaxType] = useState("fixed"); // "fixed" or "percentage"
+  const [discountType, setDiscountType] = useState("fixed"); // "fixed" or "percentage"
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -172,7 +178,6 @@ const Orders = () => {
           form.setFieldsValue({
             customerName: booking.name || "",
             customerPhone: booking.phone || "",
-            customerEmail: booking.email || "",
           });
           message.success("Customer information loaded from booking");
         } else {
@@ -185,11 +190,150 @@ const Orders = () => {
     }
   };
 
+  // Predefined Bangladeshi Hotel Menu Categories (same as Menu.js)
+  const predefinedCategories = [
+    "Rice & Biryani",
+    "Curry & Bhuna",
+    "Fish Items",
+    "Chicken Items",
+    "Beef Items",
+    "Mutton Items",
+    "Vegetable Dishes",
+    "Dal & Lentils",
+    "Soup",
+    "Salad",
+    "Roti & Paratha",
+    "Noodles & Pasta",
+    "Fast Food",
+    "Snacks",
+    "Desserts",
+    "Beverages",
+    "Tea & Coffee",
+    "Juice & Shake",
+    "Breakfast",
+    "Lunch",
+    "Dinner",
+    "Special Items",
+    "Combo Meals",
+    "Tandoori",
+    "Kebab",
+    "Chinese",
+    "Thai",
+    "Continental",
+    "Ice Cream",
+    "Soft Drinks"
+  ];
+
+  // Fetch categories for instant create
+  const fetchCategories = async () => {
+    try {
+      const response = await coreAxios.get("/restaurant/menu/categories");
+      if (response.status === 200) {
+        const responseData = response.data?.data || response.data;
+        const categoryIDs = responseData?.categoryIDs || 
+                           (Array.isArray(responseData) ? responseData : []);
+        
+        // Get unique categories from menu items
+        const uniqueCategories = [...new Set(menuItems.map(item => 
+          item.category || item.categoryName || item.categoryID
+        ).filter(Boolean))];
+        
+        // Combine predefined categories with API categories and unique categories from menu items
+        const allCategories = [
+          ...predefinedCategories,
+          ...categoryIDs,
+          ...uniqueCategories.filter(cat => 
+            !predefinedCategories.includes(cat) && !categoryIDs.includes(cat)
+          )
+        ];
+        
+        // Remove duplicates
+        const uniqueAllCategories = [...new Set(allCategories)];
+        setCategories(uniqueAllCategories);
+      } else {
+        // Fallback: use predefined categories + unique from menu items
+        const uniqueCategories = [...new Set(menuItems.map(item => 
+          item.category || item.categoryName || item.categoryID
+        ).filter(Boolean))];
+        const allCategories = [
+          ...predefinedCategories,
+          ...uniqueCategories.filter(cat => !predefinedCategories.includes(cat))
+        ];
+        setCategories([...new Set(allCategories)]);
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      // Fallback: use predefined categories + unique from menu items
+      const uniqueCategories = [...new Set(menuItems.map(item => 
+        item.category || item.categoryName || item.categoryID
+      ).filter(Boolean))];
+      const allCategories = [
+        ...predefinedCategories,
+        ...uniqueCategories.filter(cat => !predefinedCategories.includes(cat))
+      ];
+      setCategories([...new Set(allCategories)]);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
     fetchTables();
     fetchMenuItems();
   }, []);
+
+  // Update categories when menu items change
+  useEffect(() => {
+    if (menuItems.length > 0) {
+      fetchCategories();
+    }
+  }, [menuItems]);
+
+  // Handle instant create menu item
+  const handleInstantCreate = async (values) => {
+    try {
+      const menuItemData = {
+        itemName: values.itemName,
+        categoryID: values.categoryID,
+        price: Number(values.price) || 0,
+        availability: "available",
+        description: values.description || "",
+      };
+
+      const response = await coreAxios.post("/restaurant/menu", menuItemData);
+
+      if (response.status === 200 || response.status === 201) {
+        message.success("Menu item created successfully!");
+        setInstantCreateVisible(false);
+        instantCreateForm.resetFields();
+        
+        // Get the new item data from response
+        const newItem = response.data?.data || response.data;
+        const newItemId = newItem?.id || newItem?._id || newItem?.id;
+        
+        // Add the new item to menuItems state immediately
+        if (newItem) {
+          const itemToAdd = {
+            ...newItem,
+            id: newItemId,
+            _id: newItemId,
+            itemName: values.itemName,
+            categoryID: values.categoryID,
+            price: Number(values.price) || 0,
+          };
+          setMenuItems(prev => [...prev, itemToAdd]);
+        }
+        
+        // Also refresh menu items in background
+        fetchMenuItems();
+        
+        return { id: newItemId, price: Number(values.price) || 0 };
+      }
+    } catch (error) {
+      console.error("Error creating menu item:", error);
+      message.error(error.response?.data?.message || "Failed to create menu item.");
+      return null;
+    }
+  };
 
   // Apply filters
   useEffect(() => {
@@ -255,18 +399,37 @@ const Orders = () => {
         }
       });
 
+      // Calculate actual tax and discount amounts
+      const subtotal = values.subtotal || 0;
+      const taxValue = values.tax || 0;
+      const discountValue = values.discount || 0;
+      
+      let taxAmount = 0;
+      if (taxType === "percentage") {
+        taxAmount = (subtotal * Number(taxValue)) / 100;
+      } else {
+        taxAmount = Number(taxValue);
+      }
+      
+      let discountAmount = 0;
+      if (discountType === "percentage") {
+        discountAmount = (subtotal * Number(discountValue)) / 100;
+      } else {
+        discountAmount = Number(discountValue);
+      }
+
       const orderData = {
         invoiceNo: values.invoiceNo || "",
         customerName: values.customerName,
         customerPhone: values.customerPhone || "",
-        customerEmail: values.customerEmail || "",
         tableNumber: values.tableNumber || "",
         orderType: values.orderType || "dine_in",
         items: items, // Array of menu item IDs (ObjectIds) - quantity is represented by duplicates
-        tax: values.tax ? Number(values.tax) : 0,
-        discount: values.discount ? Number(values.discount) : 0,
+        tax: taxAmount,
+        discount: discountAmount,
         paymentStatus: values.paymentStatus || "pending",
         paymentMethod: values.paymentMethod || "",
+        transactionID: values.transactionID || "",
         orderStatus: values.orderStatus || "pending",
         notes: values.notes || "",
       };
@@ -287,6 +450,8 @@ const Orders = () => {
         message.success(successMsg);
         setVisible(false);
         setEditingOrder(null);
+        setTaxType("fixed");
+        setDiscountType("fixed");
         form.resetFields();
         fetchOrders();
       }
@@ -337,20 +502,30 @@ const Orders = () => {
       quantity: quantity,
     }));
     
+    // Determine if tax/discount were percentages (if tax/discount is less than subtotal, likely percentage)
+    const subtotal = order.subtotal || 0;
+    const tax = order.tax || 0;
+    const discount = order.discount || 0;
+    
+    // Check if tax might be percentage (if tax is reasonable percentage of subtotal)
+    // We'll default to fixed, but user can change
+    setTaxType("fixed");
+    setDiscountType("fixed");
+    
     form.setFieldsValue({
       invoiceNo: order.invoiceNo || "",
       customerName: order.customerName || "",
       customerPhone: order.customerPhone || "",
-      customerEmail: order.customerEmail || "",
       tableNumber: order.tableNumber || "",
       orderType: order.orderType || "dine_in",
       items: formattedItems, // Array of objects with menuItemId and quantity
-      subtotal: order.subtotal || 0,
-      tax: order.tax || 0,
-      discount: order.discount || 0,
+      subtotal: subtotal,
+      tax: tax,
+      discount: discount,
       total: order.total || 0,
       paymentStatus: order.paymentStatus || "pending",
       paymentMethod: order.paymentMethod || "",
+      transactionID: order.transactionID || "",
       orderStatus: order.orderStatus || "pending",
       notes: order.notes || "",
     });
@@ -377,11 +552,7 @@ const Orders = () => {
   const getOrderStatusColor = (status) => {
     const statusLower = (status || "").toLowerCase();
     if (statusLower === "pending") return "orange";
-    if (statusLower === "confirmed") return "blue";
-    if (statusLower === "preparing") return "purple";
-    if (statusLower === "ready") return "cyan";
-    if (statusLower === "served") return "green";
-    if (statusLower === "cancelled") return "red";
+    if (statusLower === "confirmed" || statusLower === "confirm") return "blue";
     return "default";
   };
 
@@ -391,8 +562,39 @@ const Orders = () => {
     if (statusLower === "paid") return "green";
     if (statusLower === "pending") return "orange";
     if (statusLower === "partially_paid") return "blue";
-    if (statusLower === "refunded") return "red";
     return "default";
+  };
+
+  // Calculate totals with percentage/fixed support - instant calculation
+  const calculateTotals = () => {
+    const subtotal = Number(form.getFieldValue('subtotal') || 0);
+    const taxValue = Number(form.getFieldValue('tax') || 0);
+    const discountValue = Number(form.getFieldValue('discount') || 0);
+    
+    // Calculate tax amount
+    let taxAmount = 0;
+    if (taxType === "percentage") {
+      // If percentage: calculate percentage of subtotal
+      // Example: 5% of 1000 = 50
+      taxAmount = (subtotal * taxValue) / 100;
+    } else {
+      // If fixed: use the value directly
+      taxAmount = taxValue;
+    }
+    
+    // Calculate discount amount
+    let discountAmount = 0;
+    if (discountType === "percentage") {
+      // If percentage: calculate percentage of subtotal
+      // Example: 5% of 1000 = 50
+      discountAmount = (subtotal * discountValue) / 100;
+    } else {
+      // If fixed: use the value directly
+      discountAmount = discountValue;
+    }
+    
+    const total = subtotal + taxAmount - discountAmount;
+    form.setFieldsValue({ total: total > 0 ? total : 0 });
   };
 
   // Handle invoice view
@@ -557,8 +759,7 @@ const Orders = () => {
       render: (type) => {
         const typeMap = {
           dine_in: "Dine In",
-          takeaway: "Takeaway",
-          delivery: "Delivery"
+          room_delivery: "Room Delivery"
         };
         return typeMap[type] || type || "N/A";
       },
@@ -715,6 +916,8 @@ const Orders = () => {
                   icon={<PlusOutlined />}
                   onClick={() => {
                     setEditingOrder(null);
+                    setTaxType("fixed");
+                    setDiscountType("fixed");
                     form.resetFields();
                     setVisible(true);
                   }}
@@ -785,6 +988,8 @@ const Orders = () => {
         onCancel={() => {
           setVisible(false);
           setEditingOrder(null);
+          setTaxType("fixed");
+          setDiscountType("fixed");
           form.resetFields();
         }}
         afterOpenChange={(open) => {
@@ -802,6 +1007,12 @@ const Orders = () => {
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
+          onValuesChange={(changedValues, allValues) => {
+            // Recalculate totals instantly when subtotal, tax, or discount changes
+            if ('subtotal' in changedValues || 'tax' in changedValues || 'discount' in changedValues) {
+              calculateTotals();
+            }
+          }}
           initialValues={{
             orderType: "dine_in",
             orderStatus: "pending",
@@ -854,16 +1065,6 @@ const Orders = () => {
               </Form.Item>
             </Col>
 
-            {/* Customer Email */}
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item
-                name="customerEmail"
-                label="Email"
-              >
-                <Input type="email" placeholder="Email address" />
-              </Form.Item>
-            </Col>
-
             {/* Table Number */}
             <Col xs={24} sm={12} md={8}>
               <Form.Item
@@ -900,8 +1101,7 @@ const Orders = () => {
               >
                 <Select placeholder="Select type">
                   <Select.Option value="dine_in">Dine In</Select.Option>
-                  <Select.Option value="takeaway">Takeaway</Select.Option>
-                  <Select.Option value="delivery">Delivery</Select.Option>
+                  <Select.Option value="room_delivery">Room Delivery</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -940,6 +1140,24 @@ const Orders = () => {
                                   filterOption={(input, option) =>
                                     (option?.children || "").toLowerCase().indexOf(input.toLowerCase()) >= 0
                                   }
+                                  dropdownRender={(menu) => (
+                                    <>
+                                      {menu}
+                                      <div style={{ padding: '8px', borderTop: '1px solid #f0f0f0' }}>
+                                        <Button
+                                          type="link"
+                                          icon={<PlusOutlined />}
+                                          onClick={() => {
+                                            setCurrentItemFieldIndex(name);
+                                            setInstantCreateVisible(true);
+                                          }}
+                                          style={{ width: '100%' }}
+                                        >
+                                          Instant Create New Item
+                                        </Button>
+                                      </div>
+                                    </>
+                                  )}
                                   onChange={(value) => {
                                     const menuItem = menuItems.find(item => 
                                       (item.id || item._id) === value
@@ -968,10 +1186,8 @@ const Orders = () => {
                                           subtotal += (item.quantity || 1) * Number(menuItem.price || 0);
                                         }
                                       });
-                                      const tax = form.getFieldValue('tax') || 0;
-                                      const discount = form.getFieldValue('discount') || 0;
-                                      const total = subtotal + Number(tax) - Number(discount);
-                                      form.setFieldsValue({ subtotal, total: total > 0 ? total : 0 });
+                                      form.setFieldsValue({ subtotal });
+                                      calculateTotals();
                                     }
                                   }}
                                   notFoundContent={menuItems.length === 0 ? "Loading..." : "No items"}
@@ -1014,10 +1230,8 @@ const Orders = () => {
                                         subtotal += (item.quantity || 1) * Number(menuItem.price || 0);
                                       }
                                     });
-                                    const tax = form.getFieldValue('tax') || 0;
-                                    const discount = form.getFieldValue('discount') || 0;
-                                    const total = subtotal + Number(tax) - Number(discount);
-                                    form.setFieldsValue({ subtotal, total: total > 0 ? total : 0 });
+                                    form.setFieldsValue({ subtotal });
+                                    calculateTotals();
                                   }}
                                 />
                               </Form.Item>
@@ -1046,10 +1260,8 @@ const Orders = () => {
                                       }
                                     }
                                   });
-                                  const tax = form.getFieldValue('tax') || 0;
-                                  const discount = form.getFieldValue('discount') || 0;
-                                  const total = subtotal + Number(tax) - Number(discount);
-                                  form.setFieldsValue({ subtotal, total: total > 0 ? total : 0 });
+                                  form.setFieldsValue({ subtotal });
+                                  calculateTotals();
                                 }}
                                 icon={<DeleteOutlined />}
                               />
@@ -1085,33 +1297,73 @@ const Orders = () => {
               </Form.Item>
             </Col>
             <Col xs={12} sm={6}>
-              <Form.Item name="tax" label="Tax">
-                <InputNumber
-                  min={0}
-                  placeholder="0"
-                  style={{ width: '100%' }}
-                  onChange={(value) => {
-                    const subtotal = form.getFieldValue('subtotal') || 0;
-                    const discount = form.getFieldValue('discount') || 0;
-                    const total = subtotal + Number(value || 0) - Number(discount);
-                    form.setFieldsValue({ total: total > 0 ? total : 0 });
-                  }}
-                />
+              <Form.Item 
+                name="tax" 
+                label="Vat/Tax"
+                help={taxType === "percentage" ? "Enter percentage (e.g., 5 for 5%)" : "Enter fixed amount"}
+              >
+                <Input.Group compact>
+                  <Select
+                    value={taxType}
+                    onChange={(value) => {
+                      setTaxType(value);
+                      // Reset tax value when switching types
+                      form.setFieldsValue({ tax: 0 });
+                      calculateTotals();
+                    }}
+                    style={{ width: '30%' }}
+                  >
+                    <Select.Option value="fixed">৳ Fixed</Select.Option>
+                    <Select.Option value="percentage">% Percentage</Select.Option>
+                  </Select>
+                  <InputNumber
+                    min={0}
+                    max={taxType === "percentage" ? 100 : undefined}
+                    placeholder={taxType === "percentage" ? "5" : "0"}
+                    style={{ width: '70%' }}
+                    formatter={taxType === "percentage" ? (value) => `${value}%` : (value) => `৳ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={taxType === "percentage" ? (value) => value.replace('%', '') : (value) => value.replace(/৳\s?|(,*)/g, '')}
+                    onChange={(value) => {
+                      form.setFieldsValue({ tax: value || 0 });
+                      calculateTotals();
+                    }}
+                  />
+                </Input.Group>
               </Form.Item>
             </Col>
             <Col xs={12} sm={6}>
-              <Form.Item name="discount" label="Discount">
-                <InputNumber
-                  min={0}
-                  placeholder="0"
-                  style={{ width: '100%' }}
-                  onChange={(value) => {
-                    const subtotal = form.getFieldValue('subtotal') || 0;
-                    const tax = form.getFieldValue('tax') || 0;
-                    const total = subtotal + Number(tax) - Number(value || 0);
-                    form.setFieldsValue({ total: total > 0 ? total : 0 });
-                  }}
-                />
+              <Form.Item 
+                name="discount" 
+                label="Discount"
+                help={discountType === "percentage" ? "Enter percentage (e.g., 5 for 5%)" : "Enter fixed amount"}
+              >
+                <Input.Group compact>
+                  <Select
+                    value={discountType}
+                    onChange={(value) => {
+                      setDiscountType(value);
+                      // Reset discount value when switching types
+                      form.setFieldsValue({ discount: 0 });
+                      calculateTotals();
+                    }}
+                    style={{ width: '30%' }}
+                  >
+                    <Select.Option value="fixed">৳ Fixed</Select.Option>
+                    <Select.Option value="percentage">% Percentage</Select.Option>
+                  </Select>
+                  <InputNumber
+                    min={0}
+                    max={discountType === "percentage" ? 100 : undefined}
+                    placeholder={discountType === "percentage" ? "5" : "0"}
+                    style={{ width: '70%' }}
+                    formatter={discountType === "percentage" ? (value) => `${value}%` : (value) => `৳ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={discountType === "percentage" ? (value) => value.replace('%', '') : (value) => value.replace(/৳\s?|(,*)/g, '')}
+                    onChange={(value) => {
+                      form.setFieldsValue({ discount: value || 0 });
+                      calculateTotals();
+                    }}
+                  />
+                </Input.Group>
               </Form.Item>
             </Col>
             <Col xs={12} sm={6}>
@@ -1132,7 +1384,6 @@ const Orders = () => {
                   <Select.Option value="pending">Pending</Select.Option>
                   <Select.Option value="paid">Paid</Select.Option>
                   <Select.Option value="partially_paid">Partially Paid</Select.Option>
-                  <Select.Option value="refunded">Refunded</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -1140,9 +1391,9 @@ const Orders = () => {
               <Form.Item name="paymentMethod" label="Payment Method">
                 <Select placeholder="Payment method" allowClear>
                   <Select.Option value="cash">Cash</Select.Option>
-                  <Select.Option value="card">Card</Select.Option>
-                  <Select.Option value="mobile_banking">Mobile Banking</Select.Option>
-                  <Select.Option value="online">Online</Select.Option>
+                  <Select.Option value="bkash">Bkash</Select.Option>
+                  <Select.Option value="nagad">Nagad</Select.Option>
+                  <Select.Option value="bank">Bank</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -1150,12 +1401,15 @@ const Orders = () => {
               <Form.Item name="orderStatus" label="Order Status">
                 <Select placeholder="Order status">
                   <Select.Option value="pending">Pending</Select.Option>
-                  <Select.Option value="confirmed">Confirmed</Select.Option>
-                  <Select.Option value="preparing">Preparing</Select.Option>
-                  <Select.Option value="ready">Ready</Select.Option>
-                  <Select.Option value="served">Served</Select.Option>
-                  <Select.Option value="cancelled">Cancelled</Select.Option>
+                  <Select.Option value="confirmed">Confirm</Select.Option>
                 </Select>
+              </Form.Item>
+            </Col>
+
+            {/* Transaction ID */}
+            <Col xs={24} sm={8}>
+              <Form.Item name="transactionID" label="Transaction ID">
+                <Input placeholder="Transaction ID (optional)" allowClear />
               </Form.Item>
             </Col>
 
@@ -1175,6 +1429,8 @@ const Orders = () => {
               onClick={() => {
                 setVisible(false);
                 setEditingOrder(null);
+                setTaxType("fixed");
+                setDiscountType("fixed");
                 form.resetFields();
               }}
             >
@@ -1260,10 +1516,23 @@ const Orders = () => {
             
             {/* Invoice Header */}
             <div className="mb-6">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-800 mb-1">INVOICE</h1>
-                  <p className="text-sm text-gray-600">Hotel Sea Shore Restaurant</p>
+              {/* Logo and Header Section */}
+              <div className="flex items-center justify-between mb-4 pb-4 border-b-2 border-gray-300">
+                <div className="flex items-center gap-4">
+                  <img 
+                    src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
+                    alt="Hotel Sea Shore Logo" 
+                    style={{ 
+                      height: '80px', 
+                      width: 'auto', 
+                      objectFit: 'contain',
+                      maxWidth: '200px'
+                    }}
+                  />
+                  <div>
+                    <h1 className="text-3xl font-bold text-gray-800 mb-1">INVOICE</h1>
+                    <p className="text-sm text-gray-600 font-medium">Hotel Sea Shore Restaurant</p>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-600 mb-1">
@@ -1288,9 +1557,6 @@ const Orders = () => {
                   {selectedOrder.customerPhone && (
                     <p>Phone: {selectedOrder.customerPhone}</p>
                   )}
-                  {selectedOrder.customerEmail && (
-                    <p>Email: {selectedOrder.customerEmail}</p>
-                  )}
                 </div>
               </div>
               <div>
@@ -1299,9 +1565,12 @@ const Orders = () => {
                   {selectedOrder.tableNumber && (
                     <p>Table: {selectedOrder.tableNumber}</p>
                   )}
-                  <p>Type: {(selectedOrder.orderType || "dine_in").replace("_", " ").toUpperCase()}</p>
-                  <p>Status: <span className="font-medium">{(selectedOrder.orderStatus || "pending").toUpperCase()}</span></p>
+                  <p>Type: {(selectedOrder.orderType === "room_delivery" ? "Room Delivery" : "Dine In")}</p>
+                  <p>Status: <span className="font-medium">{(selectedOrder.orderStatus === "confirmed" ? "Confirm" : "Pending").toUpperCase()}</span></p>
                   <p>Payment: <span className="font-medium">{(selectedOrder.paymentStatus || "pending").replace("_", " ").toUpperCase()}</span></p>
+                  {selectedOrder.transactionID && (
+                    <p>Transaction ID: <span className="font-medium">{selectedOrder.transactionID}</span></p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1358,7 +1627,13 @@ const Orders = () => {
                 {selectedOrder.paymentMethod && (
                   <div className="flex justify-between py-2 text-sm mt-2">
                     <span className="text-gray-600">Payment Method:</span>
-                    <span className="text-gray-800 font-medium">{(selectedOrder.paymentMethod || "").replace("_", " ").toUpperCase()}</span>
+                    <span className="text-gray-800 font-medium">{(selectedOrder.paymentMethod || "").charAt(0).toUpperCase() + (selectedOrder.paymentMethod || "").slice(1)}</span>
+                  </div>
+                )}
+                {selectedOrder.transactionID && (
+                  <div className="flex justify-between py-2 text-sm mt-2">
+                    <span className="text-gray-600">Transaction ID:</span>
+                    <span className="text-gray-800 font-medium">{selectedOrder.transactionID}</span>
                   </div>
                 )}
               </div>
@@ -1379,6 +1654,163 @@ const Orders = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Instant Create Menu Item Modal */}
+      <Modal
+        title="Instant Create Menu Item"
+        open={instantCreateVisible}
+        onCancel={() => {
+          setInstantCreateVisible(false);
+          setCurrentItemFieldIndex(null);
+          instantCreateForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+        destroyOnClose
+      >
+        <Form
+          form={instantCreateForm}
+          layout="vertical"
+          onFinish={async (values) => {
+            const result = await handleInstantCreate(values);
+            if (result && result.id) {
+              const newItemId = result.id;
+              const newItemPrice = result.price;
+              
+              // Get current items from form
+              const currentItems = form.getFieldValue('items') || [];
+              
+              // Update the current field with the new item
+              if (currentItemFieldIndex !== null && currentItemFieldIndex !== undefined) {
+                const updatedItems = currentItems.map((item, idx) => 
+                  idx === currentItemFieldIndex 
+                    ? { ...item, menuItemId: newItemId, quantity: item.quantity || 1 }
+                    : item
+                );
+                form.setFieldsValue({ items: updatedItems });
+                
+                // Recalculate totals
+                let subtotal = 0;
+                updatedItems.forEach((item) => {
+                  const menuItem = menuItems.find(m => 
+                    (m.id || m._id) === item.menuItemId
+                  );
+                  if (menuItem) {
+                    subtotal += (item.quantity || 1) * Number(menuItem.price || 0);
+                  } else if (item.menuItemId === newItemId) {
+                    // Use the price from the newly created item
+                    subtotal += (item.quantity || 1) * newItemPrice;
+                  }
+                });
+                form.setFieldsValue({ subtotal });
+                calculateTotals();
+              } else {
+                // Add as new item if no field index
+                const newItems = [...currentItems, { menuItemId: newItemId, quantity: 1 }];
+                form.setFieldsValue({ items: newItems });
+                
+                // Recalculate totals
+                let subtotal = 0;
+                newItems.forEach((item) => {
+                  const menuItem = menuItems.find(m => 
+                    (m.id || m._id) === item.menuItemId
+                  );
+                  if (menuItem) {
+                    subtotal += (item.quantity || 1) * Number(menuItem.price || 0);
+                  } else if (item.menuItemId === newItemId) {
+                    subtotal += (item.quantity || 1) * newItemPrice;
+                  }
+                });
+                form.setFieldsValue({ subtotal });
+                calculateTotals();
+              }
+              
+              setCurrentItemFieldIndex(null);
+            }
+          }}
+          initialValues={{
+            availability: "available",
+            price: 0,
+          }}
+        >
+          <Form.Item
+            name="itemName"
+            label="Item Name"
+            rules={[{ required: true, message: "Item name is required" }]}
+          >
+            <Input placeholder="Enter item name" />
+          </Form.Item>
+
+          <Form.Item
+            name="categoryID"
+            label="Category"
+            rules={[{ required: true, message: "Category is required" }]}
+          >
+            <Select 
+              placeholder="Select or enter category"
+              showSearch
+              allowClear
+              mode={undefined}
+              optionFilterProp="children"
+              filterOption={(input, option) =>
+                (option?.children || "").toLowerCase().indexOf(input.toLowerCase()) >= 0
+              }
+            >
+              {categories.map((cat) => (
+                <Select.Option key={cat} value={cat}>
+                  {cat}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="price"
+            label="Price"
+            rules={[
+              { required: true, message: "Price is required" },
+              { type: "number", min: 0, message: "Price must be greater than 0" }
+            ]}
+          >
+            <InputNumber
+              min={0}
+              placeholder="Enter price"
+              style={{ width: '100%' }}
+              formatter={(value) => `৳ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={(value) => value.replace(/৳\s?|(,*)/g, '')}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="Description"
+          >
+            <Input.TextArea
+              rows={3}
+              placeholder="Enter description (optional)"
+            />
+          </Form.Item>
+
+          <div className="flex justify-end gap-3 pt-3 border-t">
+            <Button
+              onClick={() => {
+                setInstantCreateVisible(false);
+                setCurrentItemFieldIndex(null);
+                instantCreateForm.resetFields();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="primary"
+              htmlType="submit"
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              Create & Add to Order
+            </Button>
+          </div>
+        </Form>
       </Modal>
     </div>
   );

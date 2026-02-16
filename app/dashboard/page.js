@@ -65,6 +65,7 @@ import RoomAvailabilityPage from "@/component/RoomSearchPage";
 import AllBookingInfo from "@/component/AllBookingInfo";
 import ExpenseInfo from "@/component/Expense/ExpenseInfo";
 import PermissionManagement from "@/component/Permission/PermissionManagement";
+import DailyStatement from "@/component/DailyStatement";
 // Restaurant components
 import RestaurantDashboard from "@/component/restaurant/RestaurantDashboard";
 import Orders from "@/component/restaurant/Orders";
@@ -112,6 +113,12 @@ const hotelMenuItems = [
     label: "Report Dashboard",
     icon: <BarChartOutlined className="text-base" />,
     component: (props) => <AllBookingInfo hotelID={props?.hotelID || 1} />,
+  },
+  {
+    key: "11",
+    label: "Daily Statement",
+    icon: <FileTextOutlined className="text-base" />,
+    component: () => <DailyStatement />,
   },
   {
     key: "101",
