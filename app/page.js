@@ -174,7 +174,8 @@ const PortalSelection = () => {
                 Developed by <span className="font-semibold text-gray-700">Cox Web Solutions</span>
               </p>
               <p className="text-xs text-gray-600">
-                Contact support: <span className="font-semibold text-blue-600">+880 1515‑604845</span>
+                Contact support: <span className="font-semibold text-blue-600">
++8801840452081</span>
               </p>
             </div>
           </div>

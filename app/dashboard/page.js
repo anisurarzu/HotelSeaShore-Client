@@ -389,6 +389,25 @@ const DashboardContent = ({ sliders }) => {
 
   // Get hotelID from URL
   const hotelID = searchParams.get("hotelID");
+  const [hotelName, setHotelName] = useState("Sea Shore");
+
+  // Fetch hotel name when hotelID is present (from URL or userInfo)
+  useEffect(() => {
+    const effectiveHotelID = hotelID || userInfo?.hotelID;
+    if (!effectiveHotelID || isRestaurant) return;
+    const fetchHotelName = async () => {
+      try {
+        const response = await coreAxios.get(`/hotels/${effectiveHotelID}`);
+        if (response?.status === 200 && response?.data?.success && response?.data?.data) {
+          const name = response.data.data.hotelName || response.data.data.name;
+          if (name) setHotelName(name);
+        }
+      } catch (err) {
+        console.error("Error fetching hotel name:", err);
+      }
+    };
+    fetchHotelName();
+  }, [hotelID, userInfo?.hotelID, isRestaurant]);
 
   // Get menu items based on portal type
   const menuItems = isRestaurant ? restaurantMenuItems : hotelMenuItems;
@@ -1146,7 +1165,7 @@ const DashboardContent = ({ sliders }) => {
           <img 
             src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
             alt="Hotel Sea Shore Logo" 
-            className="h-14 w-auto object-contain"
+            className="h-16 w-auto object-contain"
           />
         </div>
 
@@ -1208,7 +1227,7 @@ const DashboardContent = ({ sliders }) => {
               <img 
                 src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
                 alt="Logo" 
-                className="h-5 sm:h-6 w-auto object-contain"
+                className="h-7 sm:h-8 w-auto object-contain"
               />
             </div>
 
@@ -1226,17 +1245,17 @@ const DashboardContent = ({ sliders }) => {
                   }}
                 />
                 <div className="text-left min-w-0">
-                  <p className="text-white font-semibold m-0 text-[10px] lg:text-xs truncate">
+                  {/* <p className="text-white font-semibold m-0 text-[10px] lg:text-xs truncate">
                     {userInfo.username || userInfo.name || "User"}
-                  </p>
+                  </p> */}
                   <p className="text-blue-100 text-[9px] lg:text-[10px] m-0 truncate">
                     {userInfo.role?.label || "User"}
                   </p>
                 </div>
                 <div className="hidden lg:block h-5 w-px bg-white/30 mx-2" />
                 <div className="hidden lg:block text-left">
-                  <p className="text-white text-[10px] m-0">{isRestaurant ? 'Restaurant:' : 'Hotel:'}</p>
-                  <p className="text-white font-bold m-0 text-xs">{isRestaurant ? 'Sea Shore Restaurant' : 'Hotel Sea Shore'}</p>
+                  <p className="text-white text-[20px] m-0">{isRestaurant ? 'Sea Shore Restaurant' : 'Hotel Sea Shore'}</p>
+                
                 </div>
               </div>
             )}
@@ -1377,7 +1396,7 @@ const DashboardContent = ({ sliders }) => {
           <div className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
             <span className="hidden sm:inline">{isRestaurant ? 'Restaurant: ' : 'Hotel Name: '}</span>
             <span className={`font-semibold ${darkMode ? (isRestaurant ? 'text-emerald-400' : 'text-blue-400') : (isRestaurant ? 'text-emerald-600' : 'text-blue-600')}`}>
-              {isRestaurant ? "Sea Shore Restaurant" : "Hotel Sea Shore"}
+              {isRestaurant ? "Sea Shore Restaurant" : hotelName}
             </span>
           </div>
         </div>
@@ -1407,7 +1426,7 @@ const DashboardContent = ({ sliders }) => {
             <img 
               src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
               alt="Hotel Sea Shore Logo" 
-              className="h-14 w-auto object-contain"
+              className="h-16 w-auto object-contain"
             />
           </div>
         }

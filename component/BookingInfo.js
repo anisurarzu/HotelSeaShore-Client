@@ -330,10 +330,8 @@ const BookingInfo = ({ hotelID }) => {
         nights: nights,
         adults: Number(values.adults) || 1,
         children: Number(values.children) || 0,
-        isKitchen: values.isKitchen || false,
-        kitchenTotalBill: values.isKitchen ? Number(values.kitchenTotalBill) : 0,
-        extraBed: values.extraBed || false,
-        extraBedTotalBill: values.extraBed ? Number(values.extraBedTotalBill) : 0,
+        isBreakfast: values.isBreakfast || false,
+        breakfastTotalBill: values.isBreakfast ? Number(values.breakfastTotalBill) : 0,
         totalBill: Number(values.totalBill) || 0,
         advancePayment: Number(values.advancePayment) || 0,
         duePayment: Number(values.duePayment) || 0,
@@ -408,10 +406,8 @@ const BookingInfo = ({ hotelID }) => {
       email: "",
       hotelID: 0,
       hotelName: "",
-      isKitchen: false,
-      kitchenTotalBill: 0,
-      extraBedTotalBill: 0,
-      extraBed: false,
+      isBreakfast: false,
+      breakfastTotalBill: 0,
       roomCategoryID: "",
       roomCategoryName: "",
       roomNumberID: "",
@@ -684,9 +680,8 @@ const BookingInfo = ({ hotelID }) => {
       // Recalculate total bill
       const nights = Number(formik.values.nights) || 0;
       const roomPrice = selectedCategory.basePrice || 0;
-      const kitchenTotalBill = formik.values.isKitchen ? Number(formik.values.kitchenTotalBill) || 0 : 0;
-      const extraBedTotalBill = formik.values.extraBed ? Number(formik.values.extraBedTotalBill) || 0 : 0;
-      const totalBill = (nights * roomPrice) + kitchenTotalBill + extraBedTotalBill;
+      const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
+      const totalBill = (nights * roomPrice) + breakfastTotalBill;
       const advancePayment = Number(formik.values.advancePayment) || 0;
       const duePayment = Math.max(0, totalBill - advancePayment);
       formik.setFieldValue("totalBill", totalBill);
@@ -742,10 +737,8 @@ const BookingInfo = ({ hotelID }) => {
       nights: calculatedNights > 0 ? calculatedNights : (record.nights || 0),
       adults: record.adults || 0,
       children: record.children || 0,
-      isKitchen: record.isKitchen || false,
-      kitchenTotalBill: record.kitchenTotalBill || 0,
-      extraBed: record.extraBed || false,
-      extraBedTotalBill: record.extraBedTotalBill || 0,
+      isBreakfast: record.isBreakfast ?? (record.isKitchen || record.extraBed) ?? false,
+      breakfastTotalBill: record.breakfastTotalBill ?? (Number(record.kitchenTotalBill) || 0) + (Number(record.extraBedTotalBill) || 0),
       totalBill: record.totalBill || 0,
       advancePayment: record.advancePayment || 0,
       duePayment: record.duePayment || 0,
@@ -1015,9 +1008,8 @@ const BookingInfo = ({ hotelID }) => {
       
       // Recalculate total bill when nights change
       const roomPrice = Number(formik.values.roomPrice) || 0;
-      const kitchenTotalBill = formik.values.isKitchen ? Number(formik.values.kitchenTotalBill) || 0 : 0;
-      const extraBedTotalBill = formik.values.extraBed ? Number(formik.values.extraBedTotalBill) || 0 : 0;
-      const totalBill = (calculatedNights * roomPrice) + kitchenTotalBill + extraBedTotalBill;
+      const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
+      const totalBill = (calculatedNights * roomPrice) + breakfastTotalBill;
       const advancePayment = Number(formik.values.advancePayment) || 0;
       const duePayment = Math.max(0, totalBill - advancePayment);
       
@@ -1181,7 +1173,13 @@ const BookingInfo = ({ hotelID }) => {
                             Phone
                           </th>
                           <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Room
+                            Room Category
+                          </th>
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                            Room Type
+                          </th>
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                            Booking Date
                           </th>
                           <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Check In
@@ -1223,10 +1221,13 @@ const BookingInfo = ({ hotelID }) => {
                                 <Skeleton.Input active size="small" style={{ width: 100, height: 16 }} />
                               </td>
                               <td className="px-2 py-1.5 border border-gray-300">
-                                <div className="space-y-1">
-                                  <Skeleton.Input active size="small" style={{ width: 80, height: 14 }} />
-                                  <Skeleton.Input active size="small" style={{ width: 60, height: 12 }} />
-                                </div>
+                                <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
+                              </td>
+                              <td className="px-2 py-1.5 border border-gray-300">
+                                <Skeleton.Input active size="small" style={{ width: 60, height: 16 }} />
+                              </td>
+                              <td className="px-2 py-1.5 border border-gray-300">
+                                <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
                               </td>
                               <td className="px-2 py-1.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
@@ -1298,12 +1299,17 @@ const BookingInfo = ({ hotelID }) => {
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {booking.phone}
                             </td>
-                            {/* Room Info */}
+                            {/* Room Category */}
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
+                              {booking.roomCategoryName || "—"}
+                            </td>
+                            {/* Room Type */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                              <div>
-                                <div className="font-medium text-xs">{booking.roomCategoryName}</div>
-                                <div className="text-xs text-gray-500" style={{ fontSize: "10px" }}>{booking.roomNumberName}</div>
-                              </div>
+                              {booking.roomNumberName || "—"}
+                            </td>
+                            {/* Booking Date */}
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
+                              {(booking.createdAt || booking.createTime || booking.createdDate) ? moment(booking.createdAt || booking.createTime || booking.createdDate).format("D MMM YY") : "—"}
                             </td>
                             {/* Check In */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
@@ -1537,19 +1543,10 @@ const BookingInfo = ({ hotelID }) => {
                         </Col>
                         <Col span={12}>
                           <div className="bg-gray-50 p-3 rounded">
-                            <p className="text-xs text-gray-500 mb-1">Kitchen Service</p>
+                            <p className="text-xs text-gray-500 mb-1">Breakfast</p>
                             <p className="font-semibold text-sm">
-                              {selectedBookingDetails.isKitchen ? "Yes" : "No"} 
-                              {selectedBookingDetails.isKitchen && ` (${selectedBookingDetails.kitchenTotalBill})`}
-                            </p>
-                          </div>
-                        </Col>
-                        <Col span={12}>
-                          <div className="bg-gray-50 p-3 rounded">
-                            <p className="text-xs text-gray-500 mb-1">Extra Bed</p>
-                            <p className="font-semibold text-sm">
-                              {selectedBookingDetails.extraBed ? "Yes" : "No"}
-                              {selectedBookingDetails.extraBed && ` (${selectedBookingDetails.extraBedTotalBill})`}
+                              {(selectedBookingDetails.isBreakfast || selectedBookingDetails.isKitchen || selectedBookingDetails.extraBed) ? "Yes" : "No"}
+                              {((selectedBookingDetails.isBreakfast || selectedBookingDetails.isKitchen || selectedBookingDetails.extraBed) && (selectedBookingDetails.breakfastTotalBill != null || selectedBookingDetails.kitchenTotalBill != null || selectedBookingDetails.extraBedTotalBill != null)) && ` (${Number(selectedBookingDetails.breakfastTotalBill) || (Number(selectedBookingDetails.kitchenTotalBill) || 0) + (Number(selectedBookingDetails.extraBedTotalBill) || 0)})`}
                             </p>
                           </div>
                         </Col>
@@ -1848,9 +1845,8 @@ const BookingInfo = ({ hotelID }) => {
                                 formik.handleChange(e);
                                 const nights = Number(e.target.value) || 0;
                                 const roomPrice = Number(formik.values.roomPrice) || 0;
-                                const kitchenTotalBill = formik.values.isKitchen ? Number(formik.values.kitchenTotalBill) || 0 : 0;
-                                const extraBedTotalBill = formik.values.extraBed ? Number(formik.values.extraBedTotalBill) || 0 : 0;
-                                const totalBill = (nights * roomPrice) + kitchenTotalBill + extraBedTotalBill;
+                                const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
+                                const totalBill = (nights * roomPrice) + breakfastTotalBill;
                                 const advancePayment = Number(formik.values.advancePayment) || 0;
                                 const duePayment = Math.max(0, totalBill - advancePayment);
                                 formik.setFieldValue("totalBill", totalBill);
@@ -1990,9 +1986,8 @@ const BookingInfo = ({ hotelID }) => {
                                   formik.setFieldValue("roomPrice", selectedRoom.price);
                                   // Recalculate total bill
                                   const nights = Number(formik.values.nights) || 0;
-                                  const kitchenTotalBill = formik.values.isKitchen ? Number(formik.values.kitchenTotalBill) || 0 : 0;
-                                  const extraBedTotalBill = formik.values.extraBed ? Number(formik.values.extraBedTotalBill) || 0 : 0;
-                                  const totalBill = (nights * selectedRoom.price) + kitchenTotalBill + extraBedTotalBill;
+                                  const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
+                                  const totalBill = (nights * selectedRoom.price) + breakfastTotalBill;
                                   const advancePayment = Number(formik.values.advancePayment) || 0;
                                   const duePayment = Math.max(0, totalBill - advancePayment);
                                   formik.setFieldValue("totalBill", totalBill);
@@ -2035,9 +2030,8 @@ const BookingInfo = ({ hotelID }) => {
                                 formik.handleChange(e);
                                 const roomPrice = Number(e.target.value) || 0;
                                 const nights = Number(formik.values.nights) || 0;
-                                const kitchenTotalBill = formik.values.isKitchen ? Number(formik.values.kitchenTotalBill) || 0 : 0;
-                                const extraBedTotalBill = formik.values.extraBed ? Number(formik.values.extraBedTotalBill) || 0 : 0;
-                                const totalBill = (nights * roomPrice) + kitchenTotalBill + extraBedTotalBill;
+                                const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
+                                const totalBill = (nights * roomPrice) + breakfastTotalBill;
                                 const advancePayment = Number(formik.values.advancePayment) || 0;
                                 const duePayment = Math.max(0, totalBill - advancePayment);
                                 formik.setFieldValue("totalBill", totalBill);
@@ -2140,17 +2134,16 @@ const BookingInfo = ({ hotelID }) => {
                     >
                       <Row gutter={[16, 0]}>
                         <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Kitchen Service" style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Breakfast" style={{ marginBottom: "12px" }}>
                             <Switch
-                              checked={formik.values.isKitchen}
+                              checked={formik.values.isBreakfast}
                               onChange={(checked) => {
-                                formik.setFieldValue("isKitchen", checked);
+                                formik.setFieldValue("isBreakfast", checked);
                                 if (!checked) {
-                                  formik.setFieldValue("kitchenTotalBill", 0);
+                                  formik.setFieldValue("breakfastTotalBill", 0);
                                   const nights = Number(formik.values.nights) || 0;
                                   const roomPrice = Number(formik.values.roomPrice) || 0;
-                                  const extraBedTotalBill = formik.values.extraBed ? Number(formik.values.extraBedTotalBill) || 0 : 0;
-                                  const totalBill = (nights * roomPrice) + extraBedTotalBill;
+                                  const totalBill = (nights * roomPrice);
                                   const advancePayment = Number(formik.values.advancePayment) || 0;
                                   const duePayment = Math.max(0, totalBill - advancePayment);
                                   formik.setFieldValue("totalBill", totalBill);
@@ -2159,69 +2152,24 @@ const BookingInfo = ({ hotelID }) => {
                               }}
                             />
                           </Form.Item>
-                          {formik.values.isKitchen && (
-                            <Form.Item label="Kitchen Bill" style={{ marginBottom: "12px" }}>
+                          {formik.values.isBreakfast && (
+                            <Form.Item label="Breakfast Bill" style={{ marginBottom: "12px" }}>
                               <Input
                                 type="number"
                                 min={0}
-                                value={formik.values.kitchenTotalBill || ""}
+                                value={formik.values.breakfastTotalBill || ""}
                                 onChange={(e) => {
-                                  const kitchenTotalBill = Number(e.target.value) || 0;
-                                  formik.setFieldValue("kitchenTotalBill", kitchenTotalBill);
+                                  const breakfastTotalBill = Number(e.target.value) || 0;
+                                  formik.setFieldValue("breakfastTotalBill", breakfastTotalBill);
                                   const nights = Number(formik.values.nights) || 0;
                                   const roomPrice = Number(formik.values.roomPrice) || 0;
-                                  const extraBedTotalBill = formik.values.extraBed ? Number(formik.values.extraBedTotalBill) || 0 : 0;
-                                  const totalBill = (nights * roomPrice) + kitchenTotalBill + extraBedTotalBill;
+                                  const totalBill = (nights * roomPrice) + breakfastTotalBill;
                                   const advancePayment = Number(formik.values.advancePayment) || 0;
                                   const duePayment = Math.max(0, totalBill - advancePayment);
                                   formik.setFieldValue("totalBill", totalBill);
                                   formik.setFieldValue("duePayment", duePayment);
                                 }}
-                                placeholder="Enter kitchen bill"
-                                style={{ height: "40px" }}
-                              />
-                            </Form.Item>
-                          )}
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Extra Bed" style={{ marginBottom: "12px" }}>
-                            <Switch
-                              checked={formik.values.extraBed}
-                              onChange={(checked) => {
-                                formik.setFieldValue("extraBed", checked);
-                                if (!checked) {
-                                  formik.setFieldValue("extraBedTotalBill", 0);
-                                  const nights = Number(formik.values.nights) || 0;
-                                  const roomPrice = Number(formik.values.roomPrice) || 0;
-                                  const kitchenTotalBill = formik.values.isKitchen ? Number(formik.values.kitchenTotalBill) || 0 : 0;
-                                  const totalBill = (nights * roomPrice) + kitchenTotalBill;
-                                  const advancePayment = Number(formik.values.advancePayment) || 0;
-                                  const duePayment = Math.max(0, totalBill - advancePayment);
-                                  formik.setFieldValue("totalBill", totalBill);
-                                  formik.setFieldValue("duePayment", duePayment);
-                                }
-                              }}
-                            />
-                          </Form.Item>
-                          {formik.values.extraBed && (
-                            <Form.Item label="Extra Bed Bill" style={{ marginBottom: "12px" }}>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={formik.values.extraBedTotalBill || ""}
-                                onChange={(e) => {
-                                  const extraBedTotalBill = Number(e.target.value) || 0;
-                                  formik.setFieldValue("extraBedTotalBill", extraBedTotalBill);
-                                  const nights = Number(formik.values.nights) || 0;
-                                  const roomPrice = Number(formik.values.roomPrice) || 0;
-                                  const kitchenTotalBill = formik.values.isKitchen ? Number(formik.values.kitchenTotalBill) || 0 : 0;
-                                  const totalBill = (nights * roomPrice) + kitchenTotalBill + extraBedTotalBill;
-                                  const advancePayment = Number(formik.values.advancePayment) || 0;
-                                  const duePayment = Math.max(0, totalBill - advancePayment);
-                                  formik.setFieldValue("totalBill", totalBill);
-                                  formik.setFieldValue("duePayment", duePayment);
-                                }}
-                                placeholder="Enter extra bed bill"
+                                placeholder="Enter breakfast bill"
                                 style={{ height: "40px" }}
                               />
                             </Form.Item>

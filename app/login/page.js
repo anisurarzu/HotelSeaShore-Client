@@ -148,8 +148,8 @@ const HotelSeaShoreLogin = () => {
                 <div className="bg-white/95 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg border border-white/30 p-2">
                   <img 
                     src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
-                    alt="Hotel Sea Shore Logo" 
-                    className="h-16 w-auto object-contain"
+alt="Hotel Sea Shore Logo"
+                    className="h-32 w-auto object-contain"
                   />
                 </div>
               </div>
@@ -172,6 +172,7 @@ const HotelSeaShoreLogin = () => {
                   hour: '2-digit', 
                   minute: '2-digit'
                 })}
+                
               </div>
             </div>
 
@@ -333,7 +334,7 @@ const HotelSeaShoreLogin = () => {
                   Developed by <span className="font-semibold text-gray-700">Cox Web Solutions</span>
                 </p>
                 <p className="text-xs text-gray-600">
-                  Contact support: <span className="font-semibold text-blue-600">+880 1515‑604845</span>
+                  Contact support: <a href="tel:+8801840452081" className="font-semibold text-blue-600 hover:underline">+8801840452081</a>
                 </p>
               </div>
             </div>

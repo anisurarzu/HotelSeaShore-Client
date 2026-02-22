@@ -5,7 +5,6 @@ import {
   Button,
   Modal,
   Table,
-  message,
   Input,
   InputNumber,
   Popconfirm,
@@ -38,16 +37,23 @@ const ExpenseInfo = () => {
   const [editingCategoryKey, setEditingCategoryKey] = useState(null);
   const [categoryLoading, setCategoryLoading] = useState(false);
 
+  // Daily sum
+  const [dailySumDate, setDailySumDate] = useState(dayjs());
+  const [dailySum, setDailySum] = useState(null);
+  const [dailySumLoading, setDailySumLoading] = useState(false);
+
   const fetchExpenses = async () => {
     try {
       setLoading(true);
       const response = await coreAxios.get("/expenses");
       if (response.status === 200) {
-        setExpenses(response.data);
+        const data = Array.isArray(response.data) ? response.data : [];
+        setExpenses(data);
       }
     } catch (error) {
       console.error("Error fetching expenses:", error);
       toast.error(error.response?.data?.message || "Failed to fetch expenses");
+      setExpenses([]);
     } finally {
       setLoading(false);
     }
@@ -56,36 +62,35 @@ const ExpenseInfo = () => {
   const fetchCategories = async () => {
     try {
       setCategoryLoading(true);
-      // Try to fetch from API, if not available, use localStorage
-      try {
-        const response = await coreAxios.get("/expense-categories");
-        if (response.status === 200) {
-          setCategories(response.data || []);
-          return;
-        }
-      } catch (apiError) {
-        // If API doesn't exist, use localStorage
-        const storedCategories = localStorage.getItem("expenseCategories");
-        if (storedCategories) {
-          setCategories(JSON.parse(storedCategories));
-        } else {
-          // Initialize with default categories
-          const defaultCategories = [
-            { _id: "1", name: "Food & Beverage" },
-            { _id: "2", name: "Utilities" },
-            { _id: "3", name: "Maintenance" },
-            { _id: "4", name: "Staff Salary" },
-            { _id: "5", name: "Marketing" },
-            { _id: "6", name: "Other" },
-          ];
-          setCategories(defaultCategories);
-          localStorage.setItem("expenseCategories", JSON.stringify(defaultCategories));
-        }
+      const response = await coreAxios.get("/expense-categories");
+      if (response.status === 200) {
+        setCategories(Array.isArray(response.data) ? response.data : []);
       }
     } catch (error) {
       console.error("Error fetching categories:", error);
+      toast.error(error.response?.data?.message || "Failed to fetch categories");
+      setCategories([]);
     } finally {
       setCategoryLoading(false);
+    }
+  };
+
+  const fetchDailySum = async (date) => {
+    try {
+      setDailySumLoading(true);
+      const dateStr = dayjs(date).format("YYYY-MM-DD");
+      const response = await coreAxios.get(`/expenses/sum/daily?date=${dateStr}`);
+      if (response?.data) {
+        setDailySum(response.data);
+      } else {
+        setDailySum({ date: dateStr, totalAmount: 0, expenseCount: 0, expenses: [] });
+      }
+    } catch (error) {
+      console.error("Error fetching daily sum:", error);
+      toast.error(error.response?.data?.message || "Failed to fetch daily sum");
+      setDailySum(null);
+    } finally {
+      setDailySumLoading(false);
     }
   };
 
@@ -93,6 +98,10 @@ const ExpenseInfo = () => {
     fetchExpenses();
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    fetchDailySum(dailySumDate);
+  }, [dailySumDate]);
 
   const formik = useFormik({
     initialValues: {
@@ -105,20 +114,15 @@ const ExpenseInfo = () => {
     onSubmit: async (values, { resetForm }) => {
       setLoading(true);
       try {
-        // Format dates before sending to API
         const payload = {
-          expenseCategory: values.expenseCategory,
-          expenseReason: values.expenseReason,
-          expenseAmount: values.expenseAmount,
-          expenseDate: values.expenseDate.format("YYYY-MM-DD"),
-          createdAt: values.createdAt.format("YYYY-MM-DD HH:mm:ss"),
+          expenseCategory: values.expenseCategory || "",
+          expenseReason: values.expenseReason?.trim() || "",
+          expenseAmount: Number(values.expenseAmount) || 0,
+          expenseDate: dayjs(values.expenseDate).format("YYYY-MM-DD"),
         };
-
         if (isEditing) {
-          const response = await coreAxios.put(
-            `/expenses/${editingKey}`,
-            payload
-          );
+          payload.createdAt = dayjs(values.createdAt).toISOString();
+          const response = await coreAxios.put(`/expenses/${editingKey}`, payload);
           if (response?.status === 200) {
             toast.success("Expense updated successfully!");
           }
@@ -143,6 +147,7 @@ const ExpenseInfo = () => {
         setIsEditing(false);
         setEditingKey(null);
         await fetchExpenses();
+        fetchDailySum(dailySumDate);
       } catch (error) {
         console.error("Error saving expense:", error);
         toast.error(error.response?.data?.message || "Failed to save expense");
@@ -159,48 +164,28 @@ const ExpenseInfo = () => {
     onSubmit: async (values, { resetForm }) => {
       try {
         setCategoryLoading(true);
-        let updatedCategories = [...categories];
+        const name = values.name?.trim();
+        if (!name) {
+          toast.error("Category name is required");
+          return;
+        }
 
         if (isEditingCategory) {
-          // Update category
-          updatedCategories = categories.map((cat) =>
-            cat._id === editingCategoryKey
-              ? { ...cat, name: values.name }
-              : cat
-          );
-          try {
-            await coreAxios.put(`/expense-categories/${editingCategoryKey}`, {
-              name: values.name,
-            });
-          } catch (apiError) {
-            // If API doesn't exist, just update localStorage
-            localStorage.setItem("expenseCategories", JSON.stringify(updatedCategories));
-          }
+          await coreAxios.put(`/expense-categories/${editingCategoryKey}`, { name });
           toast.success("Category updated successfully!");
         } else {
-          // Add new category
-          const newCategory = {
-            _id: `cat-${Date.now()}`,
-            name: values.name,
-          };
-          updatedCategories.push(newCategory);
-          try {
-            await coreAxios.post("/expense-categories", { name: values.name });
-          } catch (apiError) {
-            // If API doesn't exist, just update localStorage
-            localStorage.setItem("expenseCategories", JSON.stringify(updatedCategories));
-          }
+          await coreAxios.post("/expense-categories", { name });
           toast.success("Category added successfully!");
         }
 
-        setCategories(updatedCategories);
         resetForm();
         setCategoryModalVisible(false);
         setIsEditingCategory(false);
         setEditingCategoryKey(null);
+        await fetchCategories();
       } catch (error) {
         console.error("Error saving category:", error);
-        toast.error("Failed to save category");
+        toast.error(error.response?.data?.message || "Failed to save category");
       } finally {
         setCategoryLoading(false);
       }
@@ -232,18 +217,12 @@ const ExpenseInfo = () => {
   const handleDeleteCategory = async (record) => {
     try {
       setCategoryLoading(true);
-      const updatedCategories = categories.filter((cat) => cat._id !== record._id);
-      setCategories(updatedCategories);
-      localStorage.setItem("expenseCategories", JSON.stringify(updatedCategories));
-      try {
-        await coreAxios.delete(`/expense-categories/${record._id}`);
-      } catch (apiError) {
-        // If API doesn't exist, that's fine, we already updated localStorage
-      }
+      await coreAxios.delete(`/expense-categories/${record._id}`);
       toast.success("Category deleted successfully!");
+      await fetchCategories();
     } catch (error) {
       console.error("Error deleting category:", error);
-      toast.error("Failed to delete category");
+      toast.error(error.response?.data?.message || "Failed to delete category");
     } finally {
       setCategoryLoading(false);
     }
@@ -256,6 +235,7 @@ const ExpenseInfo = () => {
       if (response?.status === 200) {
         toast.success("Expense deleted successfully!");
         await fetchExpenses();
+        fetchDailySum(dailySumDate);
       }
     } catch (error) {
       console.error("Error deleting expense:", error);
@@ -266,6 +246,13 @@ const ExpenseInfo = () => {
   };
 
   const expenseColumns = [
+    {
+      title: "Expense Date",
+      dataIndex: "expenseDate",
+      key: "expenseDate",
+      render: (date) => dayjs(date).format("YYYY-MM-DD"),
+      sorter: (a, b) => new Date(a.expenseDate) - new Date(b.expenseDate),
+    },
     {
       title: "Category",
       dataIndex: "expenseCategory",
@@ -283,20 +270,6 @@ const ExpenseInfo = () => {
       key: "expenseAmount",
       render: (amount) => `৳${amount?.toFixed(2) || 0}`,
       sorter: (a, b) => (a.expenseAmount || 0) - (b.expenseAmount || 0),
-    },
-    {
-      title: "Expense Date",
-      dataIndex: "expenseDate",
-      key: "expenseDate",
-      render: (date) => dayjs(date).format("YYYY-MM-DD"),
-      sorter: (a, b) => new Date(a.expenseDate) - new Date(b.expenseDate),
-    },
-    {
-      title: "Created At",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      render: (date) => dayjs(date).format("YYYY-MM-DD HH:mm"),
-      sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
     },
     {
       title: "Actions",
@@ -364,7 +337,7 @@ const ExpenseInfo = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <div className="mb-4 flex justify-between items-center">
+      <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
         <Button
           type="primary"
           onClick={() => {
@@ -384,6 +357,19 @@ const ExpenseInfo = () => {
           icon={<PlusOutlined />}>
           Add New Expense
         </Button>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Daily total:</span>
+          <DatePicker
+            value={dailySumDate}
+            onChange={(date) => setDailySumDate(date || dayjs())}
+            allowClear={false}
+          />
+          <Spin spinning={dailySumLoading}>
+            <span className="font-semibold text-gray-800">
+              {dailySum != null ? `৳${Number(dailySum.totalAmount || 0).toFixed(2)} (${dailySum.expenseCount || 0} items)` : "—"}
+            </span>
+          </Spin>
+        </div>
       </div>
 
       <Row gutter={16}>
@@ -394,7 +380,10 @@ const ExpenseInfo = () => {
               <div className="overflow-x-auto">
                 <Table
                   columns={expenseColumns}
-                  dataSource={expenses}
+                  dataSource={expenses.slice(
+                    (pagination.current - 1) * pagination.pageSize,
+                    pagination.current * pagination.pageSize
+                  )}
                   pagination={false}
                   rowKey={(record) => record._id || record.id}
                   onChange={handleTableChange}
@@ -408,9 +397,11 @@ const ExpenseInfo = () => {
             <Pagination
               current={pagination.current}
               pageSize={pagination.pageSize}
-              total={expenses?.length}
+              total={expenses?.length || 0}
+              showSizeChanger
+              showTotal={(total, range) => `${range[0]}-${range[1]} of ${total}`}
               onChange={(page, pageSize) =>
-                setPagination({ ...pagination, current: page, pageSize })
+                setPagination((p) => ({ ...p, current: page, pageSize: pageSize || p.pageSize }))
               }
               className="mt-4"
             />
@@ -520,17 +511,18 @@ const ExpenseInfo = () => {
             />
           </div>
 
-          <div className="mb-4">
-            <label className="block mb-1 font-medium">Expense Date</label>
-            <DatePicker
-              name="expenseDate"
-              style={{ width: "100%" }}
-              value={formik.values.expenseDate}
-              onChange={(date) => formik.setFieldValue("expenseDate", date)}
-              disabled
-              required
-            />
-          </div>
+          {isEditing && (
+            <div className="mb-4">
+              <label className="block mb-1 font-medium">Expense Date</label>
+              <DatePicker
+                name="expenseDate"
+                style={{ width: "100%" }}
+                value={formik.values.expenseDate}
+                onChange={(date) => formik.setFieldValue("expenseDate", date)}
+                required
+              />
+            </div>
+          )}
 
           {isEditing && (
             <div className="mb-4">
@@ -541,7 +533,6 @@ const ExpenseInfo = () => {
                 showTime
                 value={formik.values.createdAt}
                 onChange={(date) => formik.setFieldValue("createdAt", date)}
-                disabled
               />
             </div>
           )}
