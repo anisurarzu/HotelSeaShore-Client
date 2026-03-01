@@ -10,6 +10,10 @@ import { Button, Spin, message, Space } from "antd";
 import coreAxios from "@/utils/axiosInstance";
 import moment from "moment";
 
+// Shared layout for Print & PDF – same design
+const INVOICE_PAGE_MARGIN_IN = 0.3;
+const INVOICE_WIDTH_A4 = "210mm";
+
 const Invoice = ({ params }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
@@ -49,12 +53,7 @@ const Invoice = ({ params }) => {
   }, []);
 
   const print = () => {
-    const printContent = document.getElementById("invoice-card").innerHTML;
-    const originalContent = document.body.innerHTML;
-    document.body.innerHTML = printContent;
     window.print();
-    document.body.innerHTML = originalContent;
-    window.location.reload();
   };
 
   const downloadPDF = async () => {
@@ -62,12 +61,12 @@ const Invoice = ({ params }) => {
     const html2pdf = (await import("html2pdf.js")).default;
     const element = document.getElementById("invoice-card");
     const options = {
-      margin: [0.2, 0.2, 0.2, 0.2],
+      margin: [INVOICE_PAGE_MARGIN_IN, INVOICE_PAGE_MARGIN_IN, INVOICE_PAGE_MARGIN_IN, INVOICE_PAGE_MARGIN_IN],
       filename: `Invoice-${data?.[0]?.bookingNo}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true, allowTaint: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
     html2pdf().from(element).set(options).save();
   };
@@ -291,12 +290,19 @@ const Invoice = ({ params }) => {
         </Space>
           </div>
 
-      {/* Invoice Card */}
+      {/* Invoice Card – single source for Print & PDF (same design) */}
           <div
             id="invoice-card"
-        className="max-w-5xl mx-auto bg-white shadow-md print:shadow-none"
-        style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", fontSize: '10px' }}
-      >
+            className="invoice-card-export mx-auto bg-white shadow-md print:shadow-none"
+            style={{
+              fontFamily: "'Inter', 'Segoe UI', sans-serif",
+              fontSize: "10px",
+              maxWidth: INVOICE_WIDTH_A4,
+              width: "100%",
+              WebkitPrintColorAdjust: "exact",
+              printColorAdjust: "exact",
+            }}
+          >
         {/* Header Section */}
         <div 
           className="px-6 py-4 print:px-6 print:py-3"
@@ -380,15 +386,27 @@ const Invoice = ({ params }) => {
               </h2>
               <div className="space-y-1">
                 <p className="font-bold text-slate-900 text-xs">
-                  {data?.[0]?.hotelName || hotelInfo.name}
+                  {data?.[0]?.hotelInformation?.hotelName || data?.[0]?.hotelName || hotelInfo.name}
                 </p>
-                <p className="text-slate-600 text-xs">
-                  <span className="font-semibold">Date:</span>{" "}
-                  {moment(data?.[0]?.createTime).format("MMM DD, YYYY") || "N/A"}
-                </p>
-                {data?.[0]?.bookedBy && (
+                {(() => {
+                  const addr = data?.[0]?.hotelInformation?.address;
+                  if (!addr) return null;
+                  const parts = [addr.street, addr.city, addr.state, addr.zipCode, addr.country].filter(Boolean);
+                  if (parts.length === 0) return null;
+                  return (
+                    <p className="text-slate-600 text-xs">
+                      {parts.join(", ")}
+                    </p>
+                  );
+                })()}
+                {data?.[0]?.hotelInformation?.contact?.phone && (
                   <p className="text-slate-600 text-xs">
-                    <span className="font-semibold">By:</span> {data?.[0]?.bookedBy}
+                    {data[0].hotelInformation.contact.phone}
+                  </p>
+                )}
+                {data?.[0]?.hotelInformation?.contact?.email && (
+                  <p className="text-slate-600 text-xs">
+                    {data[0].hotelInformation.contact.email}
                   </p>
                 )}
               </div>
@@ -682,21 +700,42 @@ const Invoice = ({ params }) => {
         </div>
       </div>
 
-      {/* Print Styles */}
+      {/* Print & PDF – same layout (A4, 0.3in margin, same invoice width) */}
       <style jsx global>{`
+        .invoice-card-export {
+          box-sizing: border-box;
+        }
         @media print {
           @page {
             size: A4;
-            margin: 0.3in;
+            margin: ${INVOICE_PAGE_MARGIN_IN}in;
           }
           body {
-            background: white;
-            margin: 0;
-            padding: 0;
-            font-size: 10px !important;
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-          * {
-            font-size: 10px !important;
+          body * {
+            visibility: hidden;
+          }
+          #invoice-card,
+          #invoice-card * {
+            visibility: visible;
+          }
+          #invoice-card {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: ${INVOICE_WIDTH_A4} !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .print\\:hidden {
             display: none !important;
@@ -714,11 +753,6 @@ const Invoice = ({ params }) => {
           }
           .print\\:bg-white {
             background: white !important;
-          }
-          #invoice-card {
-            max-width: 100% !important;
-            margin: 0 !important;
-            box-shadow: none !important;
           }
         }
       `}</style>

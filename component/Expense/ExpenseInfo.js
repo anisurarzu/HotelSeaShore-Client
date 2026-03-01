@@ -9,14 +9,14 @@ import {
   InputNumber,
   Popconfirm,
   Space,
-  Spin,
   Pagination,
   DatePicker,
   Select,
   Row,
   Col,
+  Skeleton,
 } from "antd";
-import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { EditOutlined, DeleteOutlined, PlusOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { useFormik } from "formik";
 import dayjs from "dayjs";
 import coreAxios from "@/utils/axiosInstance";
@@ -101,6 +101,16 @@ const ExpenseInfo = () => {
 
   useEffect(() => {
     fetchDailySum(dailySumDate);
+  }, [dailySumDate]);
+
+  // Expenses for selected date only (table is date-wise)
+  const expensesForDate = expenses.filter(
+    (e) => e && e.expenseDate && dayjs(e.expenseDate).isSame(dailySumDate, "day")
+  );
+
+  // Reset to page 1 when date changes
+  useEffect(() => {
+    setPagination((p) => ({ ...p, current: 1 }));
   }, [dailySumDate]);
 
   const formik = useFormik({
@@ -338,74 +348,129 @@ const ExpenseInfo = () => {
   return (
     <div className="container mx-auto p-4">
       <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
-        <Button
-          type="primary"
-          onClick={() => {
-            setIsEditing(false);
-            formik.resetForm({
-              values: {
-                expenseCategory: "",
-                expenseReason: "",
-                expenseAmount: 0,
-                expenseDate: dayjs(),
-                createdAt: dayjs(),
-              },
-            });
-            setVisible(true);
-          }}
-          style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
-          icon={<PlusOutlined />}>
-          Add New Expense
-        </Button>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Daily total:</span>
+        <div className="flex-shrink-0">
+          <Button
+            type="primary"
+            onClick={() => {
+              setIsEditing(false);
+              formik.resetForm({
+                values: {
+                  expenseCategory: "",
+                  expenseReason: "",
+                  expenseAmount: 0,
+                  expenseDate: dayjs(),
+                  createdAt: dayjs(),
+                },
+              });
+              setVisible(true);
+            }}
+            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
+            icon={<PlusOutlined />}>
+            Add New Expense
+          </Button>
+        </div>
+
+        <div className="flex-1 flex justify-center min-w-0">
+          {dailySumLoading ? (
+            <div className="text-center">
+              <Skeleton.Input active size="small" className="mb-1 block mx-auto" />
+              <Skeleton.Input active size="small" className="block mx-auto" style={{ width: 120 }} />
+            </div>
+          ) : (
+            <div className="text-center">
+              <span className="text-sm text-gray-600 block">Daily total</span>
+              <span className="font-semibold text-lg text-gray-800">
+                {dailySum != null ? `৳${Number(dailySum.totalAmount || 0).toFixed(2)} (${dailySum.expenseCount || 0} items)` : "—"}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <Button
+            type="default"
+            icon={<LeftOutlined />}
+            onClick={() => setDailySumDate(dailySumDate.subtract(1, "day"))}
+            aria-label="Previous day"
+          />
           <DatePicker
             value={dailySumDate}
             onChange={(date) => setDailySumDate(date || dayjs())}
             allowClear={false}
+            format="DD MMM YYYY"
           />
-          <Spin spinning={dailySumLoading}>
-            <span className="font-semibold text-gray-800">
-              {dailySum != null ? `৳${Number(dailySum.totalAmount || 0).toFixed(2)} (${dailySum.expenseCount || 0} items)` : "—"}
-            </span>
-          </Spin>
+          <Button
+            type="default"
+            icon={<RightOutlined />}
+            onClick={() => setDailySumDate(dailySumDate.add(1, "day"))}
+            aria-label="Next day"
+          />
         </div>
       </div>
 
       <Row gutter={16}>
         {/* Expense Info Table - 2/3 width */}
         <Col xs={24} lg={16}>
-          <Spin spinning={loading}>
+          {loading || dailySumLoading ? (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <Table
-                  columns={expenseColumns}
-                  dataSource={expenses.slice(
-                    (pagination.current - 1) * pagination.pageSize,
-                    pagination.current * pagination.pageSize
-                  )}
-                  pagination={false}
-                  rowKey={(record) => record._id || record.id}
-                  onChange={handleTableChange}
-                  scroll={{ x: true }}
-                  bordered
-                  size="small"
-                />
+                <table className="w-full border-collapse border border-gray-200 text-sm">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 w-[120px]">Expense Date</th>
+                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 w-[100px]">Category</th>
+                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 min-w-[140px]">Expense Reason</th>
+                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 w-[110px]">Amount (BDT)</th>
+                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 w-[120px]">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...Array(10)].map((_, i) => (
+                      <tr key={i}>
+                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
+          ) : (
+            <>
+              <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <Table
+                    columns={expenseColumns}
+                    dataSource={expensesForDate.slice(
+                      (pagination.current - 1) * pagination.pageSize,
+                      pagination.current * pagination.pageSize
+                    )}
+                    pagination={false}
+                    rowKey={(record) => record._id || record.id}
+                    onChange={handleTableChange}
+                    scroll={{ x: true }}
+                    bordered
+                    size="small"
+                  />
+                </div>
+              </div>
 
-            <Pagination
-              current={pagination.current}
-              pageSize={pagination.pageSize}
-              total={expenses?.length || 0}
-              showSizeChanger
-              showTotal={(total, range) => `${range[0]}-${range[1]} of ${total}`}
-              onChange={(page, pageSize) =>
-                setPagination((p) => ({ ...p, current: page, pageSize: pageSize || p.pageSize }))
-              }
-              className="mt-4"
-            />
-          </Spin>
+              <Pagination
+                current={pagination.current}
+                pageSize={pagination.pageSize}
+                total={expensesForDate?.length || 0}
+                showSizeChanger
+                showTotal={(total, range) => `${range[0]}-${range[1]} of ${total}`}
+                onChange={(page, pageSize) =>
+                  setPagination((p) => ({ ...p, current: page, pageSize: pageSize || p.pageSize }))
+                }
+                className="mt-4"
+              />
+            </>
+          )}
         </Col>
 
         {/* Expense Category Table - 1/3 width */}
@@ -428,7 +493,11 @@ const ExpenseInfo = () => {
               Add Category
             </Button>
           </div>
-          <Spin spinning={categoryLoading}>
+          {categoryLoading ? (
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden p-4">
+              <Skeleton active paragraph={{ rows: 6 }} />
+            </div>
+          ) : (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <Table
@@ -442,7 +511,7 @@ const ExpenseInfo = () => {
                 />
               </div>
             </div>
-          </Spin>
+          )}
         </Col>
       </Row>
 

@@ -70,7 +70,8 @@ const BookingInfo = ({ hotelID }) => {
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [checkInDate, setCheckInDate] = useState(null);
-  
+  const [isHotelFromReference, setIsHotelFromReference] = useState(false);
+
   // Ref to track if we've already handled query params (prevent duplicate modal opens)
   const hasHandledQueryParams = useRef(false);
 
@@ -363,6 +364,7 @@ const BookingInfo = ({ hotelID }) => {
         setIsEditing(false);
         setEditingKey(null);
         setPrevData(null);
+        setIsHotelFromReference(false);
         formik.resetForm();
         
         // Clear URL query params if they exist
@@ -624,11 +626,9 @@ const BookingInfo = ({ hotelID }) => {
       !roomNumberId &&
       !dateStr
     ) {
-      // Find hotel with hotelID === 1
-      const defaultHotel = hotelInfo.find((hotel) => hotel.hotelID === 1);
-      
+      // Always use first hotel from list (fixed default)
+      const defaultHotel = hotelInfo[0];
       if (defaultHotel) {
-        // Set the default hotel using the same handler to trigger category extraction
         handleHotelInfo(defaultHotel.hotelName);
       }
     }
@@ -876,13 +876,12 @@ const BookingInfo = ({ hotelID }) => {
     pagination.current * pagination.pageSize
   );
 
-  const fetchBookingDetails = async (bookingNo) => {
+  const fetchBookingDetails = async (bookingNo, guestInfoOnly = false) => {
     try {
       const response = await coreAxios.get(`/bookings/bookingNo/${bookingNo}`);
       if (response?.status === 200 && response.data && Array.isArray(response.data) && response.data.length > 0) {
         const bookingDetails = response.data[0];
-        // Set selected hotel and extract categories
-        if (bookingDetails.hotelID) {
+        if (!guestInfoOnly && bookingDetails.hotelID) {
           setSelectedHotelId(bookingDetails.hotelID);
           const selectedHotel = hotelInfo.find(h => h.hotelID === bookingDetails.hotelID);
           if (selectedHotel) {
@@ -902,11 +901,9 @@ const BookingInfo = ({ hotelID }) => {
   const handleBlur = async (e) => {
     const { value } = e.target;
     if (value && value.trim()) {
-      const bookingDetails = await fetchBookingDetails(value);
+      const bookingDetails = await fetchBookingDetails(value, true);
       if (bookingDetails) {
-        const checkInDate = bookingDetails.checkInDate ? dayjs(bookingDetails.checkInDate) : null;
-        const checkOutDate = bookingDetails.checkOutDate ? dayjs(bookingDetails.checkOutDate) : null;
-        
+        // Only fill Guest Information. All other fields stay initially blank.
         formik.setValues({
           ...formik.values,
           fullName: bookingDetails.fullName || "",
@@ -914,33 +911,8 @@ const BookingInfo = ({ hotelID }) => {
           address: bookingDetails.address || "",
           phone: bookingDetails.phone || "",
           email: bookingDetails.email || "",
-          hotelName: bookingDetails.hotelName || "",
-          hotelID: bookingDetails.hotelID || 0,
-          roomCategoryID: bookingDetails.roomCategoryID || "",
-          roomCategoryName: bookingDetails.roomCategoryName || "",
-          roomNumberID: bookingDetails.roomNumberID || "",
-          roomNumberName: bookingDetails.roomNumberName || "",
-          roomPrice: bookingDetails.roomPrice || 0,
-          checkInDate: checkInDate || dayjs(),
-          checkOutDate: checkOutDate || dayjs().add(1, "day"),
-          adults: bookingDetails.adults || 0,
-          children: bookingDetails.children || 0,
-          nights: bookingDetails.nights || 0,
-          totalBill: bookingDetails.totalBill || 0,
-          advancePayment: bookingDetails.advancePayment || 0,
-          duePayment: bookingDetails.duePayment || 0,
-          paymentMethod: bookingDetails.paymentMethod || "",
-          transactionId: bookingDetails.transactionId || "",
-          note: bookingDetails.note || "",
         });
-        
-        if (bookingDetails.roomCategoryID && bookingDetails.hotelID) {
-          setTimeout(() => {
-            extractRoomNumbers(bookingDetails.roomCategoryID);
-          }, 300);
-        }
-        
-        message.success("Booking details loaded successfully!");
+        message.success("Guest information loaded.");
       }
     }
   };
@@ -948,14 +920,11 @@ const BookingInfo = ({ hotelID }) => {
   // night calculations
   const handleCheckInChange = (date) => {
     if (!isEditing) {
-      formik.setFieldValue("hotelName", "");
-      formik.setFieldValue("hotelID", 0);
       formik.setFieldValue("roomCategoryID", "");
       formik.setFieldValue("roomCategoryName", "");
       formik.setFieldValue("roomNumberID", "");
       formik.setFieldValue("roomNumberName", "");
       formik.setFieldValue("roomPrice", 0);
-      setRoomCategories([]);
       setRoomNumbers([]);
     }
     formik.setFieldValue("checkInDate", date);
@@ -973,14 +942,11 @@ const BookingInfo = ({ hotelID }) => {
 
   const handleCheckOutChange = (date) => {
     if (!isEditing) {
-      formik.setFieldValue("hotelName", "");
-      formik.setFieldValue("hotelID", 0);
       formik.setFieldValue("roomCategoryID", "");
       formik.setFieldValue("roomCategoryName", "");
       formik.setFieldValue("roomNumberID", "");
       formik.setFieldValue("roomNumberName", "");
       formik.setFieldValue("roomPrice", 0);
-      setRoomCategories([]);
       setRoomNumbers([]);
     }
     formik.setFieldValue("checkOutDate", date);
@@ -1125,6 +1091,7 @@ const BookingInfo = ({ hotelID }) => {
                               setIsEditing(false);
                               setEditingKey(null);
                               setPrevData(null);
+                              setIsHotelFromReference(false);
                               // Clear category and room selections
                               setRoomCategories([]);
                               setRoomNumbers([]);
@@ -1631,6 +1598,7 @@ const BookingInfo = ({ hotelID }) => {
                     setIsEditing(false);
                     setEditingKey(null);
                     setPrevData(null);
+                    setIsHotelFromReference(false);
                     formik.resetForm();
                     // Reset query params ref when modal is closed
                     hasHandledQueryParams.current = false;
@@ -1729,7 +1697,10 @@ const BookingInfo = ({ hotelID }) => {
                             <Input
                               name="reference"
                               value={formik.values.reference}
-                              onChange={formik.handleChange}
+                              onChange={(e) => {
+                                formik.handleChange(e);
+                                if (!e.target.value?.trim()) setIsHotelFromReference(false);
+                              }}
                               onBlur={handleBlur}
                               placeholder="Previous booking no."
                               style={{ height: "40px" }}
@@ -1898,9 +1869,10 @@ const BookingInfo = ({ hotelID }) => {
                           <Form.Item label="Hotel Name" required style={{ marginBottom: "12px" }}>
                             <Select
                               name="hotelName"
-                              value={formik.values.hotelName}
+                              value={formik.values.hotelName || (hotelInfo[0] && hotelInfo[0].hotelName)}
                               onChange={handleHotelInfo}
                               placeholder={hotelInfo.length === 0 ? "Loading..." : "Select hotel"}
+                              disabled
                               showSearch
                               optionFilterProp="children"
                               filterOption={(input, option) => {
@@ -2197,6 +2169,7 @@ const BookingInfo = ({ hotelID }) => {
                           setIsEditing(false);
                           setEditingKey(null);
                           setPrevData(null);
+                          setIsHotelFromReference(false);
                           formik.resetForm();
                         }}
                         style={{ height: "40px", padding: "0 24px", fontSize: "14px", display: "flex", alignItems: "center" }}

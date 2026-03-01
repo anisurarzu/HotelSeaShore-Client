@@ -1,5 +1,9 @@
 "use client";
 
+/**
+ * Role & Permission Management – connects to backend:
+ * GET /permission, POST /permission, PUT /permission/:id, DELETE /permission/:id
+ */
 import { useEffect, useState } from "react";
 import {
   Button,
@@ -9,60 +13,62 @@ import {
   message,
   Input,
   Spin,
-  Popconfirm,
   Tag,
   Dropdown,
-  Menu,
-  Skeleton,
-  Divider,
-  Grid,
+  Tabs,
+  Card,
+  Space,
+  Typography,
+  Empty,
 } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
   DownOutlined,
   PlusOutlined,
-  CloseOutlined,
+  SafetyOutlined,
+  AppstoreOutlined,
 } from "@ant-design/icons";
 import { useFormik } from "formik";
 import coreAxios from "@/utils/axiosInstance";
+import {
+  HOTEL_PAGES,
+  RESTAURANT_PAGES,
+} from "@/config/dashboardPages";
 
-const { useBreakpoint } = Grid;
+const { Text } = Typography;
 
-const validPageNames = [
-  "Dashboard",
-  "Calender",
-  "Booking",
-  "Daily Statement",
-  "Report",
-  "Expense",
-  "Hotel",
-  "Users",
-  "WebHotels",
-  "WebUsers",
-  "WebBooking",
-  "RoomAvailability",
-];
+// Role = Permission document: permissionName (role name) + permissions[] (page-wise access)
+const defaultPagePermission = (page) => ({
+  pageKey: page.key,
+  pageName: page.label,
+  viewAccess: false,
+  insertAccess: false,
+  editAccess: false,
+  deleteAccess: false,
+});
 
 const PermissionManagement = () => {
-  const screens = useBreakpoint();
   const [visible, setVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingKey, setEditingKey] = useState(null);
-  const [permissions, setPermissions] = useState([]);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [activeTab, setActiveTab] = useState("hotel");
 
-  const fetchPermissions = async () => {
+  const fetchRoles = async () => {
     try {
       setLoading(true);
       const response = await coreAxios.get("/permission");
       if (response.status === 200) {
-        setPermissions(response.data);
+        const data = Array.isArray(response.data) ? response.data : response.data?.data ?? [];
+        setRoles(data);
       }
     } catch (error) {
-      message.error("Failed to fetch permissions. Please try again.");
+      const msg = error.response?.data?.message || error.response?.data?.error || "Failed to fetch roles.";
+      message.error(msg);
+      setRoles([]);
     } finally {
       setLoading(false);
       setInitialLoad(false);
@@ -70,64 +76,52 @@ const PermissionManagement = () => {
   };
 
   useEffect(() => {
-    fetchPermissions();
+    fetchRoles();
   }, []);
+
+  const pagesByPortal = { hotel: HOTEL_PAGES, restaurant: RESTAURANT_PAGES };
+  const currentPages = pagesByPortal[activeTab] || HOTEL_PAGES;
+  const allPages = [...HOTEL_PAGES, ...RESTAURANT_PAGES];
+  const PAGE_NAME_TO_KEY = Object.fromEntries(allPages.map((p) => [p.label, p.key]));
+
+  function getPageKey(p) {
+    return p.pageKey || (p.pageName && PAGE_NAME_TO_KEY[p.pageName]) || p.pageName;
+  }
 
   const formik = useFormik({
     initialValues: {
       permissionName: "",
-      permissions: [
-        {
-          pageName: "",
-          viewAccess: false,
-          editAccess: false,
-          deleteAccess: false,
-          insertAccess: false,
-        },
-      ],
+      permissions: [],
     },
-    onSubmit: async (values, { resetForm }) => {
-      if (
-        values.permissions.some((p) => !validPageNames.includes(p.pageName))
-      ) {
-        message.error(
-          "Invalid page name in one or more permissions. Please choose from the available list."
-        );
+    onSubmit: async (values) => {
+      if (!values.permissionName?.trim()) {
+        message.error("Please enter a role name.");
         return;
       }
 
-      if (!values.permissionName) {
-        message.error("Please provide a permission name");
+      const permissions = values.permissions.filter((p) => p.viewAccess || p.insertAccess || p.editAccess || p.deleteAccess);
+      if (permissions.length === 0) {
+        message.error("Assign at least one page with View or other access.");
         return;
       }
 
       setLoading(true);
       try {
+        const payload = { permissionName: values.permissionName.trim(), permissions };
         if (isEditing) {
-          const response = await coreAxios.put(
-            `/permission/${editingKey}`,
-            values
-          );
-          if (response.status === 200) {
-            message.success("Permission updated successfully!");
-          }
+          await coreAxios.put(`/permission/${editingKey}`, payload);
+          message.success("Role updated successfully.");
         } else {
-          const response = await coreAxios.post("/permission", values);
-          if (response.status === 201) {
-            message.success("Permission created successfully!");
-          }
+          await coreAxios.post("/permission", payload);
+          message.success("Role created successfully.");
         }
-
-        resetForm();
         setVisible(false);
-        setIsEditing(false);
         setEditingKey(null);
-        fetchPermissions();
+        formik.resetForm();
+        fetchRoles();
       } catch (error) {
-        message.error(
-          error.response?.data?.message ||
-            "Failed to save permission. Please try again."
-        );
+        const msg = error.response?.data?.message || error.response?.data?.error || "Failed to save role.";
+        message.error(msg);
       } finally {
         setLoading(false);
       }
@@ -136,9 +130,15 @@ const PermissionManagement = () => {
 
   const handleEdit = (record) => {
     setEditingKey(record._id);
+    const perms = Array.isArray(record.permissions) ? record.permissions : [];
     formik.setValues({
-      permissionName: record.permissionName,
-      permissions: record.permissions,
+      permissionName: record.permissionName || "",
+      permissions: allPages.map((page) => {
+        const existing = perms.find((p) => (p.pageKey || getPageKey(p)) === page.key);
+        return existing
+          ? { ...existing, pageKey: page.key, pageName: page.label }
+          : { ...defaultPagePermission(page), viewAccess: false };
+      }),
     });
     setVisible(true);
     setIsEditing(true);
@@ -147,108 +147,90 @@ const PermissionManagement = () => {
   const handleDelete = async (record) => {
     try {
       setLoading(true);
-      const response = await coreAxios.delete(`/permission/${record._id}`);
-      if (response.status === 200) {
-        message.success("Permission deleted successfully!");
-        fetchPermissions();
-      }
+      await coreAxios.delete(`/permission/${record._id}`);
+      message.success("Role deleted successfully.");
+      await fetchRoles();
     } catch (error) {
-      message.error("Failed to delete permission. Please try again.");
+      const msg = error.response?.data?.message || error.response?.data?.error || "Failed to delete role.";
+      message.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const addPermissionItem = () => {
+  const openCreateModal = () => {
+    setEditingKey(null);
+    setIsEditing(false);
     formik.setValues({
-      ...formik.values,
-      permissions: [
-        ...formik.values.permissions,
-        {
-          pageName: "",
-          viewAccess: false,
-          editAccess: false,
-          deleteAccess: false,
-          insertAccess: false,
-        },
-      ],
+      permissionName: "",
+      permissions: allPages.map((p) => defaultPagePermission(p)),
     });
+    setVisible(true);
   };
 
-  const removePermissionItem = (index) => {
-    const newPermissions = [...formik.values.permissions];
-    newPermissions.splice(index, 1);
-    formik.setValues({
-      ...formik.values,
-      permissions: newPermissions,
-    });
+  const setPagePermission = (pageKey, field, value) => {
+    const next = formik.values.permissions.map((p) =>
+      (p.pageKey || getPageKey(p)) === pageKey ? { ...p, [field]: value } : p
+    );
+    formik.setValues({ ...formik.values, permissions: next });
   };
 
   const columns = [
     {
-      title: "Permission Name",
+      title: "Role Name",
       dataIndex: "permissionName",
       key: "permissionName",
       render: (text) => (
-        <span className="hover:text-blue-600 transition-colors cursor-pointer">
-          {text}
-        </span>
+        <Space>
+          <SafetyOutlined className="text-blue-500" />
+          <Text strong>{text}</Text>
+        </Space>
       ),
     },
     {
-      title: "Pages",
+      title: "Page access",
       dataIndex: "permissions",
       key: "pages",
       render: (permissions) => (
-        <div className="flex flex-wrap gap-1">
-          {permissions
-            .slice(0, screens.md ? permissions.length : 3)
-            .map((p, i) => (
-              <Tag key={i} color="blue">
-                {p.pageName}
-              </Tag>
-            ))}
-          {!screens.md && permissions.length > 3 && (
-            <Tag>+{permissions.length - 3} more</Tag>
+        <Space wrap size={[4, 4]}>
+          {permissions?.filter((p) => p.viewAccess).slice(0, 5).map((p, i) => (
+            <Tag key={i} color="blue">{p.pageName || p.pageKey}</Tag>
+          ))}
+          {permissions?.filter((p) => p.viewAccess).length > 5 && (
+            <Tag>+{permissions.filter((p) => p.viewAccess).length - 5} more</Tag>
           )}
-        </div>
+        </Space>
       ),
     },
     {
       title: "Actions",
       key: "actions",
-      width: screens.md ? 150 : 100,
+      width: 120,
       render: (_, record) => (
         <Dropdown
-          overlay={
-            <Menu>
-              <Menu.Item
-                key="edit"
-                icon={<EditOutlined />}
-                onClick={() => handleEdit(record)}
-              >
-                Edit
-              </Menu.Item>
-              <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
-                <Popconfirm
-                  title="Are you sure to delete this permission?"
-                  onConfirm={() => handleDelete(record)}
-                  okText="Yes"
-                  cancelText="No"
-                >
-                  Delete
-                </Popconfirm>
-              </Menu.Item>
-            </Menu>
-          }
+          menu={{
+            items: [
+              { key: "edit", icon: <EditOutlined />, label: "Edit", onClick: () => handleEdit(record) },
+              {
+                key: "delete",
+                icon: <DeleteOutlined />,
+                label: "Delete",
+                danger: true,
+                onClick: () => {
+                  Modal.confirm({
+                    title: "Delete this role?",
+                    content: "Users with this role will need a new role assignment.",
+                    okText: "Delete",
+                    onOk: () => handleDelete(record),
+                  });
+                },
+              },
+            ],
+          }}
           trigger={["click"]}
         >
-          <Button
-            className="flex items-center"
-            size={screens.md ? "middle" : "small"}
-          >
-            {screens.md ? "Actions" : <EditOutlined />}{" "}
-            {screens.md && <DownOutlined className="ml-1" />}
+          <Button size="small">
+            Actions <DownOutlined />
           </Button>
         </Dropdown>
       ),
@@ -257,208 +239,129 @@ const PermissionManagement = () => {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-4">
-        <h1 className="text-xl md:text-2xl font-bold text-gray-800">
-          Permission Management
-        </h1>
-      </div>
-
-      <div className="flex justify-end my-2" style={{ marginTop: "1rem" }}>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setIsEditing(false);
-            formik.resetForm();
-            formik.setValues({
-              permissionName: "",
-              permissions: [
-                {
-                  pageName: "",
-                  viewAccess: false,
-                  editAccess: false,
-                  deleteAccess: false,
-                  insertAccess: false,
-                },
-              ],
-            });
-            setVisible(true);
-          }}
-          className="shadow-md"
-        >
-          {screens.sm ? "Add New Permission" : "Add New"}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <AppstoreOutlined />
+            Role & Permission Management
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Create roles and assign page access + content permissions (view, add, edit, delete) per page.
+          </p>
+        </div>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+          Add Role
         </Button>
       </div>
 
       {initialLoad ? (
-        <div className="bg-white p-4 md:p-6 rounded-lg shadow">
-          <Skeleton active paragraph={{ rows: 8 }} />
-        </div>
+        <Card><Spin tip="Loading roles..." /></Card>
       ) : (
-        <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+        <Card title="Roles" className="shadow-sm">
           <Table
             columns={columns}
-            dataSource={permissions}
+            dataSource={roles}
             rowKey="_id"
-            pagination={{
-              current: pagination.current,
-              pageSize: pagination.pageSize,
-              total: permissions.length,
-              onChange: (page, pageSize) =>
-                setPagination({ current: page, pageSize }),
-              showSizeChanger: true,
-              pageSizeOptions: ["10", "20", "50", "100"],
-              size: screens.md ? "default" : "small",
-            }}
             loading={loading}
-            scroll={{ x: true }}
-            size={screens.md ? "default" : "middle"}
+            pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `Total ${t} roles` }}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="No roles yet"
+                >
+                  <Button type="primary" onClick={openCreateModal}>
+                    Create first role
+                  </Button>
+                </Empty>
+              ),
+            }}
           />
-        </div>
+        </Card>
       )}
 
       <Modal
-        title={isEditing ? "Edit Permission" : "Add New Permission"}
+        title={isEditing ? "Edit Role" : "Create Role"}
         open={visible}
         onCancel={() => setVisible(false)}
         footer={null}
-        width={800}
-        centered
+        width={720}
+        destroyOnClose
       >
-        <form onSubmit={formik.handleSubmit} className="space-y-6">
-          <div>
-            <label className="block mb-2 text-gray-700 font-medium">
-              Permission Name
-            </label>
+        <form onSubmit={formik.handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-gray-700 font-medium mb-2">Role name</label>
             <Input
-              name="permissionName"
+              placeholder="e.g. Hotel Manager, Reception"
               value={formik.values.permissionName}
-              onChange={formik.handleChange}
+              onChange={(e) => formik.setFieldValue("permissionName", e.target.value)}
               required
-              placeholder="e.g., Admin Permissions, Manager Permissions"
-              className="py-2"
             />
           </div>
 
-          <Divider orientation="left">Page Permissions</Divider>
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            items={[
+              { key: "hotel", label: "Hotel pages" },
+              { key: "restaurant", label: "Restaurant pages" },
+            ]}
+          />
 
-          {formik.values.permissions.map((permission, index) => (
-            <div
-              key={index}
-              className="border border-gray-200 rounded-lg p-4 mb-4 relative"
-              style={{ marginBottom: "1rem", marginTop: "1rem" }}
-            >
-              {formik.values.permissions.length > 1 && (
-                <Button
-                  type="text"
-                  icon={<CloseOutlined />}
-                  onClick={() => removePermissionItem(index)}
-                  className="absolute top-2 right-2"
-                  danger
-                />
-              )}
+          <div className="max-h-[60vh] overflow-y-auto border rounded-lg p-2 mt-2">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="text-left p-2 font-semibold">Page</th>
+                  <th className="text-center p-2 w-20">View</th>
+                  <th className="text-center p-2 w-20">Add</th>
+                  <th className="text-center p-2 w-20">Edit</th>
+                  <th className="text-center p-2 w-20">Delete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentPages.map((page) => {
+                  const perm = formik.values.permissions.find(
+                    (p) => (p.pageKey || getPageKey(p)) === page.key
+                  ) || defaultPagePermission(page);
+                  return (
+                    <tr key={page.key} className="border-b hover:bg-gray-50/50">
+                      <td className="p-2 font-medium">{page.label}</td>
+                      <td className="p-2 text-center">
+                        <Checkbox
+                          checked={!!perm.viewAccess}
+                          onChange={(e) => setPagePermission(page.key, "viewAccess", e.target.checked)}
+                        />
+                      </td>
+                      <td className="p-2 text-center">
+                        <Checkbox
+                          checked={!!perm.insertAccess}
+                          onChange={(e) => setPagePermission(page.key, "insertAccess", e.target.checked)}
+                        />
+                      </td>
+                      <td className="p-2 text-center">
+                        <Checkbox
+                          checked={!!perm.editAccess}
+                          onChange={(e) => setPagePermission(page.key, "editAccess", e.target.checked)}
+                        />
+                      </td>
+                      <td className="p-2 text-center">
+                        <Checkbox
+                          checked={!!perm.deleteAccess}
+                          onChange={(e) => setPagePermission(page.key, "deleteAccess", e.target.checked)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-              <div className="mb-4">
-                <label
-                  className="block font-semibold text-gray-700"
-                  style={{ marginBottom: "1rem", marginTop: "1rem" }}
-                >
-                  Page Name
-                </label>
-                <div className="gap-2 grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                  {validPageNames.map((name) => (
-                    <Tag
-                      key={name}
-                      color={permission.pageName === name ? "green" : "blue"}
-                      className={`cursor-pointer hover:shadow-md transition-all text-center py-1 px-3 ${
-                        permission.pageName === name
-                          ? "ring-2 ring-green-400"
-                          : ""
-                      }`}
-                      onClick={() =>
-                        formik.setFieldValue(
-                          `permissions[${index}].pageName`,
-                          name
-                        )
-                      }
-                    >
-                      {name}
-                    </Tag>
-                  ))}
-                </div>
-              </div>
-
-              <div
-                className=""
-                style={{ marginBottom: "1rem", marginTop: "1rem" }}
-              >
-                <label className="block mb-2 text-gray-700">
-                  Access Rights
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  <Checkbox
-                    name={`permissions[${index}].viewAccess`}
-                    checked={permission.viewAccess}
-                    onChange={formik.handleChange}
-                    className="hover:bg-gray-50 p-2 rounded"
-                  >
-                    View Access
-                  </Checkbox>
-                  <Checkbox
-                    name={`permissions[${index}].editAccess`}
-                    checked={permission.editAccess}
-                    onChange={formik.handleChange}
-                    className="hover:bg-gray-50 p-2 rounded"
-                  >
-                    Edit Access
-                  </Checkbox>
-                  <Checkbox
-                    name={`permissions[${index}].deleteAccess`}
-                    checked={permission.deleteAccess}
-                    onChange={formik.handleChange}
-                    className="hover:bg-gray-50 p-2 rounded"
-                  >
-                    Delete Access
-                  </Checkbox>
-                  <Checkbox
-                    name={`permissions[${index}].insertAccess`}
-                    checked={permission.insertAccess}
-                    onChange={formik.handleChange}
-                    className="hover:bg-gray-50 p-2 rounded"
-                  >
-                    Insert Access
-                  </Checkbox>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          <Button
-            type="dashed"
-            onClick={addPermissionItem}
-            block
-            icon={<PlusOutlined />}
-          >
-            Add Another Page Permission
-          </Button>
-
-          <div
-            className="flex justify-end gap-4 pt-6"
-            style={{ marginTop: "1rem" }}
-          >
-            <Button
-              onClick={() => setVisible(false)}
-              className="px-6 py-2 border border-gray-300"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={loading}
-              className="px-6 py-2 shadow-md"
-            >
-              {isEditing ? "Update Permission" : "Create Permission"}
+          <div className="flex justify-end gap-2 mt-4">
+            <Button onClick={() => setVisible(false)}>Cancel</Button>
+            <Button type="primary" htmlType="submit" loading={loading}>
+              {isEditing ? "Update Role" : "Create Role"}
             </Button>
           </div>
         </form>

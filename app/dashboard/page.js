@@ -31,8 +31,6 @@ import {
   InfoCircleOutlined,
   DownOutlined,
   UserOutlined,
-  BellOutlined,
-  QuestionCircleOutlined,
   HomeOutlined,
   BankOutlined,
   DollarOutlined,
@@ -54,7 +52,7 @@ import {
   AppstoreAddOutlined,
 } from "@ant-design/icons";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense, useCallback } from "react";
+import { useState, useEffect, Suspense, useCallback, useMemo } from "react";
 import { Pie } from "@ant-design/charts";
 import DashboardHome from "@/component/DashboardHome";
 import AgentInformation from "@/component/AgentInformation";
@@ -72,6 +70,7 @@ import Orders from "@/component/restaurant/Orders";
 import RestaurantMenu from "@/component/restaurant/Menu";
 import Tables from "@/component/restaurant/Tables";
 import coreAxios from "@/utils/axiosInstance";
+import { PermissionProvider, useResolvedPermission } from "@/context/PermissionContext";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -410,7 +409,13 @@ const DashboardContent = ({ sliders }) => {
   }, [hotelID, userInfo?.hotelID, isRestaurant]);
 
   // Get menu items based on portal type
-  const menuItems = isRestaurant ? restaurantMenuItems : hotelMenuItems;
+  const allMenuItems = isRestaurant ? restaurantMenuItems : hotelMenuItems;
+  // Role-based & page-wise: filter menu by allowed pages
+  const { allowedPageKeys, getContentPermission } = useResolvedPermission(userInfo, isRestaurant);
+  const menuItems = useMemo(
+    () => allMenuItems.filter((item) => allowedPageKeys.includes(item.key)),
+    [allMenuItems, allowedPageKeys]
+  );
 
   // Calculate dashboard statistics from bookings API data
   const calculateDashboardStats = useCallback((bookingsData) => {
@@ -607,6 +612,17 @@ const DashboardContent = ({ sliders }) => {
   const toggleTopbar = () => {
     setTopbarCollapsed(!topbarCollapsed);
   };
+
+  // When allowed pages change, ensure selected menu is still allowed
+  useEffect(() => {
+    if (menuItems.length > 0 && !menuItems.some((item) => item.key === selectedMenu)) {
+      const firstKey = menuItems[0]?.key || "1";
+      setSelectedMenu(firstKey);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("menu", firstKey);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    }
+  }, [menuItems, selectedMenu]);
 
   const handleMenuClick = (e) => {
     const menuKey = String(e.key);
@@ -1026,7 +1042,8 @@ const DashboardContent = ({ sliders }) => {
 
     const selectedItem = menuItems.find((item) => item.key === selectedMenu);
     if (selectedItem) {
-      return selectedItem.component({ hotelID });
+      const contentPermissions = getContentPermission(selectedMenu);
+      return selectedItem.component({ hotelID, contentPermissions });
     }
 
     // Fallback to dashboard
@@ -1109,11 +1126,6 @@ const DashboardContent = ({ sliders }) => {
       icon: <UserOutlined />,
     },
     {
-      key: 'help',
-      label: 'Help & Support',
-      icon: <QuestionCircleOutlined />,
-    },
-    {
       type: 'divider',
     },
     {
@@ -1126,9 +1138,10 @@ const DashboardContent = ({ sliders }) => {
   ];
 
   return (
-    <Layout className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900`}>
-      {/* Desktop Sidebar */}
-      <Sider
+    <PermissionProvider userInfo={userInfo} isRestaurant={isRestaurant}>
+      <Layout className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900`}>
+        {/* Desktop Sidebar */}
+        <Sider
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
@@ -1279,24 +1292,6 @@ const DashboardContent = ({ sliders }) => {
 
           {/* Right side */}
           <div className="flex items-center gap-1 lg:gap-2">
-            {!topbarCollapsed && (
-              <Button
-                type="text"
-                icon={<BellOutlined className="text-white text-sm" />}
-                className="hidden md:flex hover:bg-white/10 relative"
-                style={{ 
-                  color: "white",
-                  padding: "4px",
-                  minWidth: "28px",
-                  minHeight: "28px"
-                }}
-              >
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 text-white text-[8px] rounded-full flex items-center justify-center font-semibold">
-                  3
-                </span>
-              </Button>
-            )}
-            
             <Tooltip title={topbarCollapsed ? "Expand Topbar" : "Collapse Topbar"}>
               <Button
                 type="text"
@@ -2231,7 +2226,8 @@ const DashboardContent = ({ sliders }) => {
           }
         }
       `}</style>
-    </Layout>
+      </Layout>
+    </PermissionProvider>
   );
 };
 

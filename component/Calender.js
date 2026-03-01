@@ -332,16 +332,16 @@ const HotelCalendar = ({ hotelID }) => {
       
       return {
         title: (
-          <div className="text-center p-0 m-0" style={{ minWidth: '80px' }}>
+          <div className="text-center p-0 m-0 text-white" style={{ minWidth: '80px' }}>
             <div 
-              className={`font-bold ${isToday ? 'text-red-600' : ''} ${isHoliday ? 'text-orange-600' : ''}`}
+              className={`font-bold ${isToday ? 'text-amber-200' : ''} ${isHoliday ? 'text-amber-200' : ''}`}
               style={{ fontSize: '9px', lineHeight: '1.2' }}
             >
               {dayOfWeek.toUpperCase()}
               {isHoliday && <span className="text-xs ml-1">🏛️</span>}
             </div>
             <div 
-              className={`font-extrabold ${isToday ? 'text-red-600' : ''} ${isHoliday ? 'text-orange-600' : ''}`}
+              className={`font-extrabold ${isToday ? 'text-amber-200' : ''} ${isHoliday ? 'text-amber-200' : ''}`}
               style={{ fontSize: '12px', lineHeight: '1.2' }}
             >
               {dayNum}
@@ -444,25 +444,34 @@ const HotelCalendar = ({ hotelID }) => {
       };
     });
 
+    const roomNoColumnBg = '#2563eb'; // blue-600
+
     return [
       {
         title: (
-          <div className="text-center">
+          <div className="text-center text-white font-bold">
             <div className="font-bold text-xs sm:text-sm">Room</div>
-            <div className="text-xs text-gray-500">No.</div>
+            <div className="text-xs text-white/90">No.</div>
           </div>
         ),
         dataIndex: 'flatNo',
         key: 'flatNo',
         fixed: 'left',
         width: 70,
+        onHeaderCell: () => ({
+          style: { background: roomNoColumnBg, color: 'white', borderColor: 'rgba(255,255,255,0.2)' },
+        }),
+        onCell: () => ({ style: { background: roomNoColumnBg } }),
         render: (text, record) => (
-          <div className="text-center">
-            <div className="font-bold text-xs sm:text-sm">{text}</div>
-            <div className="text-xs text-gray-500">
+          <div
+            className="text-center h-full min-h-[60px] flex flex-col justify-center py-1"
+            style={{ background: roomNoColumnBg, color: 'white' }}
+          >
+            <div className="font-bold text-xs sm:text-sm text-white">{text}</div>
+            <div className="text-xs text-white/90">
               {calculateTotalBooked(record.key)}/{generateDateColumns().length}
             </div>
-            <div className="text-gray-800 mt-1" style={{ fontSize: '10px' }}>
+            <div className="text-white/90 mt-1" style={{ fontSize: '10px' }}>
               {record.category || 'N/A'}
             </div>
           </div>
@@ -1721,7 +1730,9 @@ const HotelCalendar = ({ hotelID }) => {
         .calendar-table .ant-table-thead > tr > th {
           padding: 4px 2px !important;
           text-align: center;
-          background: #fafafa;
+          background: #2563eb !important;
+          color: white !important;
+          border-color: rgba(255,255,255,0.2) !important;
           position: sticky;
           top: 0;
           z-index: 10;
@@ -1754,11 +1765,11 @@ const HotelCalendar = ({ hotelID }) => {
           position: sticky;
           left: 0;
           z-index: 5;
-          background: white;
+          background: #2563eb !important;
         }
         
         .calendar-table .ant-table-tbody > tr:hover > td:first-child {
-          background: #fafafa !important;
+          background: #2563eb !important;
         }
         
         .calendar-table .ant-table-body {
