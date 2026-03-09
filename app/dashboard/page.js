@@ -111,37 +111,37 @@ const hotelMenuItems = [
     key: "10",
     label: "Report Dashboard",
     icon: <BarChartOutlined className="text-base" />,
-    component: (props) => <AllBookingInfo hotelID={props?.hotelID || 1} />,
+    component: (props) => <AllBookingInfo hotelID={props?.hotelID || 1} contentPermissions={props?.contentPermissions} />,
   },
   {
     key: "11",
     label: "Daily Statement",
     icon: <FileTextOutlined className="text-base" />,
-    component: () => <DailyStatement />,
+    component: (props) => <DailyStatement {...props} />,
   },
   {
     key: "101",
     label: "Expense",
     icon: <WalletOutlined className="text-base" />,
-    component: () => <ExpenseInfo />,
+    component: (props) => <ExpenseInfo {...props} />,
   },
   {
     key: "5",
     label: "Hotel Info",
     icon: <BankOutlined className="text-base" />,
-    component: () => <HotelInformation />,
+    component: (props) => <HotelInformation {...props} />,
   },
   {
     key: "2",
     label: "Users",
     icon: <TeamOutlined className="text-base" />,
-    component: () => <AgentInformation />,
+    component: (props) => <AgentInformation {...props} />,
   },
   {
     key: "8",
     label: "Settings",
     icon: <SettingOutlined className="text-base" />,
-    component: () => <PermissionManagement />,
+    component: (props) => <PermissionManagement {...props} />,
   },
 ];
 
@@ -1042,7 +1042,17 @@ const DashboardContent = ({ sliders }) => {
 
     const selectedItem = menuItems.find((item) => item.key === selectedMenu);
     if (selectedItem) {
-      const contentPermissions = getContentPermission(selectedMenu);
+      const cp = getContentPermission(selectedMenu);
+      const contentPermissions = {
+        view: cp.view,
+        insert: cp.insert,
+        edit: cp.edit,
+        delete: cp.delete,
+        viewAccess: cp.view,
+        insertAccess: cp.insert,
+        editAccess: cp.edit,
+        deleteAccess: cp.delete,
+      };
       return selectedItem.component({ hotelID, contentPermissions });
     }
 

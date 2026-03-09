@@ -21,8 +21,17 @@ import { useFormik } from "formik";
 import dayjs from "dayjs";
 import coreAxios from "@/utils/axiosInstance";
 import { toast } from "react-toastify";
+import NoPermissionBanner from "../Permission/NoPermissionBanner";
+import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
 
-const ExpenseInfo = () => {
+const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
+  const contentPermissions = contentPermissionsFromProps
+    ? normalizeContentPermissions(contentPermissionsFromProps)
+    : getPagePermissionFromStorage(["Expense"]);
+  const canView = contentPermissions.viewAccess;
+  const canInsert = contentPermissions.insertAccess;
+  const canEdit = contentPermissions.editAccess;
+  const canDelete = contentPermissions.deleteAccess;
   const [visible, setVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingKey, setEditingKey] = useState(null);
@@ -113,43 +122,77 @@ const ExpenseInfo = () => {
     setPagination((p) => ({ ...p, current: 1 }));
   }, [dailySumDate]);
 
+  const defaultExpenseRow = () => ({
+    expenseCategory: "",
+    expenseReason: "",
+    expenseAmount: 0,
+  });
+
   const formik = useFormik({
     initialValues: {
+      expenseItems: [defaultExpenseRow()],
+      expenseDate: dayjs(),
+      createdAt: dayjs(),
+      // Single-item mode for edit
       expenseCategory: "",
       expenseReason: "",
       expenseAmount: 0,
-      expenseDate: dayjs(),
-      createdAt: dayjs(),
     },
     onSubmit: async (values, { resetForm }) => {
       setLoading(true);
       try {
-        const payload = {
-          expenseCategory: values.expenseCategory || "",
-          expenseReason: values.expenseReason?.trim() || "",
-          expenseAmount: Number(values.expenseAmount) || 0,
-          expenseDate: dayjs(values.expenseDate).format("YYYY-MM-DD"),
-        };
+        const expenseDateStr = dayjs(values.expenseDate).format("YYYY-MM-DD");
+
         if (isEditing) {
-          payload.createdAt = dayjs(values.createdAt).toISOString();
+          const payload = {
+            expenseCategory: values.expenseCategory || "",
+            expenseReason: values.expenseReason?.trim() || "",
+            expenseAmount: Number(values.expenseAmount) || 0,
+            expenseDate: expenseDateStr,
+            createdAt: dayjs(values.createdAt).toISOString(),
+          };
           const response = await coreAxios.put(`/expenses/${editingKey}`, payload);
           if (response?.status === 200) {
             toast.success("Expense updated successfully!");
           }
         } else {
-          const response = await coreAxios.post("/expenses", payload);
-          if (response?.status === 200) {
-            toast.success("Expense created successfully!");
+          const items = values.expenseItems || [];
+          const validItems = items.filter(
+            (row) => (row.expenseCategory || "").trim() && Number(row.expenseAmount) > 0
+          );
+          if (validItems.length === 0) {
+            toast.error("Add at least one expense with category and amount.");
+            setLoading(false);
+            return;
+          }
+          let successCount = 0;
+          for (const row of validItems) {
+            const payload = {
+              expenseCategory: (row.expenseCategory || "").trim(),
+              expenseReason: (row.expenseReason || "").trim() || row.expenseCategory,
+              expenseAmount: Number(row.expenseAmount) || 0,
+              expenseDate: expenseDateStr,
+            };
+            const response = await coreAxios.post("/expenses", payload);
+            if (response?.status === 200) successCount++;
+          }
+          if (successCount > 0) {
+            toast.success(
+              successCount === validItems.length
+                ? `${successCount} expense(s) added successfully!`
+                : `${successCount}/${validItems.length} expense(s) added.`
+            );
           }
         }
 
         resetForm({
           values: {
+            expenseItems: [defaultExpenseRow()],
+            expenseDate: dayjs(),
+            createdAt: dayjs(),
             expenseCategory: "",
             expenseReason: "",
             expenseAmount: 0,
-            expenseDate: dayjs(),
-            createdAt: dayjs(),
           },
         });
 
@@ -166,6 +209,27 @@ const ExpenseInfo = () => {
       }
     },
   });
+
+  const addExpenseRow = () => {
+    formik.setFieldValue("expenseItems", [
+      ...(formik.values.expenseItems || []),
+      defaultExpenseRow(),
+    ]);
+  };
+
+  const removeExpenseRow = (index) => {
+    const items = [...(formik.values.expenseItems || [])];
+    if (items.length <= 1) return;
+    items.splice(index, 1);
+    formik.setFieldValue("expenseItems", items);
+  };
+
+  const updateExpenseRow = (index, field, value) => {
+    const items = [...(formik.values.expenseItems || [])];
+    if (!items[index]) return;
+    items[index] = { ...items[index], [field]: value };
+    formik.setFieldValue("expenseItems", items);
+  };
 
   const categoryFormik = useFormik({
     initialValues: {
@@ -286,22 +350,23 @@ const ExpenseInfo = () => {
       key: "actions",
       render: (_, record) => (
         <Space size="middle">
-          <Button
-            type="primary"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
-          />
-          <Popconfirm
-            title="Are you sure to delete this expense?"
-            onConfirm={() => handleDelete(record)}
-            okText="Yes"
-            cancelText="No">
+          {canEdit && (
             <Button
-              danger
-              icon={<DeleteOutlined />}
+              type="primary"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+              style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
             />
-          </Popconfirm>
+          )}
+          {canDelete && (
+            <Popconfirm
+              title="Are you sure to delete this expense?"
+              onConfirm={() => handleDelete(record)}
+              okText="Yes"
+              cancelText="No">
+              <Button danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -345,21 +410,27 @@ const ExpenseInfo = () => {
     setPagination(pagination);
   };
 
+  if (!canView) {
+    return <NoPermissionBanner />;
+  }
+
   return (
     <div className="container mx-auto p-4">
       <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
         <div className="flex-shrink-0">
+          {canInsert && (
           <Button
             type="primary"
             onClick={() => {
               setIsEditing(false);
               formik.resetForm({
                 values: {
+                  expenseItems: [defaultExpenseRow()],
+                  expenseDate: dayjs(dailySumDate),
+                  createdAt: dayjs(),
                   expenseCategory: "",
                   expenseReason: "",
                   expenseAmount: 0,
-                  expenseDate: dayjs(),
-                  createdAt: dayjs(),
                 },
               });
               setVisible(true);
@@ -368,6 +439,7 @@ const ExpenseInfo = () => {
             icon={<PlusOutlined />}>
             Add New Expense
           </Button>
+          )}
         </div>
 
         <div className="flex-1 flex justify-center min-w-0">
@@ -523,87 +595,164 @@ const ExpenseInfo = () => {
           setVisible(false);
           formik.resetForm({
             values: {
+              expenseItems: [defaultExpenseRow()],
+              expenseDate: dayjs(),
+              createdAt: dayjs(),
               expenseCategory: "",
               expenseReason: "",
               expenseAmount: 0,
-              expenseDate: dayjs(),
-              createdAt: dayjs(),
             },
           });
         }}
-        footer={null}>
+        footer={null}
+        width={isEditing ? 520 : 720}>
         <form onSubmit={formik.handleSubmit}>
-          <div className="mb-4">
-            <label className="block mb-1 font-medium">Expense Category</label>
-            <Select
-              name="expenseCategory"
-              style={{ width: "100%" }}
-              placeholder="Select expense category"
-              value={formik.values.expenseCategory}
-              onChange={(value) => formik.setFieldValue("expenseCategory", value)}
-              required>
-              {categories.map((cat) => (
-                <Select.Option key={cat._id} value={cat.name}>
-                  {cat.name}
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="mb-4">
-            <label className="block mb-1 font-medium">Expense Reason</label>
-            <Input.TextArea
-              name="expenseReason"
-              rows={3}
-              placeholder="Enter expense reason"
-              value={formik.values.expenseReason}
-              onChange={formik.handleChange}
-              required
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block mb-1 font-medium">Amount (BDT)</label>
-            <InputNumber
-              name="expenseAmount"
-              style={{ width: "100%" }}
-              formatter={(value) =>
-                `৳ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-              }
-              parser={(value) => value.replace(/৳\s?|(,*)/g, "")}
-              step={0.01}
-              precision={2}
-              min={0}
-              value={formik.values.expenseAmount}
-              onChange={(value) => formik.setFieldValue("expenseAmount", value)}
-              required
-            />
-          </div>
-
-          {isEditing && (
-            <div className="mb-4">
-              <label className="block mb-1 font-medium">Expense Date</label>
-              <DatePicker
-                name="expenseDate"
-                style={{ width: "100%" }}
-                value={formik.values.expenseDate}
-                onChange={(date) => formik.setFieldValue("expenseDate", date)}
-                required
-              />
-            </div>
-          )}
-
-          {isEditing && (
-            <div className="mb-4">
-              <label className="block mb-1 font-medium">Created At</label>
-              <DatePicker
-                name="createdAt"
-                style={{ width: "100%" }}
-                showTime
-                value={formik.values.createdAt}
-                onChange={(date) => formik.setFieldValue("createdAt", date)}
-              />
-            </div>
+          {isEditing ? (
+            <>
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Expense Category</label>
+                <Select
+                  name="expenseCategory"
+                  style={{ width: "100%" }}
+                  placeholder="Select expense category"
+                  value={formik.values.expenseCategory}
+                  onChange={(value) => formik.setFieldValue("expenseCategory", value)}
+                  required>
+                  {categories.map((cat) => (
+                    <Select.Option key={cat._id} value={cat.name}>
+                      {cat.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Expense Reason</label>
+                <Input.TextArea
+                  name="expenseReason"
+                  rows={3}
+                  placeholder="Enter expense reason"
+                  value={formik.values.expenseReason}
+                  onChange={formik.handleChange}
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Amount (BDT)</label>
+                <InputNumber
+                  name="expenseAmount"
+                  style={{ width: "100%" }}
+                  formatter={(value) =>
+                    `৳ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  parser={(value) => value.replace(/৳\s?|(,*)/g, "")}
+                  step={0.01}
+                  precision={2}
+                  min={0}
+                  value={formik.values.expenseAmount}
+                  onChange={(value) => formik.setFieldValue("expenseAmount", value)}
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Expense Date</label>
+                <DatePicker
+                  name="expenseDate"
+                  style={{ width: "100%" }}
+                  value={formik.values.expenseDate}
+                  onChange={(date) => formik.setFieldValue("expenseDate", date)}
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Created At</label>
+                <DatePicker
+                  name="createdAt"
+                  style={{ width: "100%" }}
+                  showTime
+                  value={formik.values.createdAt}
+                  onChange={(date) => formik.setFieldValue("createdAt", date)}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mb-4">
+                <label className="block mb-1 font-medium">Expense Date</label>
+                <DatePicker
+                  style={{ width: "100%" }}
+                  value={formik.values.expenseDate}
+                  onChange={(date) => formik.setFieldValue("expenseDate", date || dayjs())}
+                  required
+                />
+              </div>
+              <div className="mb-2 flex justify-between items-center">
+                <span className="font-medium text-gray-700">Category-wise expense (reason & amount)</span>
+                <Button type="dashed" icon={<PlusOutlined />} onClick={addExpenseRow} size="small">
+                  Add row
+                </Button>
+              </div>
+              <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border-b border-gray-200 px-3 py-2 text-left font-medium text-gray-600 w-[180px]">Category</th>
+                      <th className="border-b border-gray-200 px-3 py-2 text-left font-medium text-gray-600">Reason</th>
+                      <th className="border-b border-gray-200 px-3 py-2 text-left font-medium text-gray-600 w-[120px]">Amount (BDT)</th>
+                      <th className="border-b border-gray-200 px-3 py-2 w-[56px]"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(formik.values.expenseItems || []).map((row, index) => (
+                      <tr key={index} className="border-b border-gray-100 last:border-b-0">
+                        <td className="px-3 py-2 align-top">
+                          <Select
+                            style={{ width: "100%", minWidth: 160 }}
+                            placeholder="Select category"
+                            value={row.expenseCategory || undefined}
+                            onChange={(value) => updateExpenseRow(index, "expenseCategory", value)}
+                            allowClear>
+                            {categories.map((cat) => (
+                              <Select.Option key={cat._id} value={cat.name}>
+                                {cat.name}
+                              </Select.Option>
+                            ))}
+                          </Select>
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <Input
+                            placeholder="Reason"
+                            value={row.expenseReason || ""}
+                            onChange={(e) => updateExpenseRow(index, "expenseReason", e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <InputNumber
+                            style={{ width: "100%", minWidth: 100 }}
+                            placeholder="0"
+                            min={0}
+                            step={0.01}
+                            precision={2}
+                            value={row.expenseAmount}
+                            onChange={(value) => updateExpenseRow(index, "expenseAmount", value ?? 0)}
+                          />
+                        </td>
+                        <td className="px-2 py-2 align-top">
+                          <Button
+                            type="text"
+                            danger
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            onClick={() => removeExpenseRow(index)}
+                            disabled={(formik.values.expenseItems || []).length <= 1}
+                            aria-label="Remove row"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           <Button
@@ -612,7 +761,7 @@ const ExpenseInfo = () => {
             htmlType="submit"
             style={{ width: "100%", backgroundColor: "#2563eb", borderColor: "#2563eb" }}
             className="mt-2">
-            {isEditing ? "Update Expense" : "Add Expense"}
+            {isEditing ? "Update Expense" : "Add Expense(s)"}
           </Button>
         </form>
       </Modal>

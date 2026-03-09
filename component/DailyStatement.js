@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button, message, Spin, Alert, Tooltip, InputNumber } from "antd";
+import { Button, message, Spin, Alert, Tooltip, InputNumber, Pagination } from "antd";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import moment from "moment";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
 import { CopyOutlined } from "@ant-design/icons";
@@ -11,16 +16,30 @@ import Link from "next/link";
 import DatePicker from "antd/es/date-picker";
 import { useFormik } from "formik";
 import DailySummary from "./DailySummary";
+import NoPermissionBanner from "./Permission/NoPermissionBanner";
+import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
 
-const DailyStatement = () => {
+const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => {
+  const contentPermissions = contentPermissionsFromProps
+    ? normalizeContentPermissions(contentPermissionsFromProps)
+    : getPagePermissionFromStorage(["Daily Statement"]);
+  const canView = contentPermissions.viewAccess;
+  const canEdit = contentPermissions.editAccess;
   const [bookings, setBookings] = useState({
     regularInvoice: [],
     unPaidInvoice: [],
   });
   const [loading, setLoading] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(dayjs());
+  const [selectedDate, setSelectedDate] = useState(() =>
+    dayjs().tz("Asia/Dhaka").startOf("day")
+  );
+
+  const todayBD = () => dayjs().tz("Asia/Dhaka").startOf("day");
   const [submitting, setSubmitting] = useState({});
   const [dailyIncome, setDailyIncome] = useState(0);
+  const PAGE_SIZE = 10;
+  const [regularPage, setRegularPage] = useState(1);
+  const [unpaidPage, setUnpaidPage] = useState(1);
 
   const formik = useFormik({
     initialValues: {},
@@ -55,24 +74,17 @@ const DailyStatement = () => {
   const getCumulativeTotals = (booking) => {
     const paymentTotals = getPaymentTotals(booking.payments);
 
-    // Use the booking.totalPaid directly if it exists, otherwise derive from duePayment or payments
     const totalBill = booking.totalBill || 0;
-    const dueFromApi = booking.duePayment !== undefined && booking.duePayment !== null && !isNaN(Number(booking.duePayment))
-      ? Number(booking.duePayment)
-      : null;
-
-    const totalPaid =
-      booking.totalPaid !== undefined && booking.totalPaid !== null && !isNaN(Number(booking.totalPaid))
-        ? Number(booking.totalPaid)
-        : dueFromApi !== null
-          ? totalBill - dueFromApi
-          : (booking.payments || []).reduce(
-            (sum, payment) => sum + (payment.amount || 0),
-            0
-          );
-
-    const duePayment = dueFromApi !== null ? dueFromApi : Math.max(0, totalBill - totalPaid);
     const advance = Number(booking.advancePayment) || 0;
+
+    // Total paid = advance (initially) + sum of all daily amounts from invoiceDetails (subsequent additions)
+    const sumOfDailyAmounts = (booking.invoiceDetails || []).reduce(
+      (sum, entry) => sum + (Number(entry?.dailyAmount) || 0),
+      0
+    );
+    const totalPaid = advance + sumOfDailyAmounts;
+
+    const duePayment = Math.max(0, totalBill - totalPaid);
 
     return {
       totalPaid: totalPaid,
@@ -86,32 +98,85 @@ const DailyStatement = () => {
     };
   };
 
+  /** First date (Asia/Dhaka) when due was fully cleared (total paid >= total bill), or null if not yet cleared */
+  const getDueClearedDate = (booking) => {
+    const totalBill = Number(booking.totalBill) || 0;
+    const advance = Number(booking.advancePayment) || 0;
+    if (advance >= totalBill) {
+      return null; // cleared before any daily entry; treat as "no single clear date" – don't show in unpaid
+    }
+    const entries = [...(booking.invoiceDetails || [])].filter(
+      (e) => e?.date != null
+    );
+    entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+    let running = advance;
+    for (const entry of entries) {
+      running += Number(entry?.dailyAmount) || 0;
+      if (running >= totalBill) {
+        return dayjs(entry.date).tz("Asia/Dhaka").startOf("day");
+      }
+    }
+    return null;
+  };
+
   const fetchBookingsByDate = async (date) => {
     setLoading(true);
     try {
-      const checkInDate = date.format("YYYY-MM-DD");
-      const response = await coreAxios.get("/bookings/checkIn", {
-        params: { checkInDate },
-      });
+      const response = await coreAxios.get("/bookings");
 
       if (response.status === 200) {
-        const bookingsForDate = Array.isArray(response.data) ? response.data : [];
-        const todayStart = dayjs().startOf("day");
+        let allBookings = Array.isArray(response.data) ? response.data : [];
 
-        // Unpaid = checkout date has passed AND still has due amount. Regular = the rest. Order: regular first, then unpaid.
-        const regularInvoice = [];
-        const unPaidInvoice = [];
+        // Filter out cancelled
+        allBookings = allBookings.filter((b) => b && b.statusID !== 255);
 
-        bookingsForDate.forEach((booking) => {
+        // Optional: filter by hotel for hoteladmin (same as dashboard)
+        try {
+          const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+          const userRole = userInfo?.role?.value;
+          const userHotelID = Number(userInfo?.hotelID);
+          if (userRole === "hoteladmin" && userHotelID) {
+            allBookings = allBookings.filter(
+              (b) => b && Number(b.hotelID) === userHotelID
+            );
+          }
+        } catch (_) {}
+
+        // Use selected date (from date picker) for "today" so lists and form reflect that day
+        const selectedDay = dayjs(date).tz("Asia/Dhaka").startOf("day");
+
+        // Show bookings where selected date is within stay (checkIn <= selected <= checkOut)
+        const bookingsForDate = allBookings.filter((booking) => {
+          if (!booking.checkInDate || !booking.checkOutDate) return false;
+          const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka").startOf("day");
+          const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+          return (
+            !selectedDay.isBefore(checkIn) && !selectedDay.isAfter(checkOut)
+          );
+        });
+
+        // Unpaid = checkout has passed (relative to selected date) AND (due not yet cleared OR due was cleared on selected date).
+        // So: show until (and including) the day due is fully cleared; from the next day onwards hide.
+        const unPaidInvoice = allBookings.filter((booking) => {
           const totals = getCumulativeTotals(booking);
           const duePayment = totals.duePayment || 0;
-          const checkoutPassed = booking.checkOutDate && dayjs(booking.checkOutDate).isBefore(todayStart, "day");
+          const checkoutPassed =
+            booking.checkOutDate &&
+            dayjs(booking.checkOutDate).tz("Asia/Dhaka").isBefore(selectedDay, "day");
+          if (!checkoutPassed) return false;
+          if (duePayment > 0) return true;
+          const dueClearedDate = getDueClearedDate(booking);
+          return dueClearedDate != null && selectedDay.isSame(dueClearedDate, "day");
+        });
 
-          if (checkoutPassed && duePayment > 0) {
-            unPaidInvoice.push(booking);
-          } else {
-            regularInvoice.push(booking);
-          }
+        // Regular = bookings active on selected date that are not in unpaid (checkout not passed or due cleared before selected day)
+        const regularInvoice = bookingsForDate.filter((booking) => {
+          const totals = getCumulativeTotals(booking);
+          const duePayment = totals.duePayment || 0;
+          const checkoutPassed =
+            booking.checkOutDate &&
+            dayjs(booking.checkOutDate).tz("Asia/Dhaka").isBefore(selectedDay, "day");
+          return !(checkoutPassed && (duePayment > 0 || (getDueClearedDate(booking) != null && selectedDay.isSame(getDueClearedDate(booking), "day"))));
         });
 
         setBookings({
@@ -243,6 +308,22 @@ const DailyStatement = () => {
     fetchBookingsByDate(selectedDate);
   }, [selectedDate]);
 
+  useEffect(() => {
+    setRegularPage(1);
+    setUnpaidPage(1);
+  }, [bookings.regularInvoice?.length, bookings.unPaidInvoice?.length]);
+
+  const regularDisplay =
+    bookings.regularInvoice?.slice(
+      (regularPage - 1) * PAGE_SIZE,
+      regularPage * PAGE_SIZE
+    ) ?? [];
+  const unpaidDisplay =
+    bookings.unPaidInvoice?.slice(
+      (unpaidPage - 1) * PAGE_SIZE,
+      unpaidPage * PAGE_SIZE
+    ) ?? [];
+
   const handleDateChange = (date) => {
     if (date) {
       setSelectedDate(date);
@@ -251,8 +332,13 @@ const DailyStatement = () => {
 
   const handlePreviousDay = () =>
     setSelectedDate((prev) => prev.subtract(1, "day"));
-  const handleNextDay = () =>
-    setSelectedDate((prev) => prev.add(1, "day"));
+  const handleNextDay = () => {
+    const today = todayBD();
+    setSelectedDate((prev) => {
+      const next = prev.add(1, "day");
+      return next.isAfter(today, "day") ? prev : next;
+    });
+  };
 
   // Calculate totals
   const regularTotals = bookings.regularInvoice?.reduce(
@@ -319,6 +405,10 @@ const DailyStatement = () => {
     }
   );
 
+  if (!canView) {
+    return <NoPermissionBanner />;
+  }
+
   return (
     <div className="p-4 bg-white">
       {/* Header Section */}
@@ -339,6 +429,7 @@ const DailyStatement = () => {
             allowClear={false}
             size="small"
             style={{ width: "140px" }}
+            disabledDate={(d) => d && d.isAfter(todayBD(), "day")}
           />
           <Button
             type="default"
@@ -350,10 +441,10 @@ const DailyStatement = () => {
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      {/* Main Table - constrained width on large screens for better readability */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden max-w-full lg:max-w-6xl lg:mx-auto">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
+          <table className="w-full border-collapse min-w-[900px]" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
             <thead>
               <tr style={{ backgroundColor: '#2563eb' }}>
                 <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
@@ -424,11 +515,12 @@ const DailyStatement = () => {
               ) : (
                 <>
                   {/* Regular Invoices */}
-                  {bookings.regularInvoice?.map((booking, index) => {
+                  {regularDisplay.map((booking, index) => {
                     const totals = getCumulativeTotals(booking);
                     const remainingAmount =
                       (booking.totalBill || 0) - totals.totalPaid;
                     const bookingId = booking._id || booking.id;
+                    const slNo = (regularPage - 1) * PAGE_SIZE + index + 1;
 
                     return (
                       <tr
@@ -436,7 +528,7 @@ const DailyStatement = () => {
                         className="hover:bg-gray-50 transition-colors"
                       >
                         <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 border border-gray-300">
-                          {index + 1}
+                          {slNo}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 font-medium border border-gray-300">
                           {booking.roomNumberName || booking.roomNumber || 0}
@@ -519,7 +611,7 @@ const DailyStatement = () => {
                                 num;
                               setDailyIncome(newDailyIncome);
                             }}
-                            disabled={totals.duePayment <= 0}
+                            disabled={totals.duePayment <= 0 || !canEdit}
                             style={{ width: "80px", color: "#000" }}
                           />
                         </td>
@@ -527,6 +619,7 @@ const DailyStatement = () => {
                           {totals.duePayment}
                         </td>
                         <td className="px-3 py-2.5 text-center border border-gray-300">
+                          {canEdit && (
                           <Button
                             type="primary"
                             size="small"
@@ -537,6 +630,7 @@ const DailyStatement = () => {
                           >
                             Update
                           </Button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -577,6 +671,23 @@ const DailyStatement = () => {
                           -
                         </td>
                       </tr>
+                      {bookings.regularInvoice?.length > PAGE_SIZE && (
+                        <tr>
+                          <td colSpan="16" className="px-2 py-2 border border-gray-300 bg-gray-50">
+                            <div className="flex justify-end">
+                              <Pagination
+                                current={regularPage}
+                                total={bookings.regularInvoice?.length ?? 0}
+                                pageSize={PAGE_SIZE}
+                                onChange={setRegularPage}
+                                showSizeChanger={false}
+                                showTotal={(total) => `Total ${total} items`}
+                                size="small"
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       <tr>
                         <td colSpan="16" className="p-2"></td>
                       </tr>
@@ -596,11 +707,12 @@ const DailyStatement = () => {
                   )}
 
                   {/* Unpaid Invoices */}
-                  {bookings.unPaidInvoice?.map((booking, index) => {
+                  {unpaidDisplay.map((booking, index) => {
                     const totals = getCumulativeTotals(booking);
                     const remainingAmount =
                       (booking.totalBill || 0) - totals.totalPaid;
                     const bookingId = booking._id || booking.id;
+                    const slNo = (unpaidPage - 1) * PAGE_SIZE + index + 1;
 
                     return (
                       <tr
@@ -608,7 +720,7 @@ const DailyStatement = () => {
                         className="hover:bg-gray-50 transition-colors bg-yellow-50"
                       >
                         <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 border border-gray-300">
-                          {index + 1}
+                          {slNo}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 font-medium border border-gray-300">
                           {booking.roomNumberName || booking.roomNumber || 0}
@@ -691,7 +803,7 @@ const DailyStatement = () => {
                                 num;
                               setDailyIncome(newDailyIncome);
                             }}
-                            disabled={totals.duePayment <= 0}
+                            disabled={totals.duePayment <= 0 || !canEdit}
                             style={{ width: "80px", color: "#000" }}
                           />
                         </td>
@@ -699,6 +811,7 @@ const DailyStatement = () => {
                           {totals.duePayment}
                         </td>
                         <td className="px-3 py-2.5 text-center border border-gray-300">
+                          {canEdit && (
                           <Button
                             type="primary"
                             size="small"
@@ -709,10 +822,30 @@ const DailyStatement = () => {
                           >
                             Update
                           </Button>
+                          )}
                         </td>
                       </tr>
                     );
                   })}
+
+                  {/* Unpaid Invoices Pagination */}
+                  {bookings.unPaidInvoice?.length > PAGE_SIZE && (
+                    <tr>
+                      <td colSpan="16" className="px-2 py-2 border border-gray-300 bg-yellow-50">
+                        <div className="flex justify-end">
+                          <Pagination
+                            current={unpaidPage}
+                            total={bookings.unPaidInvoice?.length ?? 0}
+                            pageSize={PAGE_SIZE}
+                            onChange={setUnpaidPage}
+                            showSizeChanger={false}
+                            showTotal={(total) => `Total ${total} items`}
+                            size="small"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
 
                   {/* Unpaid Invoices Total Row */}
                   {bookings.unPaidInvoice?.length > 0 && (
@@ -756,7 +889,11 @@ const DailyStatement = () => {
         </div>
       </div>
 
-      <DailySummary selectedDate={selectedDate} dailyIncome={dailyIncome} />
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-2">
+        <div className="w-full">
+          <DailySummary selectedDate={selectedDate} dailyIncome={dailyIncome} />
+        </div>
+      </div>
     </div>
   );
 };

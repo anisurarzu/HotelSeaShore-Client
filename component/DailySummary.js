@@ -93,7 +93,7 @@ const DailySummary = ({ selectedDate, dailyIncome }) => {
 
   return (
     <div className="mt-6">
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="w-full sm:w-1/2 bg-white rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
             <thead>

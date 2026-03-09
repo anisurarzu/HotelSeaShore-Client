@@ -35,11 +35,20 @@ import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import { useFormik } from "formik";
 import coreAxios from "@/utils/axiosInstance";
+import NoPermissionBanner from "./Permission/NoPermissionBanner";
+import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
-const HotelCalendar = ({ hotelID }) => {
+const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProps }) => {
+  const contentPermissions = contentPermissionsFromProps
+    ? normalizeContentPermissions(contentPermissionsFromProps)
+    : getPagePermissionFromStorage(["Calendar"]);
+  const canView = contentPermissions.viewAccess;
+  const canInsert = contentPermissions.insertAccess;
+  const canEdit = contentPermissions.editAccess;
+  const canDelete = contentPermissions.deleteAccess;
   const router = useRouter();
   const [hotelData, setHotelData] = useState([]);
   const [selectedHotel, setSelectedHotel] = useState(null);
@@ -241,10 +250,11 @@ const HotelCalendar = ({ hotelID }) => {
           address: bookingToEdit.address || "",
           adults: bookingToEdit.adults || 1,
           children: bookingToEdit.children || 0,
-          isKitchen: bookingToEdit.isKitchen || false,
-          kitchenTotalBill: bookingToEdit.kitchenTotalBill || 0,
-          extraBed: bookingToEdit.extraBed || false,
-          extraBedTotalBill: bookingToEdit.extraBedTotalBill || 0,
+          isBreakfast: bookingToEdit.isBreakfast || false,
+          breakfastTotalBill:
+            bookingToEdit.breakfastTotalBill ??
+            ((Number(bookingToEdit.kitchenTotalBill) || 0) +
+              (Number(bookingToEdit.extraBedTotalBill) || 0)),
           totalBill: bookingToEdit.totalBill || 0,
           advancePayment: bookingToEdit.advancePayment || 0,
           duePayment: bookingToEdit.duePayment || 0,
@@ -277,10 +287,8 @@ const HotelCalendar = ({ hotelID }) => {
           address: "",
           adults: 1,
           children: 0,
-          isKitchen: false,
-          kitchenTotalBill: 0,
-          extraBed: false,
-          extraBedTotalBill: 0,
+          isBreakfast: false,
+          breakfastTotalBill: 0,
           paymentMethod: "",
           transactionId: "",
           note: "",
@@ -406,6 +414,7 @@ const HotelCalendar = ({ hotelID }) => {
                         </div>
                       )}
                     </div>
+                    {canEdit && (
                     <Button
                       type="link"
                       size="small"
@@ -419,9 +428,12 @@ const HotelCalendar = ({ hotelID }) => {
                     >
                       Edit
                     </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center">
+                    {canInsert && (
+                    <>
                     <div className="text-gray-400 text-xs mb-1">+</div>
                     <Button
                       type="link"
@@ -436,6 +448,8 @@ const HotelCalendar = ({ hotelID }) => {
                     >
                       Add
                     </Button>
+                    </>
+                    )}
                   </div>
                 )}
               </div>
@@ -713,10 +727,8 @@ const HotelCalendar = ({ hotelID }) => {
       nights: 1,
       adults: 1,
       children: 0,
-      isKitchen: false,
-      kitchenTotalBill: 0,
-      extraBed: false,
-      extraBedTotalBill: 0,
+      isBreakfast: false,
+      breakfastTotalBill: 0,
       totalBill: 0,
       advancePayment: 0,
       duePayment: 0,
@@ -741,9 +753,8 @@ const HotelCalendar = ({ hotelID }) => {
       formik.setFieldValue("nights", calculatedNights);
       
       const roomPrice = Number(formik.values.roomPrice) || 0;
-      const kitchenTotalBill = formik.values.isKitchen ? Number(formik.values.kitchenTotalBill) || 0 : 0;
-      const extraBedTotalBill = formik.values.extraBed ? Number(formik.values.extraBedTotalBill) || 0 : 0;
-      const totalBill = (calculatedNights * roomPrice) + kitchenTotalBill + extraBedTotalBill;
+      const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
+      const totalBill = (calculatedNights * roomPrice) + breakfastTotalBill;
       const advancePayment = Number(formik.values.advancePayment) || 0;
       const duePayment = Math.max(0, totalBill - advancePayment);
       
@@ -788,10 +799,8 @@ const HotelCalendar = ({ hotelID }) => {
         nights: nights,
         adults: Number(values.adults) || 1,
         children: Number(values.children) || 0,
-        isKitchen: values.isKitchen || false,
-        kitchenTotalBill: values.isKitchen ? Number(values.kitchenTotalBill) : 0,
-        extraBed: values.extraBed || false,
-        extraBedTotalBill: values.extraBed ? Number(values.extraBedTotalBill) : 0,
+        isBreakfast: values.isBreakfast || false,
+        breakfastTotalBill: values.isBreakfast ? Number(values.breakfastTotalBill) || 0 : 0,
         totalBill: Number(values.totalBill) || 0,
         advancePayment: Number(values.advancePayment) || 0,
         duePayment: Number(values.duePayment) || 0,
@@ -929,6 +938,10 @@ const HotelCalendar = ({ hotelID }) => {
       </div>
     );
   };
+
+  if (!canView) {
+    return <NoPermissionBanner />;
+  }
 
   return (
     <div className="bg-gray-50 p-2">
@@ -1190,19 +1203,21 @@ const HotelCalendar = ({ hotelID }) => {
           }}>
             Close
           </Button>,
-          <Button 
-            key="add" 
-            type="primary" 
-            size="small"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              if (selectedRoomKey && selectedDateStr) {
-                handleEditClick(selectedRoomKey, selectedDateStr, null);
-              }
-            }}
-          >
-            Add Booking
-          </Button>
+          ...(canInsert ? [
+            <Button 
+              key="add" 
+              type="primary" 
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                if (selectedRoomKey && selectedDateStr) {
+                  handleEditClick(selectedRoomKey, selectedDateStr, null);
+                }
+              }}
+            >
+              Add Booking
+            </Button>
+          ] : []),
         ]}
         width={700}
         className="booking-history-modal"
@@ -1317,26 +1332,25 @@ const HotelCalendar = ({ hotelID }) => {
                   </div>
 
                   {/* Services */}
-                  {(booking.isKitchen || booking.extraBed) && (
+                  {(booking.breakfastTotalBill ||
+                    booking.kitchenTotalBill ||
+                    booking.extraBedTotalBill) && (
                     <div className="border-t border-gray-100 pt-2 mb-2">
-                      <div className="text-xs font-semibold text-gray-700 mb-1.5">Additional Services</div>
+                      <div className="text-xs font-semibold text-gray-700 mb-1.5">
+                        Additional Services
+                      </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        {booking.isKitchen && (
-                          <div>
-                            <span className="text-gray-500">Kitchen:</span>{" "}
-                            <span className="font-medium text-green-600">
-                              ৳{booking.kitchenTotalBill ? booking.kitchenTotalBill.toLocaleString() : "0"}
-                            </span>
-                          </div>
-                        )}
-                        {booking.extraBed && (
-                          <div>
-                            <span className="text-gray-500">Extra Bed:</span>{" "}
-                            <span className="font-medium text-green-600">
-                              ৳{booking.extraBedTotalBill ? booking.extraBedTotalBill.toLocaleString() : "0"}
-                            </span>
-                          </div>
-                        )}
+                        <div>
+                          <span className="text-gray-500">Breakfast:</span>{" "}
+                          <span className="font-medium text-green-600">
+                            ৳
+                            {(
+                              booking.breakfastTotalBill ??
+                              ((Number(booking.kitchenTotalBill) || 0) +
+                                (Number(booking.extraBedTotalBill) || 0))
+                            ).toLocaleString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1402,6 +1416,7 @@ const HotelCalendar = ({ hotelID }) => {
                   )}
 
                   <div className="flex justify-end pt-2 border-t border-gray-100">
+                    {canEdit && (
                     <Button
                       size="small"
                       icon={<EditOutlined />}
@@ -1412,6 +1427,7 @@ const HotelCalendar = ({ hotelID }) => {
                     >
                       Edit
                     </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1421,6 +1437,7 @@ const HotelCalendar = ({ hotelID }) => {
               <CalendarOutlined className="text-3xl text-gray-300 mb-3" />
               <div className="text-sm font-medium text-gray-600 mb-1">No Booking Found</div>
               <div className="text-xs text-gray-500 mb-4">This room is available for this date</div>
+              {canInsert && (
               <Button 
                 type="primary"
                 size="small"
@@ -1433,6 +1450,7 @@ const HotelCalendar = ({ hotelID }) => {
               >
                 Create New Booking
               </Button>
+              )}
             </div>
           )}
         </div>
@@ -1633,58 +1651,38 @@ const HotelCalendar = ({ hotelID }) => {
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Kitchen Service">
+              <Form.Item label="Breakfast">
                 <Switch
-                  checked={formik.values.isKitchen}
+                  checked={formik.values.isBreakfast}
                   onChange={(checked) => {
-                    formik.setFieldValue("isKitchen", checked);
+                    formik.setFieldValue("isBreakfast", checked);
                     if (!checked) {
-                      formik.setFieldValue("kitchenTotalBill", 0);
-                      calculateNights(formik.values.checkInDate, formik.values.checkOutDate);
+                      formik.setFieldValue("breakfastTotalBill", 0);
+                      calculateNights(
+                        formik.values.checkInDate,
+                        formik.values.checkOutDate
+                      );
                     }
                   }}
                 />
               </Form.Item>
-              {formik.values.isKitchen && (
-                <Form.Item label="Kitchen Bill">
+              {formik.values.isBreakfast && (
+                <Form.Item label="Breakfast Bill">
                   <Input
                     type="number"
                     min={0}
-                    value={formik.values.kitchenTotalBill || ""}
+                    value={formik.values.breakfastTotalBill || ""}
                     onChange={(e) => {
-                      formik.setFieldValue("kitchenTotalBill", e.target.value);
-                      calculateNights(formik.values.checkInDate, formik.values.checkOutDate);
+                      formik.setFieldValue(
+                        "breakfastTotalBill",
+                        e.target.value
+                      );
+                      calculateNights(
+                        formik.values.checkInDate,
+                        formik.values.checkOutDate
+                      );
                     }}
-                    placeholder="Enter kitchen bill"
-                    style={{ height: "40px" }}
-                  />
-                </Form.Item>
-              )}
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Extra Bed">
-                <Switch
-                  checked={formik.values.extraBed}
-                  onChange={(checked) => {
-                    formik.setFieldValue("extraBed", checked);
-                    if (!checked) {
-                      formik.setFieldValue("extraBedTotalBill", 0);
-                      calculateNights(formik.values.checkInDate, formik.values.checkOutDate);
-                    }
-                  }}
-                />
-              </Form.Item>
-              {formik.values.extraBed && (
-                <Form.Item label="Extra Bed Bill">
-                  <Input
-                    type="number"
-                    min={0}
-                    value={formik.values.extraBedTotalBill || ""}
-                    onChange={(e) => {
-                      formik.setFieldValue("extraBedTotalBill", e.target.value);
-                      calculateNights(formik.values.checkInDate, formik.values.checkOutDate);
-                    }}
-                    placeholder="Enter extra bed bill"
+                    placeholder="Enter breakfast bill"
                     style={{ height: "40px" }}
                   />
                 </Form.Item>

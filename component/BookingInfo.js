@@ -6,19 +6,16 @@ import {
   Modal,
   message,
   Popconfirm,
-  Spin,
   Form,
   Input,
   DatePicker,
   Tooltip,
   Select,
   Pagination,
-  Alert,
   Switch,
   Card,
   Row,
   Col,
-  Space,
   Skeleton,
 } from "antd";
 import { useFormik } from "formik";
@@ -37,14 +34,28 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
 
-const BookingInfo = ({ hotelID }) => {
+const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const userInfo2 = JSON.parse(localStorage.getItem("userInfo"));
+  const userInfo2 = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("userInfo") || "{}") : {};
   const userHotelID = hotelID;
   const permission = userInfo2?.permission?.permissions;
-  const bookingPermissions =
-    permission?.find((perm) => perm.pageName === "Booking") || {};
+  const fromStorage = permission?.find(
+    (perm) => perm.pageName === "Booking Info" || perm.pageName === "Booking"
+  );
+  const bookingPermissions = contentPermissionsFromProps
+    ? {
+        viewAccess: contentPermissionsFromProps.viewAccess ?? contentPermissionsFromProps.view,
+        insertAccess: contentPermissionsFromProps.insertAccess ?? contentPermissionsFromProps.insert,
+        editAccess: contentPermissionsFromProps.editAccess ?? contentPermissionsFromProps.edit,
+        deleteAccess: contentPermissionsFromProps.deleteAccess ?? contentPermissionsFromProps.delete,
+      }
+    : (fromStorage || {
+        viewAccess: !permission?.length,
+        insertAccess: !permission?.length,
+        editAccess: !permission?.length,
+        deleteAccess: !permission?.length,
+      });
 
   const [visible, setVisible] = useState(false);
   const [selectedHotelId, setSelectedHotelId] = useState(null);
@@ -55,7 +66,7 @@ const BookingInfo = ({ hotelID }) => {
   const [roomCategories, setRoomCategories] = useState([]);
   const [roomNumbers, setRoomNumbers] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
-  const [allBookings, setAllBookings] = useState([]); // Store all bookings for conflict checking
+  const [allBookings, setAllBookings] = useState([]);
   const [tableLoading, setTableLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [prevData, setPrevData] = useState(null);
@@ -72,49 +83,37 @@ const BookingInfo = ({ hotelID }) => {
   const [checkInDate, setCheckInDate] = useState(null);
   const [isHotelFromReference, setIsHotelFromReference] = useState(false);
 
-  // Ref to track if we've already handled query params (prevent duplicate modal opens)
   const hasHandledQueryParams = useRef(false);
 
   // Fetch hotels list
   const fetchHotelInfo = async () => {
     try {
-      // No loading for hotel fetch - happens in background
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const userRole = userInfo?.role?.value;
       const userHotelID = Number(hotelID);
 
-      // Fetch hotels using API
       const response = await coreAxios.get("/hotels");
 
       if (response.status === 200) {
         const responseData = response.data;
         let hotelsData = [];
         
-        // Extract hotels array from response
-        // Expected structure: { hotels: [...], pagination: {...} }
         if (responseData?.hotels && Array.isArray(responseData.hotels)) {
           hotelsData = responseData.hotels;
         } else if (responseData?.success && responseData?.data?.hotels && Array.isArray(responseData.data.hotels)) {
-          // Alternative: { success: true, data: { hotels: [...], pagination: {...} } }
           hotelsData = responseData.data.hotels;
         } else if (responseData?.data?.hotels && Array.isArray(responseData.data.hotels)) {
-          // Alternative: { data: { hotels: [...], pagination: {...} } }
           hotelsData = responseData.data.hotels;
         } else if (Array.isArray(responseData?.data)) {
-          // Alternative: { data: [...] }
           hotelsData = responseData.data;
         } else if (Array.isArray(responseData)) {
-          // Direct array response
           hotelsData = responseData;
         }
 
-        // Ensure it's an array
         if (!Array.isArray(hotelsData)) {
           hotelsData = [];
         }
 
-        // Store hotels in state (without pagination)
-        // Note: We show all hotels in the dropdown for booking creation
         setHotelInfo(hotelsData);
       }
     } catch (error) {
@@ -131,11 +130,9 @@ const BookingInfo = ({ hotelID }) => {
       return;
     }
 
-    // Extract roomCategories from hotel data
     const categories = hotel.roomCategories || [];
     setRoomCategories(Array.isArray(categories) ? categories : []);
     
-    // Reset room numbers when hotel changes
     setRoomNumbers([]);
     formik.setFieldValue("roomCategoryID", "");
     formik.setFieldValue("roomCategoryName", "");
@@ -145,20 +142,15 @@ const BookingInfo = ({ hotelID }) => {
 
   // Function to check if a room is available for given dates
   const isRoomAvailable = (roomId, categoryId, hotelId, checkIn, checkOut, excludeBookingId = null) => {
-    if (!checkIn || !checkOut) return true; // If dates not selected, show all rooms
+    if (!checkIn || !checkOut) return true;
 
     const checkInDate = dayjs(checkIn);
     const checkOutDate = dayjs(checkOut);
 
-    // Check against all existing bookings
     const conflictingBooking = allBookings.find((booking) => {
-      // Skip if this is the booking being edited
       if (excludeBookingId && booking._id === excludeBookingId) return false;
-      
-      // Skip cancelled bookings
       if (booking.statusID === 255) return false;
 
-      // Check if same hotel, category, and room
       if (
         booking.hotelID !== hotelId ||
         booking.roomCategoryID !== categoryId ||
@@ -167,7 +159,6 @@ const BookingInfo = ({ hotelID }) => {
         return false;
       }
 
-      // Check for date overlap: existing.checkInDate < newCheckOut AND newCheckIn < existing.checkOutDate
       const existingCheckIn = dayjs(booking.checkInDate);
       const existingCheckOut = dayjs(booking.checkOutDate);
 
@@ -186,14 +177,12 @@ const BookingInfo = ({ hotelID }) => {
       return;
     }
 
-    // Find the selected hotel
     const selectedHotel = hotelInfo.find(hotel => hotel.hotelID === selectedHotelId);
     if (!selectedHotel) {
       setRoomNumbers([]);
       return;
     }
 
-    // Find the selected category
     const selectedCategory = selectedHotel.roomCategories?.find(
       category => category._id === categoryId
     );
@@ -205,11 +194,10 @@ const BookingInfo = ({ hotelID }) => {
 
     let rooms = selectedCategory.roomNumbers || [];
 
-    // Filter available rooms based on check-in/check-out dates and existing bookings
     if (formik.values.checkInDate && formik.values.checkOutDate) {
       const excludeBookingId = isEditing ? editingKey : null;
-      
-      rooms = rooms.filter((roomNumber) => {
+
+      const availableRooms = rooms.filter((roomNumber) => {
         return isRoomAvailable(
           roomNumber._id,
           categoryId,
@@ -219,37 +207,60 @@ const BookingInfo = ({ hotelID }) => {
           excludeBookingId
         );
       });
+
+      if (isEditing && prevData && prevData.roomNumberID) {
+        const editingRoomId = prevData.roomNumberID;
+        
+        const hasEditingRoom = availableRooms.some(room => room._id === editingRoomId);
+        
+        if (!hasEditingRoom && editingRoomId) {
+          const originalRoom = rooms.find(room => room._id === editingRoomId);
+          if (originalRoom) {
+            rooms = [originalRoom, ...availableRooms];
+          } else {
+            rooms = availableRooms;
+          }
+        } else {
+          rooms = availableRooms;
+        }
+      } else {
+        rooms = availableRooms;
+      }
     }
 
     setRoomNumbers(Array.isArray(rooms) ? rooms : []);
     
-    // Show message if no rooms available due to date conflicts
-    if (formik.values.checkInDate && formik.values.checkOutDate && rooms.length === 0 && selectedCategory?.roomNumbers?.length > 0) {
+    if (isEditing && prevData && prevData.roomNumberID) {
+      const roomExists = rooms.some(room => room._id === prevData.roomNumberID);
+      if (roomExists) {
+        formik.setFieldValue("roomNumberID", prevData.roomNumberID);
+        formik.setFieldValue("roomNumberName", prevData.roomNumberName);
+      } else if (rooms.length > 0) {
+        formik.setFieldValue("roomNumberID", rooms[0]._id);
+        formik.setFieldValue("roomNumberName", rooms[0].name || rooms[0].roomId);
+      }
+    }
+    
+    if (
+      !isEditing &&
+      formik.values.checkInDate &&
+      formik.values.checkOutDate &&
+      rooms.length === 0 &&
+      selectedCategory?.roomNumbers?.length > 0
+    ) {
       message.warning("No rooms available for the selected dates. Please choose different dates.", 4);
     }
   };
 
-
-  // Retrieve the userInfo from localStorage
-  const userInfo = localStorage.getItem("userInfo")
-    ? JSON.parse(localStorage.getItem("userInfo"))
-    : null;
-
-  // Function to check for booking conflicts before submission
   const checkBookingConflict = async (values, excludeBookingId = null) => {
     try {
       const checkInDate = dayjs(values.checkInDate).format("YYYY-MM-DD");
       const checkOutDate = dayjs(values.checkOutDate).format("YYYY-MM-DD");
 
-      // Check against existing bookings
       const conflictingBooking = allBookings.find((booking) => {
-        // Skip if this is the booking being edited
         if (excludeBookingId && booking._id === excludeBookingId) return false;
-        
-        // Skip cancelled bookings
         if (booking.statusID === 255) return false;
 
-        // Check if same hotel, category, and room
         if (
           booking.hotelID !== values.hotelID ||
           booking.roomCategoryID !== values.roomCategoryID ||
@@ -258,7 +269,6 @@ const BookingInfo = ({ hotelID }) => {
           return false;
         }
 
-        // Check for date overlap
         const existingCheckIn = dayjs(booking.checkInDate);
         const existingCheckOut = dayjs(booking.checkOutDate);
         const newCheckIn = dayjs(checkInDate);
@@ -278,27 +288,74 @@ const BookingInfo = ({ hotelID }) => {
     setSubmitLoading(true);
 
     try {
-      // Validate dates
       if (!values.checkInDate || !values.checkOutDate) {
         message.error("Please select both check-in and check-out dates");
         setSubmitLoading(false);
         return;
       }
 
-      // Calculate nights accurately
-      const checkIn = dayjs(values.checkInDate).startOf("day");
-      const checkOut = dayjs(values.checkOutDate).startOf("day");
-      const nights = checkOut.diff(checkIn, "day");
+      let checkIn = dayjs(values.checkInDate).startOf("day");
+      let checkOut = dayjs(values.checkOutDate).startOf("day");
 
-      if (nights <= 0) {
+      // For update: allow same-day check-in/check-out; ensure payload always has checkOut > checkIn so backend validation passes
+      if (isEditing && (checkOut.isSame(checkIn) || checkOut.isBefore(checkIn))) {
+        checkOut = checkIn.add(1, "day");
+      } else if (!isEditing && checkOut.isSameOrBefore(checkIn)) {
         message.error("Check-out date must be after check-in date");
         setSubmitLoading(false);
         return;
       }
 
-      // Check for booking conflicts before submission
+      const nights = Math.max(1, checkOut.diff(checkIn, "day"));
+
+      const totalBill = Number(values.totalBill) || 0;
+      let advancePayment = Number(values.advancePayment) || 0;
+      // Cap advance to total bill so backend validation never fails (especially on update)
+      if (advancePayment > totalBill) {
+        advancePayment = totalBill;
+      }
+      const duePayment = Math.max(0, totalBill - advancePayment);
+
+      const bookingData = {
+        fullName: values.fullName,
+        phone: values.phone,
+        nidPassport: values.nidPassport || undefined,
+        address: values.address || undefined,
+        email: values.email || undefined,
+        hotelID: values.hotelID,
+        hotelName: values.hotelName,
+        roomCategoryID: values.roomCategoryID,
+        roomCategoryName: values.roomCategoryName,
+        roomNumberID: values.roomNumberID,
+        roomNumberName: values.roomNumberName,
+        roomPrice: Number(values.roomPrice) || 0,
+        checkInDate: checkIn.format("YYYY-MM-DD"),
+        checkOutDate: checkOut.format("YYYY-MM-DD"),
+        nights,
+        adults: Number(values.adults) || 1,
+        children: Number(values.children) || 0,
+        isBreakfast: values.isBreakfast || false,
+        breakfastTotalBill: values.isBreakfast ? Number(values.breakfastTotalBill) : 0,
+        totalBill,
+        advancePayment,
+        duePayment,
+        paymentMethod: values.paymentMethod || "",
+        transactionId: values.transactionId || "",
+        note: values.note || undefined,
+        reference: values.reference || undefined,
+      };
+
+      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+      bookingData.bookedBy = userInfo?.username || userInfo?.loginID || "admin";
+      bookingData.bookedByID = userInfo?.loginID || userInfo?.id || userInfo?._id || "";
+      bookingData.updatedByID = isEditing ? (userInfo?.loginID || userInfo?.id || "") : "Not Updated";
+
+      // Check for booking conflicts
       const excludeBookingId = isEditing ? editingKey : null;
-      const conflictingBooking = await checkBookingConflict(values, excludeBookingId);
+      const conflictingBooking = await checkBookingConflict(
+        bookingData,
+        excludeBookingId
+      );
 
       if (conflictingBooking) {
         const conflictMsg = `Room is already booked! Existing Booking: ${conflictingBooking.bookingNo}, Guest: ${conflictingBooking.fullName}, Dates: ${dayjs(conflictingBooking.checkInDate).format("D MMM YYYY")} - ${dayjs(conflictingBooking.checkOutDate).format("D MMM YYYY")}`;
@@ -307,59 +364,17 @@ const BookingInfo = ({ hotelID }) => {
         return;
       }
 
-      // Get user info
-      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      const bookedBy = userInfo?.username || userInfo?.loginID || "admin";
-      const bookedByID = userInfo?.loginID || userInfo?.id || userInfo?._id || "";
-
-      // Prepare booking data for API
-      const bookingData = {
-        fullName: values.fullName,
-        phone: values.phone,
-        email: values.email || undefined,
-        nidPassport: values.nidPassport || undefined,
-        address: values.address || undefined,
-        hotelID: values.hotelID,
-        hotelName: values.hotelName,
-        roomCategoryID: values.roomCategoryID,
-        roomCategoryName: values.roomCategoryName,
-        roomNumberID: values.roomNumberID,
-        roomNumberName: values.roomNumberName,
-        roomPrice: Number(values.roomPrice) || 0,
-        checkInDate: dayjs(values.checkInDate).format("YYYY-MM-DD"),
-        checkOutDate: dayjs(values.checkOutDate).format("YYYY-MM-DD"),
-        nights: nights,
-        adults: Number(values.adults) || 1,
-        children: Number(values.children) || 0,
-        isBreakfast: values.isBreakfast || false,
-        breakfastTotalBill: values.isBreakfast ? Number(values.breakfastTotalBill) : 0,
-        totalBill: Number(values.totalBill) || 0,
-        advancePayment: Number(values.advancePayment) || 0,
-        duePayment: Number(values.duePayment) || 0,
-        paymentMethod: values.paymentMethod || "",
-        transactionId: values.transactionId || "",
-        note: values.note || undefined,
-        reference: values.reference || undefined,
-        bookedBy: bookedBy,
-        bookedByID: bookedByID,
-        updatedByID: isEditing ? (userInfo?.loginID || userInfo?.id || "") : "Not Updated",
-      };
-
-      // Use the correct API endpoints based on backend routes
       let response;
       if (isEditing && editingKey) {
-        // Update existing booking: PUT /api/bookings/booking/:id
         response = await coreAxios.put(`/booking/${editingKey}`, bookingData);
       } else {
-        // Create new booking: POST /api/bookings/booking
         response = await coreAxios.post("/booking", bookingData);
       }
 
-      if (response.status === 200) {
+      if (response.status === 200 || response.status === 201) {
         const successMsg = response.data?.message || (isEditing ? "Booking updated successfully!" : "Booking created successfully!");
         message.success(successMsg, 3);
         
-        // Clean up after successful save
         setVisible(false);
         setIsEditing(false);
         setEditingKey(null);
@@ -367,12 +382,10 @@ const BookingInfo = ({ hotelID }) => {
         setIsHotelFromReference(false);
         formik.resetForm();
         
-        // Clear URL query params if they exist
         if (searchParams.get("room") || searchParams.get("date")) {
           router.replace("/dashboard?menu=6");
         }
         
-        // Refresh bookings list to update availability
         await fetchBookings();
       } else {
         message.error(response.data?.message || response.data?.error || "Failed to save booking.");
@@ -380,7 +393,6 @@ const BookingInfo = ({ hotelID }) => {
     } catch (error) {
       console.error("Error saving booking:", error);
       
-      // Handle conflict error from backend
       if (error.response?.status === 409) {
         const errorData = error.response?.data;
         const existingBooking = errorData?.details?.existingBooking;
@@ -390,6 +402,16 @@ const BookingInfo = ({ hotelID }) => {
           conflictMsg += ` Booking No: ${existingBooking.bookingNo}, Guest: ${existingBooking.guestName}, Dates: ${dayjs(existingBooking.checkInDate).format("D MMM YYYY")} - ${dayjs(existingBooking.checkOutDate).format("D MMM YYYY")}`;
         }
         message.error(conflictMsg, 6);
+      } else if (error.response?.status === 400) {
+        const errorData = error.response?.data;
+        if (errorData?.errors) {
+          const errorMessages = Object.values(errorData.errors).join(", ");
+          message.error(errorMessages);
+        } else if (errorData?.message) {
+          message.error(errorData.message);
+        } else {
+          message.error("Validation failed. Please check your input.");
+        }
       } else {
         const errorMessage = error.response?.data?.message || error.response?.data?.error || "An error occurred while saving the booking.";
         message.error(errorMessage);
@@ -417,15 +439,15 @@ const BookingInfo = ({ hotelID }) => {
       roomPrice: 0,
       checkInDate: dayjs(),
       checkOutDate: dayjs().add(1, "day"),
-      nights: 1, // Default 1 night for initial dates (today to tomorrow)
+      nights: 1,
       totalBill: 0,
       advancePayment: 0,
       duePayment: 0,
       paymentMethod: "",
       transactionId: "",
       note: "",
-      bookedBy: userInfo ? userInfo?.username : "",
-      bookedByID: userInfo ? userInfo?.loginID : "",
+      bookedBy: userInfo2 ? userInfo2?.username : "",
+      bookedByID: userInfo2 ? userInfo2?.loginID : "",
       updatedByID: "Not Updated",
       reference: "",
       adults: 1,
@@ -445,26 +467,21 @@ const BookingInfo = ({ hotelID }) => {
   const fetchBookings = async () => {
     setTableLoading(true);
     try {
-      // Retrieve user information from local storage
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const userRole = userInfo?.role?.value;
       const userHotelID = hotelID;
 
-      // Fetch the bookings data using the new API
       const response = await coreAxios.get("/bookings");
 
       if (response.status === 200) {
-        // API returns direct array of bookings
         let bookingsData = Array.isArray(response.data) ? response.data : [];
 
-        // Filter bookings if the role is "hoteladmin"
         if (userRole === "hoteladmin" && userHotelID) {
           bookingsData = bookingsData.filter(
             (booking) => booking && booking.hotelID === Number(userHotelID)
           );
         }
 
-        // Sort by createdAt descending (most recent first)
         bookingsData = bookingsData.sort((a, b) => {
           const dateA = new Date(a.createdAt || a.createTime || 0);
           const dateB = new Date(b.createdAt || b.createTime || 0);
@@ -472,9 +489,7 @@ const BookingInfo = ({ hotelID }) => {
         });
 
         setBookings(bookingsData);
-        // Show all bookings without filtering
         setFilteredBookings(bookingsData);
-        // Store all bookings for conflict checking
         setAllBookings(bookingsData);
       }
     } catch (error) {
@@ -488,7 +503,6 @@ const BookingInfo = ({ hotelID }) => {
     }
   };
 
-  // Function to pre-fill form from query params
   const prefillFormFromQueryParams = async () => {
     const roomNumberId = searchParams.get("room");
     const dateStr = searchParams.get("date");
@@ -496,7 +510,6 @@ const BookingInfo = ({ hotelID }) => {
 
     if (roomNumberId && dateStr && hotelInfo.length > 0) {
       try {
-        // Find the hotel
         const hotelId = hotelIdParam ? Number(hotelIdParam) : (selectedHotelId || Number(hotelID));
         const hotel = hotelInfo.find(h => h.hotelID === hotelId);
         
@@ -505,7 +518,6 @@ const BookingInfo = ({ hotelID }) => {
           return;
         }
 
-        // Find the room in hotel's categories
         let foundRoom = null;
         let foundCategory = null;
 
@@ -526,13 +538,10 @@ const BookingInfo = ({ hotelID }) => {
           return;
         }
 
-        // Set selected hotel
         setSelectedHotelId(hotel.hotelID);
         extractHotelCategories(hotel);
 
-        // Wait a bit for categories to load
         setTimeout(() => {
-          // Set form values
           const checkInDate = dayjs(dateStr);
           const checkOutDate = checkInDate.add(1, "day");
           const nights = 1;
@@ -556,10 +565,8 @@ const BookingInfo = ({ hotelID }) => {
             duePayment: (nights * (foundRoom.price || foundCategory.basePrice || 0)),
           });
 
-          // Extract room numbers for the category
           extractRoomNumbers(foundCategory._id);
 
-          // Open the modal
           setVisible(true);
           setIsEditing(false);
           setEditingKey(null);
@@ -573,21 +580,41 @@ const BookingInfo = ({ hotelID }) => {
   };
 
   useEffect(() => {
-    // Fetch hotels and bookings on component mount
     fetchHotelInfo();
     fetchBookings();
   }, []);
 
-  // Watch for query params changes and pre-fill form (only when coming from Calendar)
+  useEffect(() => {
+    if (!visible || !isEditing || !prevData || hotelInfo.length === 0) return;
+
+    const currentHotelId = prevData.hotelID;
+    if (!currentHotelId) return;
+
+    const selectedHotel = hotelInfo.find(
+      (h) => h && h.hotelID === currentHotelId
+    );
+    
+    if (selectedHotel) {
+      const categories = selectedHotel.roomCategories || [];
+      setRoomCategories(categories);
+      
+      if (prevData.roomCategoryID) {
+        setTimeout(() => {
+          extractRoomNumbers(prevData.roomCategoryID);
+          
+          if (prevData.roomNumberID) {
+            formik.setFieldValue("roomNumberID", prevData.roomNumberID);
+            formik.setFieldValue("roomNumberName", prevData.roomNumberName);
+          }
+        }, 300);
+      }
+    }
+  }, [hotelInfo.length, visible, isEditing, prevData]);
+
   useEffect(() => {
     const roomNumberId = searchParams.get("room");
     const dateStr = searchParams.get("date");
     
-    // Only auto-open modal if:
-    // 1. There are query params (coming from Calendar)
-    // 2. Hotel info is loaded
-    // 3. Modal is not already visible
-    // 4. We haven't already handled these query params
     if (
       hotelInfo.length > 0 && 
       roomNumberId && 
@@ -599,21 +626,12 @@ const BookingInfo = ({ hotelID }) => {
       prefillFormFromQueryParams();
     }
     
-    // Reset the ref when query params are cleared (user navigates away or closes modal)
     if (!roomNumberId && !dateStr) {
       hasHandledQueryParams.current = false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotelInfo.length, searchParams]);
 
-  // Set default hotel (hotelID 1) when modal opens for new booking
   useEffect(() => {
-    // Only set default hotel if:
-    // 1. Modal is visible
-    // 2. Not in editing mode
-    // 3. Hotels are loaded
-    // 4. No hotel is currently selected (to avoid overriding pre-filled data)
-    // 5. No query params (to avoid interfering with calendar pre-fill)
     const roomNumberId = searchParams.get("room");
     const dateStr = searchParams.get("date");
     
@@ -626,35 +644,28 @@ const BookingInfo = ({ hotelID }) => {
       !roomNumberId &&
       !dateStr
     ) {
-      // Always use first hotel from list (fixed default)
       const defaultHotel = hotelInfo[0];
       if (defaultHotel) {
         handleHotelInfo(defaultHotel.hotelName);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, isEditing, hotelInfo.length]);
 
   const handleHotelInfo = (value) => {
-    // Find hotel by hotelName
     const selectedHotel = hotelInfo.find((hotel) => hotel && hotel.hotelName === value);
 
     if (selectedHotel) {
-      // Update formik values
       formik.setFieldValue("hotelName", value);
       formik.setFieldValue("hotelID", selectedHotel.hotelID);
       
-      // Reset category and room selections
       formik.setFieldValue("roomCategoryID", "");
       formik.setFieldValue("roomCategoryName", "");
       formik.setFieldValue("roomNumberID", "");
       formik.setFieldValue("roomNumberName", "");
       formik.setFieldValue("roomPrice", 0);
       
-      // Extract categories from selected hotel
       extractHotelCategories(selectedHotel);
       
-      // Update selectedHotelId for internal state
       setSelectedHotelId(selectedHotel.hotelID);
     }
   };
@@ -665,19 +676,15 @@ const BookingInfo = ({ hotelID }) => {
     );
 
     if (selectedCategory) {
-      // Update formik values
       formik.setFieldValue("roomNumberID", "");
       formik.setFieldValue("roomNumberName", "");
       formik.setFieldValue("roomCategoryID", value);
       formik.setFieldValue("roomCategoryName", selectedCategory.name);
       
-      // Set default price from category, but room price will override if room has specific price
       formik.setFieldValue("roomPrice", selectedCategory.basePrice || 0);
       
-      // Extract rooms for the selected category (will filter by dates if available)
       extractRoomNumbers(value);
       
-      // Recalculate total bill
       const nights = Number(formik.values.nights) || 0;
       const roomPrice = selectedCategory.basePrice || 0;
       const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
@@ -691,102 +698,104 @@ const BookingInfo = ({ hotelID }) => {
 
   const handleEdit = async (record) => {
     if (!record) return;
-    
-    setEditingKey(record._id);
-    setPrevData(record);
+
+    let data = record;
+    try {
+      if (record.bookingNo) {
+        const details = await fetchBookingDetails(record.bookingNo, false);
+        if (details) {
+          data = { ...record, ...details };
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch full booking details for edit:", e);
+    }
+
+    const bookingId = data._id || record._id;
+    setEditingKey(bookingId);
+    setPrevData(data);
     setIsEditing(true);
+
+    const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
     
-    // Set selected hotel and extract categories
-    if (record.hotelID) {
-      setSelectedHotelId(record.hotelID);
-      const selectedHotel = hotelInfo.find(h => h.hotelID === record.hotelID);
+    const checkInDate = data.checkInDate ? dayjs(data.checkInDate) : dayjs();
+    const checkOutDate = data.checkOutDate ? dayjs(data.checkOutDate) : dayjs().add(1, "day");
+
+    let finalCheckOutDate = checkOutDate;
+    if (checkOutDate.isSameOrBefore(checkInDate)) {
+      finalCheckOutDate = checkInDate.add(1, "day");
+    }
+
+    const calculatedNights = finalCheckOutDate.diff(checkInDate, "day");
+    
+    if (data.hotelID) {
+      setSelectedHotelId(data.hotelID);
+      
+      const selectedHotel = hotelInfo.find((h) => h.hotelID === data.hotelID);
       if (selectedHotel) {
-        extractHotelCategories(selectedHotel);
+        const categories = selectedHotel.roomCategories || [];
+        setRoomCategories(categories);
       }
     }
-    
-    // Extract room numbers after categories are loaded
-    if (record.roomCategoryID) {
+
+    const totalBill = Number(data.totalBill) || 0;
+    const advancePayment = Number(data.advancePayment) || 0;
+    const duePayment = Math.max(0, totalBill - advancePayment);
+
+    const formValues = {
+      fullName: data.fullName || data.guestName || "",
+      nidPassport: data.nidPassport || data.nid || "",
+      address: data.address || "",
+      phone: data.phone || "",
+      email: data.email || "",
+      hotelID: data.hotelID || 0,
+      hotelName: data.hotelName || "",
+      roomCategoryID: data.roomCategoryID || "",
+      roomCategoryName: data.roomCategoryName || "",
+      roomNumberID: data.roomNumberID || "",
+      roomNumberName: data.roomNumberName || data.roomNumber || "",
+      roomPrice: Number(data.roomPrice) || 0,
+      checkInDate: checkInDate,
+      checkOutDate: finalCheckOutDate,
+      nights: calculatedNights > 0 ? calculatedNights : (Number(data.nights) || 1),
+      adults: Number(data.adults) || 1,
+      children: Number(data.children) || 0,
+      isBreakfast: data.isBreakfast ?? (data.isKitchen || data.extraBed) ?? false,
+      breakfastTotalBill:
+        Number(data.breakfastTotalBill) ||
+        (Number(data.kitchenTotalBill) || 0) + (Number(data.extraBedTotalBill) || 0),
+      totalBill: totalBill,
+      advancePayment: advancePayment,
+      duePayment: duePayment,
+      paymentMethod: data.paymentMethod || "",
+      transactionId: data.transactionId || "",
+      note: data.note || "",
+      bookedBy: data.bookedBy || userInfo?.username || "",
+      bookedByID: data.bookedByID || userInfo?.loginID || "",
+      updatedByID: userInfo?.loginID || "",
+      reference: data.reference || "",
+    };
+
+    formik.setValues(formValues);
+
+    if (data.roomCategoryID) {
       setTimeout(() => {
-        extractRoomNumbers(record.roomCategoryID);
+        extractRoomNumbers(data.roomCategoryID);
       }, 300);
     }
 
-    const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-    const checkInDate = record.checkInDate ? dayjs(record.checkInDate) : dayjs();
-    const checkOutDate = record.checkOutDate ? dayjs(record.checkOutDate) : dayjs().add(1, "day");
-
-    // Recalculate nights to ensure accuracy
-    const calculatedNights = checkOutDate.diff(checkInDate, "day");
-
-    formik.setValues({
-      fullName: record.fullName || "",
-      nidPassport: record.nidPassport || "",
-      address: record.address || "",
-      phone: record.phone || "",
-      email: record.email || "",
-      hotelID: record.hotelID || 0,
-      hotelName: record.hotelName || "",
-      roomCategoryID: record.roomCategoryID || "",
-      roomCategoryName: record.roomCategoryName || "",
-      roomNumberID: record.roomNumberID || "",
-      roomNumberName: record.roomNumberName || "",
-      roomPrice: record.roomPrice || 0,
-      checkInDate: checkInDate,
-      checkOutDate: checkOutDate,
-      nights: calculatedNights > 0 ? calculatedNights : (record.nights || 0),
-      adults: record.adults || 0,
-      children: record.children || 0,
-      isBreakfast: record.isBreakfast ?? (record.isKitchen || record.extraBed) ?? false,
-      breakfastTotalBill: record.breakfastTotalBill ?? (Number(record.kitchenTotalBill) || 0) + (Number(record.extraBedTotalBill) || 0),
-      totalBill: record.totalBill || 0,
-      advancePayment: record.advancePayment || 0,
-      duePayment: record.duePayment || 0,
-      paymentMethod: record.paymentMethod || "",
-      transactionId: record.transactionId || "",
-      note: record.note || "",
-      bookedBy: record.bookedBy || userInfo?.username || "",
-      bookedByID: record.bookedByID || userInfo?.loginID || "",
-      updatedByID: userInfo?.loginID || "",
-      reference: record.reference || "",
-    });
-    
-    // Recalculate total bill based on current values
-    setTimeout(() => {
-      calculateNights(checkInDate, checkOutDate);
-    }, 100);
-    
     setVisible(true);
   };
 
-  // Function to generate all dates between two given dates
-  function getAllDatesBetween(startDate, endDate) {
-    const dates = [];
-    let currentDate = dayjs(startDate);
-
-    while (currentDate.isBefore(endDate) || currentDate.isSame(endDate)) {
-      dates.push(currentDate.format("YYYY-MM-DD"));
-      currentDate = currentDate.add(1, "day");
-    }
-
-    // Check if start date is not the first of the month, then remove last date
-    if (dayjs(startDate).date() !== 1) {
-      dates.pop(); // Remove the last date
-    }
-
-    return dates;
-  }
-
+  // Soft delete (cancel): DELETE /booking/soft/:id with body { canceledBy, reason }
   const handleDelete2 = async (key) => {
     setSubmitLoading(true);
     try {
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const canceledBy = userInfo?.username || userInfo?.loginID || "admin";
 
-      // Soft delete: PUT /api/bookings/booking/soft/:id
-      const res = await coreAxios.put(`/booking/soft/${key}`, {
-        canceledBy: canceledBy,
-        reason: cancellationReason,
+      const res = await coreAxios.delete(`/booking/soft/${key}`, {
+        data: { canceledBy, reason: cancellationReason || "Cancelled by user" },
       });
 
       if (res.status === 200) {
@@ -794,7 +803,7 @@ const BookingInfo = ({ hotelID }) => {
         setIsModalVisible(false);
         setCancellationReason("");
         setCurrentBooking(null);
-        fetchBookings(); // Fetch the updated list of bookings
+        fetchBookings();
       } else {
         message.error(res.data?.message || res.data?.error || "Failed to cancel booking.");
       }
@@ -806,24 +815,45 @@ const BookingInfo = ({ hotelID }) => {
     }
   };
 
-  // Function to handle advance payment and calculate due payment
+  // Hard delete (permanent): DELETE /booking/:id – removes booking from DB
+  const handleHardDelete = async (booking) => {
+    if (!booking?._id) return;
+    setSubmitLoading(true);
+    try {
+      const res = await coreAxios.delete(`/booking/${booking._id}`);
+
+      if (res.status === 200) {
+        message.success(res.data?.message || "Booking deleted successfully.");
+        fetchBookings();
+      } else {
+        message.error(res.data?.message || res.data?.error || "Failed to delete booking.");
+      }
+    } catch (error) {
+      console.error("Error deleting booking:", error);
+      message.error(error.response?.data?.message || "Failed to delete booking.");
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
   const handleAdvancePaymentChange = (e) => {
     const advancePayment = parseFloat(e.target.value) || 0;
     const totalBill = parseFloat(formik.values.totalBill) || 0;
 
-    // Calculate due payment
-    const duePayment = totalBill - advancePayment;
-
-    // Set the field values in formik
-    formik.setFieldValue("advancePayment", advancePayment);
-    formik.setFieldValue("duePayment", duePayment >= 0 ? duePayment : 0); // Ensure due payment is non-negative
+    if (advancePayment > totalBill) {
+      message.warning("Advance payment cannot exceed total bill");
+      formik.setFieldValue("advancePayment", totalBill);
+      formik.setFieldValue("duePayment", 0);
+    } else {
+      const duePayment = totalBill - advancePayment;
+      formik.setFieldValue("advancePayment", advancePayment);
+      formik.setFieldValue("duePayment", duePayment >= 0 ? duePayment : 0);
+    }
   };
 
-  // Apply all filters (search and date filter)
   const applyFilters = () => {
     let filtered = Array.isArray(bookings) ? bookings : [];
     
-    // Apply search filter
     if (searchTerm && searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase().trim();
       filtered = filtered.filter((booking) => {
@@ -849,7 +879,6 @@ const BookingInfo = ({ hotelID }) => {
       });
     }
     
-    // Apply check-in date filter (single date)
     if (checkInDate) {
       const selectedDate = dayjs(checkInDate).startOf("day");
       
@@ -864,13 +893,10 @@ const BookingInfo = ({ hotelID }) => {
     setPagination({ ...pagination, current: 1 });
   };
   
-  // Apply filters when search term or date changes
   useEffect(() => {
     applyFilters();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, checkInDate, bookings]);
 
-  // Paginate the filtered data
   const paginatedBookings = filteredBookings.slice(
     (pagination.current - 1) * pagination.pageSize,
     pagination.current * pagination.pageSize
@@ -879,13 +905,21 @@ const BookingInfo = ({ hotelID }) => {
   const fetchBookingDetails = async (bookingNo, guestInfoOnly = false) => {
     try {
       const response = await coreAxios.get(`/bookings/bookingNo/${bookingNo}`);
-      if (response?.status === 200 && response.data && Array.isArray(response.data) && response.data.length > 0) {
-        const bookingDetails = response.data[0];
-        if (!guestInfoOnly && bookingDetails.hotelID) {
+      
+      if (response?.status === 200) {
+        let bookingDetails = null;
+        
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+          bookingDetails = response.data[0];
+        } else if (response.data && typeof response.data === 'object') {
+          bookingDetails = response.data;
+        }
+        
+        if (bookingDetails && !guestInfoOnly && bookingDetails.hotelID) {
           setSelectedHotelId(bookingDetails.hotelID);
           const selectedHotel = hotelInfo.find(h => h.hotelID === bookingDetails.hotelID);
           if (selectedHotel) {
-            extractHotelCategories(selectedHotel);
+            setRoomCategories(selectedHotel.roomCategories || []);
           }
         }
         return bookingDetails;
@@ -903,7 +937,6 @@ const BookingInfo = ({ hotelID }) => {
     if (value && value.trim()) {
       const bookingDetails = await fetchBookingDetails(value, true);
       if (bookingDetails) {
-        // Only fill Guest Information. All other fields stay initially blank.
         formik.setValues({
           ...formik.values,
           fullName: bookingDetails.fullName || "",
@@ -917,8 +950,48 @@ const BookingInfo = ({ hotelID }) => {
     }
   };
 
-  // night calculations
+  const calculateNights = (checkIn, checkOut) => {
+    if (checkIn && checkOut) {
+      const checkInDate = dayjs(checkIn).startOf("day");
+      const checkOutDate = dayjs(checkOut).startOf("day");
+      
+      if (checkOutDate.isSameOrBefore(checkInDate)) {
+        formik.setFieldValue("checkOutDate", checkInDate.add(1, "day"));
+        const nights = 1;
+        formik.setFieldValue("nights", nights);
+        
+        const roomPrice = Number(formik.values.roomPrice) || 0;
+        const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
+        const totalBill = (nights * roomPrice) + breakfastTotalBill;
+        const advancePayment = Number(formik.values.advancePayment) || 0;
+        const duePayment = Math.max(0, totalBill - advancePayment);
+        
+        formik.setFieldValue("totalBill", totalBill);
+        formik.setFieldValue("duePayment", duePayment);
+      } else {
+        const nights = checkOutDate.diff(checkInDate, "day");
+        const calculatedNights = nights > 0 ? nights : 1;
+        formik.setFieldValue("nights", calculatedNights);
+        
+        const roomPrice = Number(formik.values.roomPrice) || 0;
+        const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
+        const totalBill = (calculatedNights * roomPrice) + breakfastTotalBill;
+        const advancePayment = Number(formik.values.advancePayment) || 0;
+        const duePayment = Math.max(0, totalBill - advancePayment);
+        
+        formik.setFieldValue("totalBill", totalBill);
+        formik.setFieldValue("duePayment", duePayment);
+      }
+    } else {
+      formik.setFieldValue("nights", 1);
+      formik.setFieldValue("totalBill", 0);
+      formik.setFieldValue("duePayment", 0);
+    }
+  };
+
   const handleCheckInChange = (date) => {
+    if (!date) return;
+    
     if (!isEditing) {
       formik.setFieldValue("roomCategoryID", "");
       formik.setFieldValue("roomCategoryName", "");
@@ -927,12 +1000,18 @@ const BookingInfo = ({ hotelID }) => {
       formik.setFieldValue("roomPrice", 0);
       setRoomNumbers([]);
     }
+    
     formik.setFieldValue("checkInDate", date);
     
-    // Recalculate nights
-    calculateNights(date, formik.values.checkOutDate);
+    const checkOut = formik.values.checkOutDate;
+    if (checkOut && dayjs(checkOut).isSameOrBefore(dayjs(date))) {
+      const newCheckOut = dayjs(date).add(1, "day");
+      formik.setFieldValue("checkOutDate", newCheckOut);
+      calculateNights(date, newCheckOut);
+    } else {
+      calculateNights(date, checkOut);
+    }
     
-    // Re-filter rooms if category is already selected
     if (formik.values.roomCategoryID && formik.values.hotelID) {
       setTimeout(() => {
         extractRoomNumbers(formik.values.roomCategoryID);
@@ -941,6 +1020,8 @@ const BookingInfo = ({ hotelID }) => {
   };
 
   const handleCheckOutChange = (date) => {
+    if (!date) return;
+    
     if (!isEditing) {
       formik.setFieldValue("roomCategoryID", "");
       formik.setFieldValue("roomCategoryName", "");
@@ -949,12 +1030,17 @@ const BookingInfo = ({ hotelID }) => {
       formik.setFieldValue("roomPrice", 0);
       setRoomNumbers([]);
     }
+    
+    const checkIn = formik.values.checkInDate;
+    if (checkIn && dayjs(date).isSameOrBefore(dayjs(checkIn))) {
+      message.warning("Check-out date must be after check-in date");
+      return;
+    }
+    
     formik.setFieldValue("checkOutDate", date);
     
-    // Recalculate nights
     calculateNights(formik.values.checkInDate, date);
     
-    // Re-filter rooms if category is already selected
     if (formik.values.roomCategoryID && formik.values.hotelID) {
       setTimeout(() => {
         extractRoomNumbers(formik.values.roomCategoryID);
@@ -962,40 +1048,13 @@ const BookingInfo = ({ hotelID }) => {
     }
   };
 
-  const calculateNights = (checkIn, checkOut) => {
-    if (checkIn && checkOut) {
-      // Calculate nights accurately using start of day
-      const checkInDate = dayjs(checkIn).startOf("day");
-      const checkOutDate = dayjs(checkOut).startOf("day");
-      const nights = checkOutDate.diff(checkInDate, "day");
-      
-      const calculatedNights = nights > 0 ? nights : 0;
-      formik.setFieldValue("nights", calculatedNights);
-      
-      // Recalculate total bill when nights change
-      const roomPrice = Number(formik.values.roomPrice) || 0;
-      const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
-      const totalBill = (calculatedNights * roomPrice) + breakfastTotalBill;
-      const advancePayment = Number(formik.values.advancePayment) || 0;
-      const duePayment = Math.max(0, totalBill - advancePayment);
-      
-      formik.setFieldValue("totalBill", totalBill);
-      formik.setFieldValue("duePayment", duePayment);
-    } else {
-      formik.setFieldValue("nights", 0);
-      formik.setFieldValue("totalBill", 0);
-      formik.setFieldValue("duePayment", 0);
-    }
-  };
-
-  // booking cancel functionality
   const handleCancelReasonChange = (e) => {
     setCancellationReason(e.target.value);
   };
 
   const showModal = (booking) => {
-    setCurrentBooking(booking); // Store the current booking object
-    setIsModalVisible(true); // Show the modal
+    setCurrentBooking(booking);
+    setIsModalVisible(true);
   };
 
   const handleOk = async () => {
@@ -1004,16 +1063,14 @@ const BookingInfo = ({ hotelID }) => {
       return;
     }
 
-    // Call soft delete directly (this updates statusID to 255)
     await handleDelete2(currentBooking?._id);
   };
 
   const handleCancel = () => {
-    setIsModalVisible(false); // Close the modal without doing anything
+    setIsModalVisible(false);
   };
 
   const handleDelete = (booking) => {
-    // Open the modal to confirm cancellation
     showModal(booking);
   };
 
@@ -1028,12 +1085,10 @@ const BookingInfo = ({ hotelID }) => {
         <>
           <div>
             <div className="space-y-4">
-                {/* Header Section */}
                 <div className="mb-3">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Bookings</h1>
                     <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 sm:items-center">
-                      {/* Search and Date Filter Row */}
                       <div className="w-full sm:w-auto flex flex-row gap-2 flex-wrap sm:flex-nowrap">
                         <Input
                           placeholder="Search bookings..."
@@ -1067,7 +1122,6 @@ const BookingInfo = ({ hotelID }) => {
                         )}
                       </div>
                       
-                      {/* Action Buttons - Two per row on mobile */}
                       <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:flex-row gap-2">
                         <Button
                           icon={<ReloadOutlined />}
@@ -1092,30 +1146,24 @@ const BookingInfo = ({ hotelID }) => {
                               setEditingKey(null);
                               setPrevData(null);
                               setIsHotelFromReference(false);
-                              // Clear category and room selections
                               setRoomCategories([]);
                               setRoomNumbers([]);
-                              // Reset query params ref when manually opening modal
                               hasHandledQueryParams.current = false;
-                              // Clear query params from URL if they exist
                               if (searchParams.get("room") || searchParams.get("date")) {
                                 router.replace("/dashboard?menu=6");
                               }
-                              // Fetch hotel info (default hotel will be set by useEffect)
                               fetchHotelInfo();
                             }}
                             className="w-full sm:w-auto"
                             style={{ height: "40px" }}
                           >
                             <span className="hidden sm:inline">Create Booking</span>
-                          
                           </Button>
                         )}
                       </div>
                     </div>
                   </div>
                   
-                  {/* Results Count */}
                   {filteredBookings.length !== bookings.length && (
                     <div className="mt-2 text-sm text-gray-600">
                       Showing {filteredBookings.length} of {bookings.length} bookings
@@ -1123,11 +1171,9 @@ const BookingInfo = ({ hotelID }) => {
                   )}
                 </div>
 
-                {/* Bookings Table */}
                 <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
-                      {/* Table Header */}
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
@@ -1172,10 +1218,8 @@ const BookingInfo = ({ hotelID }) => {
                         </tr>
                       </thead>
 
-                      {/* Table Body */}
                       <tbody>
                         {tableLoading ? (
-                          // Skeleton Loading Rows - matches table structure exactly
                           Array.from({ length: 8 }).map((_, idx) => (
                             <tr key={`skeleton-${idx}`}>
                               <td className="px-2 py-1.5 border border-gray-300">
@@ -1231,14 +1275,13 @@ const BookingInfo = ({ hotelID }) => {
                             </tr>
                           ))
                         ) : (
-                          paginatedBookings?.map((booking, idx) => (
+                          paginatedBookings?.map((booking) => (
                           <tr
                             key={booking._id}
                             className={`hover:bg-gray-50 transition-colors ${
                               booking.statusID === 255 ? "bg-red-50" : ""
                             }`}
                           >
-                            {/* Booking No with Link and Copy Feature */}
                             <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
                               <span className="flex items-center gap-1.5">
                                 <Link
@@ -1259,46 +1302,36 @@ const BookingInfo = ({ hotelID }) => {
                                 </Tooltip>
                               </span>
                             </td>
-                            {/* Guest Name */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
                               {booking.fullName}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {booking.phone}
                             </td>
-                            {/* Room Category */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
                               {booking.roomCategoryName || "—"}
                             </td>
-                            {/* Room Type */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {booking.roomNumberName || "—"}
                             </td>
-                            {/* Booking Date */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {(booking.createdAt || booking.createTime || booking.createdDate) ? moment(booking.createdAt || booking.createTime || booking.createdDate).format("D MMM YY") : "—"}
                             </td>
-                            {/* Check In */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {moment(booking.checkInDate).format("D MMM YY")}
                             </td>
-                            {/* Check Out */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {moment(booking.checkOutDate).format("D MMM YY")}
                             </td>
-                            {/* Nights */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-center border border-gray-300">
                               {booking.nights}
                             </td>
-                            {/* Advance Payment */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-right border border-gray-300">
                               {booking.advancePayment}
                             </td>
-                            {/* Total Bill */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-green-700 text-right border border-gray-300">
                               {booking.totalBill}
                             </td>
-                            {/* Booking Status */}
                             <td className="px-2 py-1.5 whitespace-nowrap text-center border border-gray-300">
                               <span
                                 className="px-2 py-1 rounded text-xs font-semibold"
@@ -1310,7 +1343,6 @@ const BookingInfo = ({ hotelID }) => {
                                 {booking.statusID === 255 ? "Canceled" : "Confirmed"}
                               </span>
                             </td>
-                            {/* Actions */}
                             <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
                               <div className="flex gap-1.5 justify-center items-center">
                                 <Button
@@ -1333,21 +1365,38 @@ const BookingInfo = ({ hotelID }) => {
                                       </Button>
                                     )}
                                     {bookingPermissions?.deleteAccess && (
-                                      <Popconfirm
-                                        title="Are you sure to cancel this booking?"
-                                        onConfirm={() => handleDelete(booking)}
-                                        okText="Yes"
-                                        cancelText="No"
-                                      >
-                                        <Button 
-                                          type="link" 
-                                          danger 
-                                          size="small"
-                                          style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
+                                      <>
+                                        <Popconfirm
+                                          title="Cancel booking? Enter reason in the next step."
+                                          onConfirm={() => handleDelete(booking)}
+                                          okText="Yes"
+                                          cancelText="No"
                                         >
-                                          Cancel
-                                        </Button>
-                                      </Popconfirm>
+                                          <Button
+                                            type="link"
+                                            danger
+                                            size="small"
+                                            style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
+                                          >
+                                            Cancel
+                                          </Button>
+                                        </Popconfirm>
+                                        <Popconfirm
+                                          title="Are you sure to delete this booking?"
+                                          onConfirm={() => handleHardDelete(booking)}
+                                          okText="Yes"
+                                          cancelText="No"
+                                        >
+                                          <Button
+                                            type="link"
+                                            danger
+                                            size="small"
+                                            style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
+                                          >
+                                            Delete
+                                          </Button>
+                                        </Popconfirm>
+                                      </>
                                     )}
                                   </>
                                 )}
@@ -1360,7 +1409,6 @@ const BookingInfo = ({ hotelID }) => {
                     </table>
                   </div>
 
-                  {/* Pagination */}
                   {!tableLoading && filteredBookings.length > 0 && (
                     <div className="flex justify-between items-center px-3 py-2 border-t bg-gray-50">
                       <div className="text-xs text-gray-700">
@@ -1380,7 +1428,6 @@ const BookingInfo = ({ hotelID }) => {
                   )}
                 </div>
 
-                {/* Cancellation Modal */}
                 <Modal
                   title="Cancel Booking"
                   open={isModalVisible}
@@ -1416,7 +1463,6 @@ const BookingInfo = ({ hotelID }) => {
                   </div>
                 </Modal>
 
-                {/* Booking Details Modal */}
                 <Modal
                   title="Booking Details"
                   open={detailsModalVisible}
@@ -1513,7 +1559,6 @@ const BookingInfo = ({ hotelID }) => {
                             <p className="text-xs text-gray-500 mb-1">Breakfast</p>
                             <p className="font-semibold text-sm">
                               {(selectedBookingDetails.isBreakfast || selectedBookingDetails.isKitchen || selectedBookingDetails.extraBed) ? "Yes" : "No"}
-                              {((selectedBookingDetails.isBreakfast || selectedBookingDetails.isKitchen || selectedBookingDetails.extraBed) && (selectedBookingDetails.breakfastTotalBill != null || selectedBookingDetails.kitchenTotalBill != null || selectedBookingDetails.extraBedTotalBill != null)) && ` (${Number(selectedBookingDetails.breakfastTotalBill) || (Number(selectedBookingDetails.kitchenTotalBill) || 0) + (Number(selectedBookingDetails.extraBedTotalBill) || 0)})`}
                             </p>
                           </div>
                         </Col>
@@ -1533,19 +1578,6 @@ const BookingInfo = ({ hotelID }) => {
                           <div className="bg-gray-50 p-3 rounded">
                             <p className="text-xs text-gray-500 mb-1">Booked By</p>
                             <p className="font-semibold text-sm">{selectedBookingDetails.bookedBy || selectedBookingDetails.bookedByID || "N/A"}</p>
-                          </div>
-                        </Col>
-                        <Col span={12}>
-                          <div className="bg-gray-50 p-3 rounded">
-                            <p className="text-xs text-gray-500 mb-1">Updated By</p>
-                            <p className="font-semibold text-sm">
-                              {selectedBookingDetails.updatedByID || "Not Updated"}
-                              {selectedBookingDetails.updatedByID && selectedBookingDetails.updatedAt && (
-                                <span className="text-xs text-gray-500 ml-2">
-                                  ({dayjs(selectedBookingDetails.updatedAt).format("D MMM YYYY, h:mm A")})
-                                </span>
-                              )}
-                            </p>
                           </div>
                         </Col>
                         {selectedBookingDetails.statusID === 255 && (
@@ -1589,7 +1621,6 @@ const BookingInfo = ({ hotelID }) => {
                   )}
                 </Modal>
 
-                {/* Create/Edit Booking Modal */}
                 <Modal
                   title={isEditing ? "Edit Booking" : "Create New Booking"}
                   open={visible}
@@ -1600,13 +1631,10 @@ const BookingInfo = ({ hotelID }) => {
                     setPrevData(null);
                     setIsHotelFromReference(false);
                     formik.resetForm();
-                    // Reset query params ref when modal is closed
                     hasHandledQueryParams.current = false;
-                    // Clear query params from URL if they exist
                     if (searchParams.get("room") || searchParams.get("date")) {
                       router.replace("/dashboard?menu=6");
                     }
-                    // Reset to default hotel when closing modal
                     if (!isEditing) {
                       fetchHotelInfo();
                     }
@@ -1683,7 +1711,7 @@ const BookingInfo = ({ hotelID }) => {
                         flex-direction: column !important;
                       }
                     `}} />
-                    {/* Guest Information Section */}
+                    
                     <Card 
                       title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Guest Information</span>}
                       size="small" 
@@ -1731,18 +1759,6 @@ const BookingInfo = ({ hotelID }) => {
                             />
                           </Form.Item>
                         </Col>
-                        {/* <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="E-mail" style={{ marginBottom: "12px" }}>
-                            <Input
-                              name="email"
-                              type="email"
-                              value={formik.values.email}
-                              onChange={formik.handleChange}
-                              placeholder="Enter email address"
-                              style={{ height: "40px" }}
-                            />
-                          </Form.Item>
-                        </Col> */}
                         <Col xs={24} sm={12} md={12} lg={6}>
                           <Form.Item label="NID/Passport" style={{ marginBottom: "12px" }}>
                             <Input
@@ -1768,7 +1784,6 @@ const BookingInfo = ({ hotelID }) => {
                       </Row>
                     </Card>
 
-                    {/* Booking Details Section */}
                     <Card 
                       title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Booking Details</span>}
                       size="small" 
@@ -1786,7 +1801,7 @@ const BookingInfo = ({ hotelID }) => {
                               className="w-full"
                               style={{ width: "100%", height: "40px" }}
                               disabledDate={(current) =>
-                                current && current < dayjs().startOf("day")
+                                !isEditing && current && current < dayjs().startOf("day")
                               }
                             />
                           </Form.Item>
@@ -1856,7 +1871,6 @@ const BookingInfo = ({ hotelID }) => {
                       </Row>
                     </Card>
 
-                    {/* Room Selection Section */}
                     <Card 
                       title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Room Selection</span>}
                       size="small" 
@@ -1869,7 +1883,7 @@ const BookingInfo = ({ hotelID }) => {
                           <Form.Item label="Hotel Name" required style={{ marginBottom: "12px" }}>
                             <Select
                               name="hotelName"
-                              value={formik.values.hotelName || (hotelInfo[0] && hotelInfo[0].hotelName)}
+                              value={formik.values.hotelName}
                               onChange={handleHotelInfo}
                               placeholder={hotelInfo.length === 0 ? "Loading..." : "Select hotel"}
                               disabled
@@ -1892,11 +1906,9 @@ const BookingInfo = ({ hotelID }) => {
                                   </Select.Option>
                                 ))
                               ) : (
-                                (
-                                  <Select.Option value="" disabled>
-                                    No hotels available
-                                  </Select.Option>
-                                )
+                                <Select.Option value="" disabled>
+                                  No hotels available
+                                </Select.Option>
                               )}
                             </Select>
                           </Form.Item>
@@ -1943,7 +1955,6 @@ const BookingInfo = ({ hotelID }) => {
                                   selectedRoom ? selectedRoom.name || selectedRoom.roomId : ""
                                 );
                                 
-                                // Set adults and children from room capacity if available
                                 if (selectedRoom) {
                                   if (selectedRoom.capacity?.adults) {
                                     formik.setFieldValue("adults", selectedRoom.capacity.adults);
@@ -1953,10 +1964,8 @@ const BookingInfo = ({ hotelID }) => {
                                   }
                                 }
                                 
-                                // Set room price from selected room if available
                                 if (selectedRoom && selectedRoom.price) {
                                   formik.setFieldValue("roomPrice", selectedRoom.price);
-                                  // Recalculate total bill
                                   const nights = Number(formik.values.nights) || 0;
                                   const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
                                   const totalBill = (nights * selectedRoom.price) + breakfastTotalBill;
@@ -2018,7 +2027,6 @@ const BookingInfo = ({ hotelID }) => {
                       </Row>
                     </Card>
 
-                    {/* Payment Information Section */}
                     <Card 
                       title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Payment Information</span>}
                       size="small" 
@@ -2096,7 +2104,6 @@ const BookingInfo = ({ hotelID }) => {
                       </Row>
                     </Card>
 
-                    {/* Additional Services Section */}
                     <Card 
                       title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Additional Services</span>}
                       size="small" 
@@ -2192,9 +2199,7 @@ const BookingInfo = ({ hotelID }) => {
           </div>
         </>
       ) : (
-        <>
-          <NoPermissionBanner />
-        </>
+        <NoPermissionBanner />
       )}
     </div>
   );
