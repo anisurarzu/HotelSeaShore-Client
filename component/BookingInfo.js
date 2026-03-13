@@ -130,8 +130,11 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       return;
     }
 
-    const categories = hotel.roomCategories || [];
-    setRoomCategories(Array.isArray(categories) ? categories : []);
+    const allCategories = hotel.roomCategories || [];
+    const categories = Array.isArray(allCategories)
+      ? allCategories.filter((c) => c.isActive !== false)
+      : [];
+    setRoomCategories(categories);
     
     setRoomNumbers([]);
     formik.setFieldValue("roomCategoryID", "");
@@ -192,7 +195,15 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       return;
     }
 
-    let rooms = selectedCategory.roomNumbers || [];
+    let rooms = (selectedCategory.roomNumbers || []).filter(
+      (r) => (r.status || "available") === "available"
+    );
+    if (isEditing && prevData?.roomNumberID) {
+      const editingRoom = selectedCategory.roomNumbers.find((r) => r._id === prevData.roomNumberID);
+      if (editingRoom && !rooms.some((r) => r._id === editingRoom._id)) {
+        rooms = [editingRoom, ...rooms];
+      }
+    }
 
     if (formik.values.checkInDate && formik.values.checkOutDate) {
       const excludeBookingId = isEditing ? editingKey : null;

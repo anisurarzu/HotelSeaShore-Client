@@ -7,7 +7,6 @@ import {
   Table,
   message,
   Popconfirm,
-  Spin,
   Form,
   Input,
   InputNumber,
@@ -24,11 +23,13 @@ import {
   Tabs,
   Upload,
   Image,
+  Skeleton,
 } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
   PlusOutlined,
+  MinusCircleOutlined,
   SaveOutlined,
   CloseOutlined,
   HomeOutlined,
@@ -72,6 +73,7 @@ const HotelInformation = () => {
   const [hotelImages, setHotelImages] = useState([]);
   const [categoryImages, setCategoryImages] = useState([]);
   const [roomImages, setRoomImages] = useState([]);
+  const [roomRows, setRoomRows] = useState([{ name: "", status: "available" }]);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [selectedHotelForDetails, setSelectedHotelForDetails] = useState(null);
 
@@ -148,13 +150,19 @@ const HotelInformation = () => {
     enableReinitialize: true,
     initialValues: {
       hotelName: hotelData?.hotelName || "",
-      hotelDescription: hotelData?.hotelDescription || "",
       address: {
-        street: hotelData?.address?.street || "",
-        city: hotelData?.address?.city || "",
-        state: hotelData?.address?.state || "",
-        zipCode: hotelData?.address?.zipCode || "",
-        country: hotelData?.address?.country || "",
+        address1:
+          hotelData?.address?.address1 ||
+          hotelData?.address?.street ||
+          "",
+        address2:
+          hotelData?.address?.address2 ||
+          hotelData?.address?.city ||
+          "",
+        address3:
+          hotelData?.address?.address3 ||
+          hotelData?.address?.state ||
+          "",
       },
       contact: {
         phone: hotelData?.contact?.phone || "",
@@ -217,7 +225,6 @@ const HotelInformation = () => {
         // Prepare JSON payload
         const payload = {
           hotelName: values.hotelName,
-          hotelDescription: values.hotelDescription,
           status: values.status,
           address: values.address,
           contact: values.contact,
@@ -450,10 +457,10 @@ const HotelInformation = () => {
         // Combine all image URLs
         const allImageUrls = [...existingImageUrls, ...uploadedImageUrls];
         
-        // Prepare JSON payload
-        const payload = {
-          name: values.name,
-          roomId: values.roomId || "",
+        // Helper to build payload for a single room
+        const buildPayload = (roomNameOrNumber) => ({
+          name: roomNameOrNumber,
+          roomId: values.roomId || roomNameOrNumber,
           status: values.status,
           price: values.price || 0,
           capacity: {
@@ -462,13 +469,14 @@ const HotelInformation = () => {
           },
           description: values.description || "",
           images: allImageUrls.length > 0 ? allImageUrls : undefined,
-        };
+        });
 
         if (!selectedHotelId || !selectedCategoryId) {
           message.error("Please select a hotel and category first");
           return;
         }
         if (isEditingRoom) {
+          const payload = buildPayload(values.name);
           const response = await coreAxios.put(
             `/hotels/${selectedHotelId}/categories/${selectedCategoryId}/rooms/${editingRoomId}`,
             payload
@@ -484,20 +492,36 @@ const HotelInformation = () => {
             setRoomImages([]);
           }
         } else {
-          const response = await coreAxios.post(
-            `/hotels/${selectedHotelId}/categories/${selectedCategoryId}/rooms`,
-            payload
-          );
-          if (response.status === 200 || response.status === 201) {
-            if (response.data.success) {
-              message.success("Room added successfully!");
-              await fetchHotelData(selectedHotelId);
-              setRoomModalVisible(false);
-              setSelectedCategoryId(null);
-              roomFormik.resetForm();
-              setRoomImages([]);
+          // Support adding multiple rooms at once from comma/newline separated input
+          const raw = values.name || "";
+          const tokens = raw
+            .split(/[\n,]/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+          if (tokens.length === 0) {
+            message.error("Please enter at least one room number");
+            setSubmitting(false);
+            return;
+          }
+
+          for (const roomToken of tokens) {
+            const payload = buildPayload(roomToken);
+            const response = await coreAxios.post(
+              `/hotels/${selectedHotelId}/categories/${selectedCategoryId}/rooms`,
+              payload
+            );
+            if (!(response.status === 200 || response.status === 201) || !response.data.success) {
+              throw new Error("Failed to add room");
             }
           }
+
+          message.success("Room(s) added successfully!");
+          await fetchHotelData(selectedHotelId);
+          setRoomModalVisible(false);
+          setSelectedCategoryId(null);
+          roomFormik.resetForm();
+          setRoomImages([]);
         }
       } catch (error) {
         console.error("Error saving room:", error);
@@ -513,13 +537,10 @@ const HotelInformation = () => {
     hotelFormik.resetForm();
     hotelFormik.setValues({
       hotelName: "",
-      hotelDescription: "",
       address: {
-        street: "",
-        city: "",
-        state: "",
-        zipCode: "",
-        country: "",
+        address1: "",
+        address2: "",
+        address3: "",
       },
       contact: {
         phone: "",
@@ -638,9 +659,58 @@ const HotelInformation = () => {
     setSelectedCategoryId(categoryId);
     roomFormik.resetForm();
     setRoomImages([]);
+    setRoomRows([{ name: "", status: "available" }]);
     setIsEditingRoom(false);
     setEditingRoomId(null);
     setRoomModalVisible(true);
+  };
+
+  const handleAddMultipleRoomsSubmit = async () => {
+    if (!selectedHotelId || !selectedCategoryId) {
+      message.error("Please select a hotel and category first");
+      return;
+    }
+    const category = categories.find((c) => c._id === selectedCategoryId);
+    const price = category?.basePrice ?? 0;
+    const capacity = {
+      adults: category?.maxOccupancy?.adults ?? 2,
+      children: category?.maxOccupancy?.children ?? 0,
+    };
+    const toAdd = roomRows.map((r) => ({ ...r, name: (r.name || "").trim() })).filter((r) => r.name);
+    if (toAdd.length === 0) {
+      message.error("Please enter at least one room name");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      for (const row of toAdd) {
+        const payload = {
+          name: row.name,
+          roomId: row.name,
+          status: row.status || "available",
+          price,
+          capacity,
+          description: "",
+        };
+        const response = await coreAxios.post(
+          `/hotels/${selectedHotelId}/categories/${selectedCategoryId}/rooms`,
+          payload
+        );
+        if (!(response.status === 200 || response.status === 201) || !response.data?.success) {
+          throw new Error(response?.data?.message || "Failed to add room");
+        }
+      }
+      message.success(toAdd.length === 1 ? "Room added successfully!" : `${toAdd.length} rooms added successfully!`);
+      await fetchHotelData(selectedHotelId);
+      setRoomModalVisible(false);
+      setSelectedCategoryId(null);
+      setRoomRows([{ name: "", status: "available" }]);
+    } catch (error) {
+      console.error("Error adding rooms:", error);
+      message.error(error.response?.data?.message || error.message || "Failed to save room(s)");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEditRoom = (categoryId, room) => {
@@ -682,13 +752,17 @@ const HotelInformation = () => {
       const response = await coreAxios.delete(
         `/hotels/${selectedHotelId}/categories/${categoryId}/rooms/${roomId}`
       );
-      if (response.status === 200 && response.data.success) {
+      const ok = response.status === 200 && (response.data?.success === true || response.data?.success === undefined);
+      if (ok) {
         message.success("Room deleted successfully!");
         await fetchHotelData(selectedHotelId);
+      } else {
+        message.error(response.data?.message || "Failed to delete room");
       }
     } catch (error) {
       console.error("Error deleting room:", error);
-      message.error(error.response?.data?.message || "Failed to delete room");
+      const msg = error.response?.data?.message || error.response?.data?.error || error.message || "Failed to delete room";
+      message.error(msg);
     } finally {
       setLoading(false);
     }
@@ -700,8 +774,6 @@ const HotelInformation = () => {
       inactive: { color: "red", text: "Inactive" },
       maintenance: { color: "orange", text: "Maintenance" },
       available: { color: "green", text: "Available" },
-      occupied: { color: "red", text: "Occupied" },
-      reserved: { color: "blue", text: "Reserved" },
     };
     const config = statusConfig[status] || { color: "default", text: status };
     return <Tag color={config.color}>{config.text}</Tag>;
@@ -714,13 +786,6 @@ const HotelInformation = () => {
       dataIndex: "name",
       key: "name",
       width: 120,
-    },
-    {
-      title: "Room ID",
-      dataIndex: "roomId",
-      key: "roomId",
-      width: 100,
-      responsive: ["sm"],
     },
     {
       title: "Status",
@@ -760,7 +825,7 @@ const HotelInformation = () => {
             className="p-0 text-xs"
           >
             <span className="hidden sm:inline">Edit</span>
-            <span className="sm:hidden">E</span>
+           
           </Button>
           <Popconfirm
             title="Are you sure you want to delete this room?"
@@ -770,7 +835,7 @@ const HotelInformation = () => {
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />} className="p-0 text-xs">
               <span className="hidden sm:inline">Delete</span>
-              <span className="sm:hidden">Del</span>
+          
             </Button>
           </Popconfirm>
         </Space>
@@ -780,8 +845,18 @@ const HotelInformation = () => {
 
   if (loading && !hotelData) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <Spin size="large" />
+      <div className="p-4 sm:p-6">
+        <div className="mb-6">
+          <Skeleton.Input active size="large" className="mb-2" style={{ width: 280, height: 32 }} />
+          <Skeleton.Input active style={{ width: 360, height: 22 }} />
+        </div>
+        <Card className="mb-6">
+          <Skeleton active paragraph={{ rows: 2 }} className="mb-4" />
+          <Skeleton active paragraph={{ rows: 6 }} />
+        </Card>
+        <Card>
+          <Skeleton active paragraph={{ rows: 8 }} />
+        </Card>
       </div>
     );
   }
@@ -890,8 +965,9 @@ const HotelInformation = () => {
         className="mb-6 shadow-sm"
         title={
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-            <span className="text-base sm:text-lg">Hotels List</span>
-            <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+            {/* <span className="text-base sm:text-lg">Hotels List</span> */}
+            <div className="w-full sm:w-auto flex justify-end">
+              {/*
               <Input.Search
                 placeholder="Search hotels..."
                 allowClear
@@ -904,30 +980,33 @@ const HotelInformation = () => {
                 className="w-full sm:w-auto"
                 style={{ minWidth: "200px" }}
               />
-              <div className="w-full sm:w-auto grid grid-cols-2 sm:flex gap-2">
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={handleCreateHotel}
-                  className="w-full sm:w-auto"
-                >
-                  <span className="hidden sm:inline">Create Hotel</span>
-               
-                </Button>
+              */}
+              <div className="flex flex-row gap-2">
                 <Button
                   type="default"
                   onClick={() => fetchHotels(pagination.current, pagination.pageSize, searchText)}
                   loading={loading}
-                  className="w-full sm:w-auto"
+                  className="hidden sm:inline-flex items-center"
                 >
                   Refresh
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={handleCreateHotel}
+                  className="inline-flex items-center"
+                >
+                  <span className="hidden sm:inline">Create Hotel</span>
+                  <span className="sm:hidden">New</span>
                 </Button>
               </div>
             </div>
           </div>
         }
       >
-        <Spin spinning={loading}>
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 6 }} title={{ width: "100%" }} />
+        ) : (
           <Table
             columns={hotelColumns}
             dataSource={hotels}
@@ -954,7 +1033,7 @@ const HotelInformation = () => {
               style: { cursor: "pointer" },
             })}
           />
-        </Spin>
+        )}
       </Card>
 
       {!selectedHotelId && (
@@ -989,7 +1068,9 @@ const HotelInformation = () => {
               </Button>
             }
           >
-            {hotelData && (
+            {loading && !hotelData ? (
+              <Skeleton active paragraph={{ rows: 6 }} title={false} />
+            ) : hotelData ? (
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={12}>
                   <Text strong>Hotel Name:</Text>
@@ -1009,11 +1090,15 @@ const HotelInformation = () => {
                     <Text strong>Address</Text>
                   </div>
                   <div className="ml-6">
-                    {hotelData.address?.street && <div>{hotelData.address.street}</div>}
-                    {hotelData.address?.city && <div>{hotelData.address.city}</div>}
-                    {hotelData.address?.state && <div>{hotelData.address.state}</div>}
-                    {hotelData.address?.zipCode && <div>{hotelData.address.zipCode}</div>}
-                    {hotelData.address?.country && <div>{hotelData.address.country}</div>}
+                    {(hotelData.address?.address1 || hotelData.address?.street) && (
+                      <div>{hotelData.address.address1 || hotelData.address.street}</div>
+                    )}
+                    {(hotelData.address?.address2 || hotelData.address?.city) && (
+                      <div>{hotelData.address.address2 || hotelData.address.city}</div>
+                    )}
+                    {(hotelData.address?.address3 || hotelData.address?.state) && (
+                      <div>{hotelData.address.address3 || hotelData.address.state}</div>
+                    )}
                   </div>
                 </Col>
                 <Col xs={24} md={12}>
@@ -1051,7 +1136,7 @@ const HotelInformation = () => {
                   <div className="mb-3">{hotelData.availableRooms || 0}</div>
                 </Col>
               </Row>
-            )}
+            ) : null}
           </Card>
 
           {/* Categories and Rooms Section */}
@@ -1080,100 +1165,105 @@ const HotelInformation = () => {
           </div>
         }
       >
-        <Spin spinning={loading}>
-          {categories.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No categories found. Add a category to get started.
-            </div>
-          ) : (
-            <Collapse
-              activeKey={expandedCategories}
-              onChange={setExpandedCategories}
-              className="mb-4"
-            >
-              {categories.map((category) => (
-                <Panel
-                  key={category._id}
-                  header={
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full pr-2 sm:pr-4 gap-2 sm:gap-0">
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        <Text strong className="text-sm sm:text-base">{category.name}</Text>
-                        {!category.isActive && <Tag color="red" className="text-xs">Inactive</Tag>}
-                        <Text type="secondary" className="text-xs sm:text-sm">
-                          ({category.roomNumbers?.length || 0} rooms)
-                        </Text>
-                      </div>
-                      <Space onClick={(e) => e.stopPropagation()} className="flex-wrap">
-                        <Button
-                          type="link"
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={() => handleEditCategory(category)}
-                          className="text-xs sm:text-sm"
-                        >
-                          <span className="hidden sm:inline">Edit</span>
+        {loading ? (
+          <>
+            <Skeleton active avatar paragraph={{ rows: 2 }} className="mb-4" />
+            <Skeleton active avatar paragraph={{ rows: 2 }} className="mb-4" />
+            <Skeleton active avatar paragraph={{ rows: 2 }} className="mb-4" />
+            <Skeleton active paragraph={{ rows: 4 }} />
+          </>
+        ) : categories.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No categories found. Add a category to get started.
+          </div>
+        ) : (
+          <Collapse
+            activeKey={expandedCategories}
+            onChange={setExpandedCategories}
+            className="mb-4"
+          >
+            {categories.map((category) => (
+              <Panel
+                key={category._id}
+                header={
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full pr-2 sm:pr-4 gap-2 sm:gap-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <Text strong className="text-sm sm:text-base">{category.name}</Text>
+                      {!category.isActive && <Tag color="red" className="text-xs">Inactive</Tag>}
+                      <Text type="secondary" className="text-xs sm:text-sm">
+                        ({category.roomNumbers?.length || 0} rooms)
+                      </Text>
+                    </div>
+                    <Space onClick={(e) => e.stopPropagation()} className="flex-wrap">
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => handleEditCategory(category)}
+                        className="text-xs sm:text-sm"
+                      >
+                        <span className="hidden sm:inline">Edit</span>
                   
-                        </Button>
-                        <Popconfirm
-                          title="Are you sure you want to delete this category?"
-                          onConfirm={() => handleDeleteCategory(category._id)}
-                          okText="Yes"
-                          cancelText="No"
-                        >
-                          <Button type="link" size="small" danger icon={<DeleteOutlined />} className="text-xs sm:text-sm">
-                            <span className="hidden sm:inline">Delete</span>
-                         
-                          </Button>
-                        </Popconfirm>
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<PlusOutlined />}
-                          onClick={() => handleAddRoom(category._id)}
-                          className="text-xs sm:text-sm"
-                        >
-                          <span className="hidden sm:inline">Add Room</span>
+                      </Button>
+                      <Popconfirm
+                        title="Are you sure you want to delete this category?"
+                        onConfirm={() => handleDeleteCategory(category._id)}
+                        okText="Yes"
+                        cancelText="No"
+                      >
+                        <Button type="link" size="small" danger icon={<DeleteOutlined />} className="text-xs sm:text-sm">
+                          <span className="hidden sm:inline">Delete</span>
                          
                         </Button>
-                      </Space>
-                    </div>
-                  }
-                >
-                  {category.description && (
-                    <div className="mb-3">
-                      <Text type="secondary">{category.description}</Text>
-                    </div>
-                  )}
-                  <div className="mb-3">
-                    <Text strong>Base Price: </Text>
-                    <Text>৳{category.basePrice || 0}</Text>
-                    <Text className="ml-4" strong>
-                      Max Occupancy:{" "}
-                    </Text>
-                    <Text>
-                      {category.maxOccupancy?.adults || 0} Adults,{" "}
-                      {category.maxOccupancy?.children || 0} Children
-                    </Text>
+                      </Popconfirm>
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => handleAddRoom(category._id)}
+                        className="text-xs sm:text-sm"
+                      >
+                        <span className="hidden sm:inline">Add Room</span>
+                         
+                      </Button>
+                    </Space>
                   </div>
-                  {category.roomNumbers && category.roomNumbers.length > 0 ? (
-                    <Table
-                      columns={roomColumns(category._id)}
-                      dataSource={category.roomNumbers}
-                      rowKey="_id"
-                      pagination={false}
-                      size="small"
-                      scroll={{ x: "max-content" }}
-                    />
-                  ) : (
-                    <div className="text-center py-4 text-gray-500">
-                      No rooms in this category. Click "Add Room" to add one.
-                    </div>
-                  )}
-                </Panel>
-              ))}
-            </Collapse>
-          )}
-        </Spin>
+                }
+              >
+                {category.description && (
+                  <div className="mb-3">
+                    <Text type="secondary">{category.description}</Text>
+                  </div>
+                )}
+                <div className="mb-3">
+                  <Text strong>Base Price: </Text>
+                  <Text>৳{category.basePrice || 0}</Text>
+                  <Text className="ml-4" strong>
+                    Max Occupancy:{" "}
+                  </Text>
+                  <Text>
+                    {category.maxOccupancy?.adults || 0} Adults,{" "}
+                    {category.maxOccupancy?.children || 0} Children
+                  </Text>
+                </div>
+                {category.roomNumbers && category.roomNumbers.length > 0 ? (
+                  <Table
+                    columns={roomColumns(category._id)}
+                    dataSource={category.roomNumbers}
+                    rowKey="_id"
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: "max-content" }}
+                  />
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    No rooms in this category. Click "Add Room" to add one.
+                  </div>
+                )}
+              </Panel>
+            ))}
+          </Collapse>
+        )}
       </Card>
         </>
       )}
@@ -1201,74 +1291,41 @@ const HotelInformation = () => {
               placeholder="Enter hotel name"
             />
           </Form.Item>
-          <Form.Item label="Description" required>
-            <TextArea
-              name="hotelDescription"
-              value={hotelFormik.values.hotelDescription}
-              onChange={hotelFormik.handleChange}
-              rows={4}
-              placeholder="Enter hotel description"
-            />
-          </Form.Item>
           <Divider orientation="left">Address</Divider>
           <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Street">
+            <Col xs={24} sm={24}>
+              <Form.Item label="Address 1">
                 <Input
-                  name="address.street"
-                  value={hotelFormik.values.address.street}
+                  name="address.address1"
+                  value={hotelFormik.values.address.address1}
                   onChange={(e) =>
-                    hotelFormik.setFieldValue("address.street", e.target.value)
+                    hotelFormik.setFieldValue("address.address1", e.target.value)
                   }
-                  placeholder="Street address"
+                  placeholder="Address line 1"
                 />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="City">
+            <Col xs={24} sm={24}>
+              <Form.Item label="Address 2">
                 <Input
-                  name="address.city"
-                  value={hotelFormik.values.address.city}
+                  name="address.address2"
+                  value={hotelFormik.values.address.address2}
                   onChange={(e) =>
-                    hotelFormik.setFieldValue("address.city", e.target.value)
+                    hotelFormik.setFieldValue("address.address2", e.target.value)
                   }
-                  placeholder="City"
+                  placeholder="Address line 2"
                 />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="State">
+            <Col xs={24} sm={24}>
+              <Form.Item label="Address 3">
                 <Input
-                  name="address.state"
-                  value={hotelFormik.values.address.state}
+                  name="address.address3"
+                  value={hotelFormik.values.address.address3}
                   onChange={(e) =>
-                    hotelFormik.setFieldValue("address.state", e.target.value)
+                    hotelFormik.setFieldValue("address.address3", e.target.value)
                   }
-                  placeholder="State"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Zip Code">
-                <Input
-                  name="address.zipCode"
-                  value={hotelFormik.values.address.zipCode}
-                  onChange={(e) =>
-                    hotelFormik.setFieldValue("address.zipCode", e.target.value)
-                  }
-                  placeholder="Zip code"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24}>
-              <Form.Item label="Country">
-                <Input
-                  name="address.country"
-                  value={hotelFormik.values.address.country}
-                  onChange={(e) =>
-                    hotelFormik.setFieldValue("address.country", e.target.value)
-                  }
-                  placeholder="Country"
+                  placeholder="Address line 3"
                 />
               </Form.Item>
             </Col>
@@ -1276,30 +1333,31 @@ const HotelInformation = () => {
           <Divider orientation="left">Contact Information</Divider>
           <Row gutter={16}>
             <Col xs={24} sm={12}>
-              <Form.Item label="Phone">
+              <Form.Item label="Front Desk Number">
                 <Input
                   name="contact.phone"
                   value={hotelFormik.values.contact.phone}
                   onChange={(e) =>
                     hotelFormik.setFieldValue("contact.phone", e.target.value)
                   }
-                  placeholder="Phone number"
+                  placeholder="Front desk phone number"
                 />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
-              <Form.Item label="Email">
+              <Form.Item label="Reservation Number">
                 <Input
                   name="contact.email"
-                  type="email"
+                  type="number"
                   value={hotelFormik.values.contact.email}
                   onChange={(e) =>
                     hotelFormik.setFieldValue("contact.email", e.target.value)
                   }
-                  placeholder="Email address"
+                  placeholder="Reservation number"
                 />
               </Form.Item>
             </Col>
+            {/* Website field temporarily disabled
             <Col xs={24}>
               <Form.Item label="Website">
                 <Input
@@ -1312,25 +1370,26 @@ const HotelInformation = () => {
                 />
               </Form.Item>
             </Col>
+            */}
           </Row>
-          <Divider orientation="left">Images</Divider>
-          <Form.Item label="Hotel Images (Max 3)">
+          <Divider orientation="left">Logo</Divider>
+          <Form.Item label="Hotel Logo">
             <Upload
               listType="picture-card"
               fileList={hotelImages}
               onChange={({ fileList }) => setHotelImages(fileList)}
               beforeUpload={() => false}
-              maxCount={3}
+              maxCount={1}
               onRemove={(file) => {
                 const newList = hotelImages.filter((item) => item.uid !== file.uid);
                 setHotelImages(newList);
                 return true;
               }}
             >
-              {hotelImages.length < 3 && (
+              {hotelImages.length < 1 && (
                 <div>
                   <UploadOutlined />
-                  <div style={{ marginTop: 8 }}>Upload</div>
+                  <div style={{ marginTop: 8 }}>Upload Logo</div>
                 </div>
               )}
             </Upload>
@@ -1460,20 +1519,26 @@ const HotelInformation = () => {
               {selectedHotelForDetails.address && (
                 <Panel header="Address" key="address">
                   <div className="ml-4">
-                    {selectedHotelForDetails.address.street && (
-                      <div className="mb-2">{selectedHotelForDetails.address.street}</div>
+                    {(selectedHotelForDetails.address.address1 ||
+                      selectedHotelForDetails.address.street) && (
+                      <div className="mb-2">
+                        {selectedHotelForDetails.address.address1 ||
+                          selectedHotelForDetails.address.street}
+                      </div>
                     )}
-                    {selectedHotelForDetails.address.city && (
-                      <div className="mb-2">{selectedHotelForDetails.address.city}</div>
+                    {(selectedHotelForDetails.address.address2 ||
+                      selectedHotelForDetails.address.city) && (
+                      <div className="mb-2">
+                        {selectedHotelForDetails.address.address2 ||
+                          selectedHotelForDetails.address.city}
+                      </div>
                     )}
-                    {selectedHotelForDetails.address.state && (
-                      <div className="mb-2">{selectedHotelForDetails.address.state}</div>
-                    )}
-                    {selectedHotelForDetails.address.zipCode && (
-                      <div className="mb-2">{selectedHotelForDetails.address.zipCode}</div>
-                    )}
-                    {selectedHotelForDetails.address.country && (
-                      <div>{selectedHotelForDetails.address.country}</div>
+                    {(selectedHotelForDetails.address.address3 ||
+                      selectedHotelForDetails.address.state) && (
+                      <div className="mb-2">
+                        {selectedHotelForDetails.address.address3 ||
+                          selectedHotelForDetails.address.state}
+                      </div>
                     )}
                   </div>
                 </Panel>
@@ -1531,15 +1596,10 @@ const HotelInformation = () => {
               placeholder="Enter category name"
             />
           </Form.Item>
-          <Form.Item label="Description">
-            <TextArea
-              name="description"
-              value={categoryFormik.values.description}
-              onChange={categoryFormik.handleChange}
-              rows={3}
-              placeholder="Enter category description"
-            />
-          </Form.Item>
+          {/* Description and Images commented out
+          <Form.Item label="Description">...</Form.Item>
+          <Form.Item label="Category Images (Max 3)">...</Form.Item>
+          */}
           <Row gutter={16}>
             <Col xs={24} sm={12}>
               <Form.Item label="Base Price">
@@ -1579,6 +1639,8 @@ const HotelInformation = () => {
                 />
               </Form.Item>
             </Col>
+          </Row>
+          <Row gutter={16}>
             <Col xs={24} sm={12}>
               <Form.Item label="Active Status">
                 <Switch
@@ -1588,28 +1650,6 @@ const HotelInformation = () => {
               </Form.Item>
             </Col>
           </Row>
-          <Divider orientation="left">Images</Divider>
-          <Form.Item label="Category Images (Max 3)">
-            <Upload
-              listType="picture-card"
-              fileList={categoryImages}
-              onChange={({ fileList }) => setCategoryImages(fileList)}
-              beforeUpload={() => false}
-              maxCount={3}
-              onRemove={(file) => {
-                const newList = categoryImages.filter((item) => item.uid !== file.uid);
-                setCategoryImages(newList);
-                return true;
-              }}
-            >
-              {categoryImages.length < 3 && (
-                <div>
-                  <UploadOutlined />
-                  <div style={{ marginTop: 8 }}>Upload</div>
-                </div>
-              )}
-            </Upload>
-          </Form.Item>
           <Form.Item>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button type="primary" htmlType="submit" loading={submitting} className="w-full sm:w-auto">
@@ -1642,20 +1682,105 @@ const HotelInformation = () => {
           setEditingRoomId(null);
           setSelectedCategoryId(null);
           roomFormik.resetForm();
+          setRoomRows([{ name: "", status: "available" }]);
         }}
         footer={null}
         width="95%"
         style={{ maxWidth: "600px" }}
       >
-        <Form layout="vertical" onFinish={roomFormik.handleSubmit}>
-          <Form.Item label="Room Name" required>
-            <Input
-              name="name"
-              value={roomFormik.values.name}
-              onChange={roomFormik.handleChange}
-              placeholder="Enter room name"
-            />
-          </Form.Item>
+        <Form
+          layout="vertical"
+          onFinish={(e) => {
+            e?.preventDefault?.();
+            if (isEditingRoom) {
+              roomFormik.handleSubmit();
+            } else {
+              handleAddMultipleRoomsSubmit();
+            }
+          }}
+        >
+          {isEditingRoom ? (
+            <>
+              <Form.Item label="Room Name" required>
+                <Input
+                  name="name"
+                  value={roomFormik.values.name}
+                  onChange={roomFormik.handleChange}
+                  placeholder="Room name / number"
+                />
+              </Form.Item>
+              <Form.Item label="Status">
+                <Select
+                  value={roomFormik.values.status}
+                  onChange={(value) => roomFormik.setFieldValue("status", value)}
+                  style={{ width: "100%" }}
+                >
+                  <Option value="available">Available</Option>
+                  <Option value="maintenance">Maintenance</Option>
+                </Select>
+              </Form.Item>
+            </>
+          ) : (
+            <>
+              {roomRows.map((row, index) => (
+                <div key={index} className="flex flex-wrap items-start gap-2 mb-3 p-3 border border-gray-200 rounded">
+                  <div className="flex-1 min-w-[120px]">
+                    <Form.Item label={index === 0 ? "Room Name" : null} required>
+                      <Input
+                        value={row.name}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setRoomRows((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, name: v } : r))
+                          );
+                        }}
+                        placeholder="Room name / number"
+                      />
+                    </Form.Item>
+                  </div>
+                  <div className="flex-1 min-w-[120px]">
+                    <Form.Item label={index === 0 ? "Status" : null}>
+                      <Select
+                        value={row.status}
+                        onChange={(value) => {
+                          setRoomRows((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, status: value } : r))
+                          );
+                        }}
+                        style={{ width: "100%" }}
+                      >
+                        <Option value="available">Available</Option>
+                        <Option value="maintenance">Maintenance</Option>
+                      </Select>
+                    </Form.Item>
+                  </div>
+                  {roomRows.length > 1 && (
+                    <Button
+                      type="text"
+                      danger
+                      icon={<MinusCircleOutlined />}
+                      onClick={() =>
+                        setRoomRows((prev) => prev.filter((_, i) => i !== index))
+                      }
+                      className="mt-6"
+                    />
+                  )}
+                </div>
+              ))}
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() =>
+                  setRoomRows((prev) => [...prev, { name: "", status: "available" }])
+                }
+                block
+                className="mb-4"
+              >
+                Add another room
+              </Button>
+            </>
+          )}
+          {/*
           <Row gutter={16}>
             <Col xs={24} sm={12}>
               <Form.Item label="Room ID">
@@ -1665,20 +1790,6 @@ const HotelInformation = () => {
                   onChange={roomFormik.handleChange}
                   placeholder="Enter room ID"
                 />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Status">
-                <Select
-                  value={roomFormik.values.status}
-                  onChange={(value) => roomFormik.setFieldValue("status", value)}
-                  style={{ width: "100%" }}
-                >
-                  <Option value="available">Available</Option>
-                  <Option value="occupied">Occupied</Option>
-                  <Option value="maintenance">Maintenance</Option>
-                  <Option value="reserved">Reserved</Option>
-                </Select>
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
@@ -1729,32 +1840,11 @@ const HotelInformation = () => {
               placeholder="Enter room description"
             />
           </Form.Item>
-          <Divider orientation="left">Images</Divider>
-          <Form.Item label="Room Images (Max 3)">
-            <Upload
-              listType="picture-card"
-              fileList={roomImages}
-              onChange={({ fileList }) => setRoomImages(fileList)}
-              beforeUpload={() => false}
-              maxCount={3}
-              onRemove={(file) => {
-                const newList = roomImages.filter((item) => item.uid !== file.uid);
-                setRoomImages(newList);
-                return true;
-              }}
-            >
-              {roomImages.length < 3 && (
-                <div>
-                  <UploadOutlined />
-                  <div style={{ marginTop: 8 }}>Upload</div>
-                </div>
-              )}
-            </Upload>
-          </Form.Item>
+          */}
           <Form.Item>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button type="primary" htmlType="submit" loading={submitting} className="w-full sm:w-auto">
-                {isEditingRoom ? "Update" : "Create"}
+                {isEditingRoom ? "Update" : "Add Room(s)"}
               </Button>
               <Button
                 onClick={() => {
@@ -1764,6 +1854,7 @@ const HotelInformation = () => {
                   setSelectedCategoryId(null);
                   roomFormik.resetForm();
                   setRoomImages([]);
+                  setRoomRows([{ name: "", status: "available" }]);
                 }}
                 className="w-full sm:w-auto"
               >

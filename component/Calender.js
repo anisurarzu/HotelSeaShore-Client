@@ -53,7 +53,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
   const [hotelData, setHotelData] = useState([]);
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [selectedHotelId, setSelectedHotelId] = useState(null);
-  const [loading, setLoading] = useState(true); // Start with loading true
+  const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(dayjs().startOf("month"));
   const [roomList, setRoomList] = useState([]);
   const [bookingData, setBookingData] = useState({});
@@ -152,7 +152,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
   // Get booking color - green for all bookings
   const getBookingColor = (value) => {
     if (!value) return "#ffffff";
-    return "linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)"; // Fancy green gradient for bookings
+    return "linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)";
   };
 
   // Open booking modal for Add or Edit
@@ -326,30 +326,151 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     setHistoryModalVisible(true);
   };
 
+  // Build category rowSpan info: for each row index, { categoryName, rowSpan } (rowSpan 0 = merged into above)
+  const getCategoryRowSpans = () => {
+    const result = [];
+    let i = 0;
+    while (i < roomList.length) {
+      const cat = roomList[i].category || "N/A";
+      let count = 0;
+      while (i + count < roomList.length && (roomList[i + count].category || "N/A") === cat) count++;
+      result.push({ categoryName: cat, rowSpan: count });
+      for (let j = 1; j < count; j++) result.push({ categoryName: cat, rowSpan: 0 });
+      i += count;
+    }
+    return result;
+  };
+
   // Main columns configuration
   const getColumns = () => {
     const dates = generateDateColumns();
-    
+    const categoryRowSpans = getCategoryRowSpans();
+
+    const categoryColumnBg = '#15803d'; // green-700
+    const categoryColumn = {
+      title: '',
+      key: '_category',
+      width: 28,
+      fixed: 'left',
+      className: 'category-merge-column',
+      onHeaderCell: () => ({
+        style: { 
+          background: categoryColumnBg, 
+          borderColor: 'rgba(255,255,255,0.2)', 
+          padding: 0, 
+          lineHeight: 0,
+          position: 'sticky',
+          left: 0,
+          zIndex: 20
+        },
+      }),
+      onCell: (_, rowIndex) => {
+        const info = categoryRowSpans[rowIndex];
+        return {
+          rowSpan: info?.rowSpan ?? 0,
+          style: {
+            background: categoryColumnBg,
+            borderColor: 'rgba(255,255,255,0.2)',
+            padding: 0,
+            verticalAlign: 'middle',
+            lineHeight: 1,
+            position: 'sticky',
+            left: 0,
+            zIndex: 15,
+            backgroundColor: categoryColumnBg
+          },
+        };
+      },
+      render: (_, __, rowIndex) => {
+        const info = categoryRowSpans[rowIndex];
+        if (!info || info.rowSpan === 0) return null;
+        return (
+          <div
+            className="flex items-center justify-center h-full"
+            style={{ height: '100%', padding: '0 4px' }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#ffffff',
+                transform: 'rotate(-90deg)',
+                transformOrigin: 'center center',
+                whiteSpace: 'nowrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {info.categoryName}
+            </div>
+          </div>
+        );
+      },
+    };
+
+    const roomNoColumnBg = '#2563eb'; // blue-600
+
+    const roomNoColumn = {
+      title: (
+        <div className="text-center text-white font-bold">
+          <div className="font-bold text-xs sm:text-sm">Room</div>
+          <div className="text-xs text-white/90">No.</div>
+        </div>
+      ),
+      dataIndex: 'flatNo',
+      key: 'flatNo',
+      fixed: 'left',
+      width: 52,
+      onHeaderCell: () => ({
+        style: { 
+          background: roomNoColumnBg, 
+          color: 'white', 
+          borderColor: 'rgba(255,255,255,0.2)',
+          position: 'sticky',
+          left: 28,
+          zIndex: 19
+        },
+      }),
+      onCell: () => ({ 
+        style: { 
+          background: roomNoColumnBg,
+          position: 'sticky',
+          left: 28,
+          zIndex: 14,
+          backgroundColor: roomNoColumnBg
+        } 
+      }),
+      render: (text, record) => (
+        <div
+          className="h-full min-h-[60px] flex flex-col justify-center py-1 text-center"
+          style={{ background: roomNoColumnBg, color: 'white' }}
+        >
+          <div className="font-bold text-xs sm:text-sm text-white">{text}</div>
+          <div className="text-xs text-white/90">
+            {calculateTotalBooked(record.key)}/{generateDateColumns().length}
+          </div>
+        </div>
+      ),
+    };
+
     const dateColumns = dates.map((date) => {
       const dateStr = date.format("YYYY-MM-DD");
       const dayOfWeek = date.format("ddd");
       const dayNum = date.format("D");
       const isToday = date.isSame(dayjs(), 'day');
-      // Friday and Saturday are government holidays in Bangladesh
       const isHoliday = dayOfWeek === 'Fri' || dayOfWeek === 'Sat';
       
       return {
         title: (
           <div className="text-center p-0 m-0 text-white" style={{ minWidth: '80px' }}>
             <div 
-              className={`font-bold ${isToday ? 'text-amber-200' : ''} ${isHoliday ? 'text-amber-200' : ''}`}
+              className={isToday ? 'font-bold text-amber-200' : 'font-bold'}
               style={{ fontSize: '9px', lineHeight: '1.2' }}
             >
               {dayOfWeek.toUpperCase()}
               {isHoliday && <span className="text-xs ml-1">🏛️</span>}
             </div>
             <div 
-              className={`font-extrabold ${isToday ? 'text-amber-200' : ''} ${isHoliday ? 'text-amber-200' : ''}`}
+              className={isToday ? 'font-extrabold text-amber-200' : 'font-extrabold'}
               style={{ fontSize: '12px', lineHeight: '1.2' }}
             >
               {dayNum}
@@ -357,20 +478,29 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           </div>
         ),
         key: dateStr,
-        width: 80, // Wider width to show customer name
+        width: 80,
         align: 'center',
+        onHeaderCell: () => ({
+          style: {
+            background: isHoliday ? '#dc2626' : '#2563eb',
+            color: 'white',
+            borderColor: 'rgba(255,255,255,0.2)',
+          },
+        }),
         render: (_, record) => {
           const bookingKey = `${record.key}-${dateStr}`;
           const bookingInfo = bookingData[bookingKey];
+          const roomStatus = record.roomStatus || "available";
+          const isRoomAvailable = roomStatus === "available";
           
-          // Extract customer name from bookingInfo (format: "bookingNo - fullName")
+          // Extract customer name from bookingInfo
           let customerName = "";
           let bookingNo = "";
           if (bookingInfo) {
             const parts = bookingInfo.split(" - ");
             if (parts.length >= 2) {
               bookingNo = parts[0];
-              customerName = parts.slice(1).join(" - "); // In case name contains " - "
+              customerName = parts.slice(1).join(" - ");
             } else {
               customerName = bookingInfo;
             }
@@ -380,41 +510,43 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           const isGradient = cellColor.includes('gradient');
           
           return (
-              <div
-                className={`flex items-center justify-center p-1 relative calendar-cell ${bookingInfo ? 'booked-cell' : ''} ${isHoliday ? 'holiday-cell' : ''}`}
-                style={{
-                  minHeight: '60px',
-                  ...(isGradient 
-                    ? { backgroundImage: cellColor, backgroundColor: '#10b981' }
-                    : { backgroundColor: cellColor }
-                  ),
-                  cursor: 'pointer',
-                  border: isHoliday ? '2px solid #f97316' : '1px solid #e8e8e8',
-                  fontSize: '9px',
-                  padding: '4px',
-                  borderRadius: '6px',
-                  boxShadow: isHoliday ? '0 2px 4px rgba(249, 115, 22, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.08)',
-                  transition: bookingInfo ? 'transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out, z-index 0.3s ease-in-out' : 'none',
-                  zIndex: 1,
-                  ...(isHoliday && !bookingInfo ? { backgroundColor: '#fff7ed' } : {}), // Light orange tint for holiday cells
-                }}
-                onClick={() => handleCellClick(record.key, dateStr)}
-              >
-                {bookingInfo ? (
-                  <div className="w-full h-full flex flex-col justify-between">
-                    <div className="flex-grow overflow-hidden text-center">
-                      {customerName && (
-                        <div className="font-semibold text-white mb-1" style={{ fontSize: '9px', lineHeight: '1.3', wordBreak: 'break-word' }}>
-                          {customerName}
-                        </div>
-                      )}
-                      {bookingNo && (
-                        <div className="text-white font-medium" style={{ fontSize: '8px', lineHeight: '1.2' }}>
-                          {bookingNo}
-                        </div>
-                      )}
-                    </div>
-                    {canEdit && (
+            <div
+              className={`flex items-center justify-center p-1 relative calendar-cell ${bookingInfo ? 'booked-cell' : ''}`}
+              style={{
+                height: '100%',
+                minHeight: '52px',
+                maxHeight: '60px',
+                boxSizing: 'border-box',
+                ...(isGradient 
+                  ? { backgroundImage: cellColor, backgroundColor: '#10b981' }
+                  : { backgroundColor: cellColor }
+                ),
+                cursor: 'pointer',
+                border: '1px solid #e8e8e8',
+                fontSize: '9px',
+                padding: '4px',
+                borderRadius: '6px',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
+                transition: bookingInfo ? 'transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out, z-index 0.3s ease-in-out' : 'none',
+                zIndex: 1,
+              }}
+              onClick={() => handleCellClick(record.key, dateStr)}
+            >
+              {bookingInfo ? (
+                <div className="w-full h-full flex flex-col justify-between">
+                  <div className="flex-grow overflow-hidden text-center">
+                    {customerName && (
+                      <div className="font-semibold text-white mb-1" style={{ fontSize: '9px', lineHeight: '1.3', wordBreak: 'break-word' }}>
+                        {customerName}
+                      </div>
+                    )}
+                    {bookingNo && (
+                      <div className="text-white font-medium" style={{ fontSize: '8px', lineHeight: '1.2' }}>
+                        {bookingNo}
+                      </div>
+                    )}
+                  </div>
+                  {canEdit && isRoomAvailable && (
                     <Button
                       type="link"
                       size="small"
@@ -428,77 +560,43 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                     >
                       Edit
                     </Button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center">
-                    {canInsert && (
+                  )}
+                </div>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center">
+                  <div className="text-gray-500 text-[8px] mb-0.5 capitalize">{roomStatus}</div>
+                  {canInsert && isRoomAvailable && (
                     <>
-                    <div className="text-gray-400 text-xs mb-1">+</div>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<PlusOutlined style={{ fontSize: '8px' }} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditClick(record.key, dateStr, null, e);
-                      }}
-                      className="p-0 m-0"
-                      style={{ fontSize: '8px', height: '16px' }}
-                    >
-                      Add
-                    </Button>
+                      <div className="text-gray-400 text-xs mb-1">+</div>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<PlusOutlined style={{ fontSize: '8px' }} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditClick(record.key, dateStr, null, e);
+                        }}
+                        className="p-0 m-0"
+                        style={{ fontSize: '8px', height: '16px' }}
+                      >
+                        Add
+                      </Button>
                     </>
-                    )}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
+            </div>
           );
         },
       };
     });
 
-    const roomNoColumnBg = '#2563eb'; // blue-600
-
-    return [
-      {
-        title: (
-          <div className="text-center text-white font-bold">
-            <div className="font-bold text-xs sm:text-sm">Room</div>
-            <div className="text-xs text-white/90">No.</div>
-          </div>
-        ),
-        dataIndex: 'flatNo',
-        key: 'flatNo',
-        fixed: 'left',
-        width: 70,
-        onHeaderCell: () => ({
-          style: { background: roomNoColumnBg, color: 'white', borderColor: 'rgba(255,255,255,0.2)' },
-        }),
-        onCell: () => ({ style: { background: roomNoColumnBg } }),
-        render: (text, record) => (
-          <div
-            className="text-center h-full min-h-[60px] flex flex-col justify-center py-1"
-            style={{ background: roomNoColumnBg, color: 'white' }}
-          >
-            <div className="font-bold text-xs sm:text-sm text-white">{text}</div>
-            <div className="text-xs text-white/90">
-              {calculateTotalBooked(record.key)}/{generateDateColumns().length}
-            </div>
-            <div className="text-white/90 mt-1" style={{ fontSize: '10px' }}>
-              {record.category || 'N/A'}
-            </div>
-          </div>
-        ),
-      },
-      ...dateColumns,
-    ];
+    return [categoryColumn, roomNoColumn, ...dateColumns];
   };
 
   // Fetch hotels from API
   const fetchHotels = async () => {
     try {
-      // Keep loading true - it will be set to false in loadRoomsAndBookings
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const userRole = userInfo?.role?.value;
       const userHotelID = Number(hotelID);
@@ -509,7 +607,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         const responseData = response.data;
         let hotelsData = [];
         
-        // Extract hotels array from response
         if (responseData?.hotels && Array.isArray(responseData.hotels)) {
           hotelsData = responseData.hotels;
         } else if (responseData?.success && responseData?.data?.hotels && Array.isArray(responseData.data.hotels)) {
@@ -526,7 +623,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           hotelsData = [];
         }
 
-        // Filter by userHotelID if user is hoteladmin
         if (userRole === "hoteladmin" && userHotelID) {
           hotelsData = hotelsData.filter(
             (hotel) => hotel && hotel.hotelID === userHotelID
@@ -535,10 +631,8 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
 
         setHotelData(hotelsData);
         
-        // Find Hotel Sea Shore by name or use hotelID = 1 as default
         let defaultHotel = null;
         if (hotelsData.length > 0) {
-          // Try to find "Hotel Sea Shore" by name
           defaultHotel = hotelsData.find(
             (hotel) => 
               (hotel.hotelName && hotel.hotelName.toLowerCase().includes("sea shore")) ||
@@ -546,30 +640,26 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
               hotel.hotelID === 1
           );
           
-          // If not found, use first hotel
           if (!defaultHotel) {
             defaultHotel = hotelsData[0];
           }
           
           setSelectedHotel(defaultHotel.hotelName || defaultHotel.name);
           setSelectedHotelId(defaultHotel.hotelID);
-          // Load rooms and bookings after state is set
           setTimeout(() => {
             loadRoomsAndBookings(defaultHotel.hotelID, hotelsData);
           }, 100);
         } else {
-          // No hotels found, stop loading
           setLoading(false);
         }
       } else {
-        // Response not successful, stop loading
         setLoading(false);
       }
     } catch (error) {
       console.error("Error fetching hotels:", error);
       message.error(error.response?.data?.message || "Failed to fetch hotels");
       setHotelData([]);
-      setLoading(false); // Stop loading on error
+      setLoading(false);
     }
   };
 
@@ -585,19 +675,16 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       if (response.status === 200) {
         let bookingsData = Array.isArray(response.data) ? response.data : [];
 
-        // Filter bookings if the role is "hoteladmin"
         if (userRole === "hoteladmin" && userHotelID) {
           bookingsData = bookingsData.filter(
             (booking) => booking && booking.hotelID === Number(userHotelID)
           );
         } else if (hotelId) {
-          // Filter by selected hotel
           bookingsData = bookingsData.filter(
             (booking) => booking && booking.hotelID === Number(hotelId)
           );
         }
 
-        // Filter out cancelled bookings (statusID === 255)
         bookingsData = bookingsData.filter(
           (booking) => booking.statusID !== 255
         );
@@ -616,7 +703,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
   const loadRoomsAndBookings = async (hotelId, hotelsArray = null) => {
     setLoading(true);
     try {
-      // Use provided hotelsArray or fallback to hotelData state
       const hotels = hotelsArray || hotelData;
       const hotel = hotels.find(h => h.hotelID === hotelId);
       
@@ -627,12 +713,13 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         return;
       }
 
-      // Extract all rooms from hotel's roomCategories
       const rooms = [];
       if (hotel.roomCategories && Array.isArray(hotel.roomCategories)) {
         hotel.roomCategories.forEach(category => {
+          if (category.isActive === false) return;
           if (category.roomNumbers && Array.isArray(category.roomNumbers)) {
             category.roomNumbers.forEach(room => {
+              const roomStatus = room.status || "available";
               rooms.push({
                 key: `room-${room._id}`,
                 flatNo: room.name || room.roomId || `Room ${room._id}`,
@@ -640,18 +727,17 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                 roomNumberID: room._id,
                 roomCategoryID: category._id,
                 hotelID: hotelId,
-        });
-      });
+                roomStatus,
+              });
+            });
           }
         });
       }
 
       setRoomList(rooms);
 
-      // Fetch bookings for this hotel
       const bookings = await fetchBookings(hotelId);
       
-      // Map bookings to calendar cells
       const mappedBookings = {};
       const dates = generateDateColumns();
       
@@ -662,13 +748,11 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         const checkOut = dayjs(booking.checkOutDate);
         const roomKey = `room-${booking.roomNumberID}`;
         
-        // Generate all dates between check-in and check-out
         let currentDate = checkIn;
         while (currentDate.isBefore(checkOut, "day")) {
           const dateStr = currentDate.format("YYYY-MM-DD");
           const bookingKey = `${roomKey}-${dateStr}`;
           
-          // Use booking number and guest name for display
           const displayText = `${booking.bookingNo || "N/A"} - ${booking.fullName || "Guest"}`;
           mappedBookings[bookingKey] = displayText;
           
@@ -827,7 +911,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         setSelectedBookingForEdit(null);
         formik.resetForm();
         
-        // Reload bookings and rooms
         if (selectedHotelId && hotelData.length > 0) {
           await loadRoomsAndBookings(selectedHotelId, hotelData);
         }
@@ -874,71 +957,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     }
   };
 
-  // Monthly Booking Summary
-  const MonthlySummary = () => {
-    const dates = generateDateColumns();
-    const startDate = dateRange[0] || dayjs().startOf("month");
-    const endDate = dateRange[1] || dayjs().endOf("month");
-    
-    // Filter bookings for the current month
-    const monthBookings = allBookings.filter(booking => {
-      if (!booking.checkInDate || !booking.checkOutDate) return false;
-      const checkIn = dayjs(booking.checkInDate);
-      const checkOut = dayjs(booking.checkOutDate);
-      
-      // Check if booking overlaps with the selected month
-      // Booking overlaps if: checkIn <= endDate AND checkOut >= startDate
-    return (
-        (checkIn.isBefore(endDate, "day") || checkIn.isSame(endDate, "day")) &&
-        (checkOut.isAfter(startDate, "day") || checkOut.isSame(startDate, "day"))
-      );
-    });
-
-    // Calculate statistics
-    const totalBookings = monthBookings.length;
-    const totalRevenue = monthBookings.reduce((sum, booking) => sum + (Number(booking.totalBill) || 0), 0);
-    const totalAdvance = monthBookings.reduce((sum, booking) => sum + (Number(booking.advancePayment) || 0), 0);
-    const totalDue = totalRevenue - totalAdvance;
-    const totalBookedDays = dates.filter(date => {
-      const dateStr = date.format("YYYY-MM-DD");
-      return roomList.some(room => bookingData[`${room.key}-${dateStr}`]);
-    }).length;
-    const totalRooms = roomList.length;
-    const occupancyRate = totalRooms > 0 ? ((totalBookedDays / (totalRooms * dates.length)) * 100).toFixed(1) : 0;
-                
-                return (
-      <div className="flex justify-end mt-2">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3" style={{ minWidth: "280px", maxWidth: "320px" }}>
-          <div className="text-xs font-semibold text-gray-700 mb-2 border-b pb-2">
-            Summary - {startDate.format("MMM YYYY")}
-                    </div>
-          <div className="space-y-1.5 text-xs">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Bookings:</span>
-              <span className="font-semibold text-gray-800">{totalBookings}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Revenue:</span>
-              <span className="font-semibold text-green-600">৳{totalRevenue.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Advance:</span>
-              <span className="font-semibold text-yellow-600">৳{totalAdvance.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Due:</span>
-              <span className="font-semibold text-orange-600">৳{totalDue.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between pt-1 border-t">
-              <span className="text-gray-600">Occupancy:</span>
-              <span className="font-semibold text-blue-600">{occupancyRate}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   if (!canView) {
     return <NoPermissionBanner />;
   }
@@ -959,13 +977,12 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
               className="flex-1 min-w-0 calendar-title-container"
               style={{ paddingTop: '0', paddingBottom: '0' }}
             >
-              <h1 className="text-sm sm:text-lg md:text-xl lg:text-xl font-bold text-gray-800 truncate" >
+              <h1 className="text-sm sm:text-lg md:text-xl lg:text-xl font-bold text-gray-800 truncate">
                 <span className="hidden sm:inline">Booking Calendar </span>
                 ({dateRange[0].format("MMM D")} - {dateRange[1].format("D MMM")})
               </h1>
             </div>
             
-            {/* Navigation Controls - Aligned to the right */}
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" style={{ paddingTop: '0' }}>
               <Button
                 icon={<LeftOutlined className="text-[10px] sm:text-xs" />}
@@ -1109,11 +1126,13 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                   size="small"
                   rowKey="key"
                   scroll={{ 
-                    x: 1200, // Show approximately 15 days (15 * 80px = 1200px) + room column
-                    y: 550 // Height for approximately 10 rows (50px per row + header)
+                    x: 1200,
+                    y: 550,
+                    scrollToFirstRowOnChange: true
                   }}
                   className="calendar-table"
                   style={{ fontSize: '10px' }}
+                  sticky={{ offsetHeader: 0 }}
                   components={{
                     body: {
                       cell: (props) => (
@@ -1127,8 +1146,26 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                             <tfoot>
                               <tr>
                                 <td 
+                                  className="text-center border"
+                                  style={{ 
+                                    padding: 0, 
+                                    position: 'sticky', 
+                                    left: 0, 
+                                    zIndex: 15, 
+                                    background: '#15803d', 
+                                    width: 28 
+                                  }}
+                                />
+                                <td 
                                   className="text-center bg-gray-100 font-semibold border"
-                                  style={{ padding: '8px 4px', fontSize: '10px', position: 'sticky', left: 0, zIndex: 5, background: '#f3f4f6' }}
+                                  style={{ 
+                                    padding: '8px 4px', 
+                                    fontSize: '10px', 
+                                    position: 'sticky', 
+                                    left: 28, 
+                                    zIndex: 14, 
+                                    background: '#f3f4f6' 
+                                  }}
                                 >
                                   Ratio
                                 </td>
@@ -1159,12 +1196,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
             </>
           )}
         </div>
-
-        {/* Monthly Booking Summary */}
-        {/* {!loading && <MonthlySummary />} */}
-
-        {/* Legend and Instructions */}
-       
       </div>
 
       {/* Booking History Modal */}
@@ -1203,7 +1234,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           }}>
             Close
           </Button>,
-          ...(canInsert ? [
+          ...(canInsert && (roomList.find(r => r.key === selectedRoomKey)?.roomStatus || "available") === "available" ? [
             <Button 
               key="add" 
               type="primary" 
@@ -1269,7 +1300,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                     </div>
                   </div>
 
-                  {/* Guest Information */}
                   <div className="border-t border-gray-100 pt-2 mb-2">
                     <div className="text-xs font-semibold text-gray-700 mb-1.5">Guest Information</div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1296,7 +1326,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                     </div>
                   </div>
 
-                  {/* Booking Dates */}
                   <div className="border-t border-gray-100 pt-2 mb-2">
                     <div className="text-xs font-semibold text-gray-700 mb-1.5">Booking Details</div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1331,7 +1360,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                     </div>
                   </div>
 
-                  {/* Services */}
                   {(booking.breakfastTotalBill ||
                     booking.kitchenTotalBill ||
                     booking.extraBedTotalBill) && (
@@ -1355,7 +1383,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                     </div>
                   )}
 
-                  {/* Payment Information */}
                   <div className="border-t border-gray-100 pt-2 mb-2">
                     <div className="text-xs font-semibold text-gray-700 mb-1.5">Payment Information</div>
                     <div className="grid grid-cols-2 gap-2 text-xs mb-1">
@@ -1394,7 +1421,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                     </div>
                   </div>
 
-                  {/* Additional Notes */}
                   {(booking.note || booking.reference) && (
                     <div className="border-t border-gray-100 pt-2 mb-2">
                       <div className="text-xs font-semibold text-gray-700 mb-1.5">Additional Information</div>
@@ -1416,17 +1442,17 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                   )}
 
                   <div className="flex justify-end pt-2 border-t border-gray-100">
-                    {canEdit && (
-                    <Button
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={() => {
-                        setHistoryModalVisible(false);
-                        handleEditClick(selectedRoomKey, selectedDateStr, booking, null);
-                      }}
-                    >
-                      Edit
-                    </Button>
+                    {canEdit && (roomList.find(r => r.key === selectedRoomKey)?.roomStatus || "available") === "available" && (
+                      <Button
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => {
+                          setHistoryModalVisible(false);
+                          handleEditClick(selectedRoomKey, selectedDateStr, booking, null);
+                        }}
+                      >
+                        Edit
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -1436,20 +1462,24 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
             <div className="text-center py-8">
               <CalendarOutlined className="text-3xl text-gray-300 mb-3" />
               <div className="text-sm font-medium text-gray-600 mb-1">No Booking Found</div>
-              <div className="text-xs text-gray-500 mb-4">This room is available for this date</div>
-              {canInsert && (
-              <Button 
-                type="primary"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  if (selectedRoomKey && selectedDateStr) {
-                    handleEditClick(selectedRoomKey, selectedDateStr, null);
-                  }
-                }}
-              >
-                Create New Booking
-              </Button>
+              <div className="text-xs text-gray-500 mb-4">
+                {(roomList.find(r => r.key === selectedRoomKey)?.roomStatus || "available") === "available"
+                  ? "This room is available for this date"
+                  : "Add/Edit disabled for this room status"}
+              </div>
+              {canInsert && (roomList.find(r => r.key === selectedRoomKey)?.roomStatus || "available") === "available" && (
+                <Button 
+                  type="primary"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    if (selectedRoomKey && selectedDateStr) {
+                      handleEditClick(selectedRoomKey, selectedDateStr, null);
+                    }
+                  }}
+                >
+                  Create New Booking
+                </Button>
               )}
             </div>
           )}
@@ -1728,22 +1758,31 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         .calendar-table .ant-table-thead > tr > th {
           padding: 4px 2px !important;
           text-align: center;
-          background: #2563eb !important;
           color: white !important;
+          border-bottom: 1px solid #e8e8e8 !important;
           border-color: rgba(255,255,255,0.2) !important;
-          position: sticky;
-          top: 0;
+          position: sticky !important;
+          top: 0 !important;
           z-index: 10;
         }
         
         .calendar-table .ant-table-tbody > tr > td {
           padding: 0 !important;
-          vertical-align: top;
-          overflow: visible !important;
+          vertical-align: middle;
+          height: 60px;
         }
         
         .calendar-table .ant-table-tbody > tr {
           position: relative;
+          height: 60px;
+        }
+        
+        .calendar-table-right .ant-table-tbody > tr > td {
+          overflow: hidden !important;
+        }
+        
+        .calendar-table-left .ant-table-tbody > tr > td {
+          overflow: hidden !important;
         }
         
         .calendar-table .ant-table-cell {
@@ -1755,18 +1794,40 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           background: #fafafa !important;
         }
         
-        .calendar-table .ant-table-thead > tr > th:first-child {
-          z-index: 11;
+        .calendar-table .ant-table-row:hover td:first-child,
+        .calendar-table .ant-table-row:hover td:nth-child(2) {
+          background: inherit !important;
         }
         
-        .calendar-table .ant-table-tbody > tr > td:first-child {
-          position: sticky;
-          left: 0;
-          z-index: 5;
+        .calendar-table .ant-table-row:hover td:first-child {
+          background: #15803d !important;
+        }
+        
+        .calendar-table .ant-table-row:hover td:nth-child(2) {
           background: #2563eb !important;
         }
         
-        .calendar-table .ant-table-tbody > tr:hover > td:first-child {
+        .calendar-table .ant-table-thead > tr > th:first-child {
+          z-index: 21;
+          background: #15803d !important;
+        }
+        
+        .calendar-table .ant-table-thead > tr > th:nth-child(2) {
+          z-index: 20;
+          background: #2563eb !important;
+        }
+        
+        .calendar-table .ant-table-tbody > tr > td:first-child {
+          position: sticky !important;
+          left: 0 !important;
+          z-index: 15;
+          background: #15803d !important;
+        }
+        
+        .calendar-table .ant-table-tbody > tr > td:nth-child(2) {
+          position: sticky !important;
+          left: 28px !important;
+          z-index: 14;
           background: #2563eb !important;
         }
         
@@ -1778,6 +1839,19 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         
         .calendar-table .ant-table-body > table {
           overflow: visible !important;
+        }
+        
+        .calendar-table .ant-table-container {
+          position: relative;
+        }
+        
+        .calendar-table .ant-table-content {
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+        }
+        
+        .calendar-table .ant-table-header {
+          overflow: hidden !important;
         }
         
         @media (max-width: 640px) {
@@ -1853,27 +1927,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
           border: 1px solid rgba(16, 185, 129, 0.7) !important;
           border-radius: 6px !important;
-        }
-        
-        .calendar-cell.holiday-cell {
-          position: relative;
-        }
-        
-        .calendar-cell.holiday-cell::before {
-          content: '';
-          position: absolute;
-          top: 2px;
-          right: 2px;
-          width: 8px;
-          height: 8px;
-          background-color: #f97316;
-          border-radius: 50%;
-          z-index: 2;
-        }
-        
-        .calendar-cell.holiday-cell:hover {
-          border-color: #f97316 !important;
-          box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3) !important;
         }
         
         .booking-history-modal .ant-modal-content {
