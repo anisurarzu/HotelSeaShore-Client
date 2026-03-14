@@ -24,7 +24,9 @@ import {
   Upload,
   Image,
   Skeleton,
+  TimePicker,
 } from "antd";
+import dayjs from "dayjs";
 import {
   EditOutlined,
   DeleteOutlined,
@@ -169,6 +171,8 @@ const HotelInformation = () => {
         email: hotelData?.contact?.email || "",
         website: hotelData?.contact?.website || "",
       },
+      checkInTime: hotelData?.checkInTime || "14:00",
+      checkOutTime: hotelData?.checkOutTime || "11:00",
       status: hotelData?.status || "active",
     },
     onSubmit: async (values) => {
@@ -228,6 +232,8 @@ const HotelInformation = () => {
           status: values.status,
           address: values.address,
           contact: values.contact,
+          checkInTime: values.checkInTime || "14:00",
+          checkOutTime: values.checkOutTime || "11:00",
           images: allImageUrls.length > 0 ? allImageUrls : undefined,
         };
 
@@ -547,6 +553,8 @@ const HotelInformation = () => {
         email: "",
         website: "",
       },
+      checkInTime: "14:00",
+      checkOutTime: "11:00",
       status: "active",
     });
     setIsCreatingHotel(true);
@@ -570,6 +578,8 @@ const HotelInformation = () => {
         email: hotelData?.contact?.email || "",
         website: hotelData?.contact?.website || "",
       },
+      checkInTime: hotelData?.checkInTime || "14:00",
+      checkOutTime: hotelData?.checkOutTime || "11:00",
       status: hotelData?.status || "active",
     });
     // Set existing images
@@ -1371,6 +1381,37 @@ const HotelInformation = () => {
               </Form.Item>
             </Col>
             */}
+          </Row>
+          <Divider orientation="left">Check-in / Check-out Time</Divider>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item label="Check-in Time">
+                <TimePicker
+                  value={dayjs(hotelFormik.values.checkInTime || "14:00", "HH:mm")}
+                  onChange={(time) =>
+                    hotelFormik.setFieldValue("checkInTime", time ? time.format("HH:mm") : "14:00")
+                  }
+                  format="h:mm A"
+                  use12Hours
+                  style={{ width: "100%" }}
+                  placeholder="e.g. 2:00 PM"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item label="Check-out Time">
+                <TimePicker
+                  value={dayjs(hotelFormik.values.checkOutTime || "11:00", "HH:mm")}
+                  onChange={(time) =>
+                    hotelFormik.setFieldValue("checkOutTime", time ? time.format("HH:mm") : "11:00")
+                  }
+                  format="h:mm A"
+                  use12Hours
+                  style={{ width: "100%" }}
+                  placeholder="e.g. 11:00 AM"
+                />
+              </Form.Item>
+            </Col>
           </Row>
           <Divider orientation="left">Logo</Divider>
           <Form.Item label="Hotel Logo">

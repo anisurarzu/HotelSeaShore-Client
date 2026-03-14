@@ -174,7 +174,18 @@ const Invoice = ({ params }) => {
   };
 
   const getHotelInfo = () => {
-    const hotelID = data?.[0]?.hotelID;
+    // Prevent showing any fallback logo before API data is ready
+    if (!data?.[0]) {
+      const colorScheme = getHotelColorScheme(undefined);
+      return {
+        name: "Hotel",
+        logo: null,
+        color: colorScheme.primary,
+        colorScheme,
+      };
+    }
+
+    const hotelID = Number(data?.[0]?.hotelID);
     const hotelLogo = data?.[0]?.hotelLogo;
     const hotelColor = data?.[0]?.hotelColor;
     
@@ -249,12 +260,15 @@ const Invoice = ({ params }) => {
         colorScheme: colorScheme,
       },
     };
-    return hotelInfoMap[hotelID] || {
-      name: data?.[0]?.hotelName || "Hotel",
-      logo: "/images/Shamudro-Bari-1.png",
-      color: colorScheme.primary,
-      colorScheme: colorScheme,
-    };
+    return (
+      hotelInfoMap[hotelID] || {
+        name: data?.[0]?.hotelName || "Hotel",
+        // If API doesn't provide a logo and hotelID isn't mapped, don't show any default logo
+        logo: null,
+        color: colorScheme.primary,
+        colorScheme: colorScheme,
+      }
+    );
   };
 
   const hotelInfo = getHotelInfo();
@@ -374,9 +388,9 @@ const Invoice = ({ params }) => {
               </div>
             </div>
 
-            <div>
+            <div className="text-right">
               <h2 
-                className="text-xs font-bold uppercase tracking-wider mb-2 pb-1 border-b"
+                className="text-xs font-bold uppercase tracking-wider mb-2 pb-1 border-b text-right"
                 style={{
                   color: hotelInfo.colorScheme.tableHeader,
                   borderColor: hotelInfo.colorScheme.accent
@@ -384,29 +398,29 @@ const Invoice = ({ params }) => {
               >
                 Hotel Information
               </h2>
-              <div className="space-y-1">
+              <div className="space-y-1 text-right">
                 <p className="font-bold text-slate-900 text-xs">
                   {data?.[0]?.hotelInformation?.hotelName || data?.[0]?.hotelName || hotelInfo.name}
                 </p>
-                {(() => {
-                  const addr = data?.[0]?.hotelInformation?.address;
-                  if (!addr) return null;
-                  const parts = [addr.street, addr.city, addr.state, addr.zipCode, addr.country].filter(Boolean);
-                  if (parts.length === 0) return null;
-                  return (
-                    <p className="text-slate-600 text-xs">
-                      {parts.join(", ")}
-                    </p>
-                  );
-                })()}
-                {data?.[0]?.hotelInformation?.contact?.phone && (
+                {(data?.[0]?.hotelInformation?.address?.address1 || data?.[0]?.hotelInformation?.address?.street) && (
                   <p className="text-slate-600 text-xs">
-                    {data[0].hotelInformation.contact.phone}
+                    {data?.[0]?.hotelInformation?.address?.address1 || data?.[0]?.hotelInformation?.address?.street}
                   </p>
                 )}
-                {data?.[0]?.hotelInformation?.contact?.email && (
+                {(() => {
+                  const addr = data?.[0]?.hotelInformation?.address;
+                  const line2 = addr?.address2 || [addr?.city, addr?.state, addr?.zipCode, addr?.country].filter(Boolean).join(", ");
+                  if (!line2) return null;
+                  return <p className="text-slate-600 text-xs">{line2}</p>;
+                })()}
+                {(data?.[0]?.hotelInformation?.reservationNo ?? data?.[0]?.hotelInformation?.contact?.email) && (
                   <p className="text-slate-600 text-xs">
-                    {data[0].hotelInformation.contact.email}
+                    Reservation No: {data?.[0]?.hotelInformation?.reservationNo ?? data?.[0]?.hotelInformation?.contact?.email}
+                  </p>
+                )}
+                {(data?.[0]?.hotelInformation?.frontdeskNo ?? data?.[0]?.hotelInformation?.contact?.phone) && (
+                  <p className="text-slate-600 text-xs">
+                    Frontdesk No: {data?.[0]?.hotelInformation?.frontdeskNo ?? data?.[0]?.hotelInformation?.contact?.phone}
                   </p>
                 )}
               </div>

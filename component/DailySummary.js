@@ -152,7 +152,7 @@ const DailySummary = ({ selectedDate, dailyIncome }) => {
         </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 no-print">
         <Button
           type="primary"
           onClick={handleSave}

@@ -50,49 +50,46 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     return dayjs(date1).isSame(dayjs(date2), "day");
   };
 
-  // Calculate payment totals by method
-  const getPaymentTotals = (payments) => {
-    return (
-      payments?.reduce(
-        (acc, payment) => {
-          if (payment.method === "BKASH" || payment.method === "Bkash") {
-            acc.bkash += payment.amount || 0;
-          } else if (payment.method === "CASH" || payment.method === "Cash") {
-            acc.cash += payment.amount || 0;
-          } else if (payment.method === "BANK" || payment.method === "Bank") {
-            acc.bank += payment.amount || 0;
-          } else if (payment.method === "NAGAD" || payment.method === "Nagad") {
-            acc.nagad += payment.amount || 0;
-          }
-          return acc;
-        },
-        { bkash: 0, cash: 0, bank: 0, nagad: 0 }
-      ) || { bkash: 0, cash: 0, bank: 0, nagad: 0 }
+  // Calculate payment totals by method (supports paymentMethod or method from backend)
+  const getPaymentTotals = (payments, fallbackAdvance = 0) => {
+    if (!Array.isArray(payments) || payments.length === 0) {
+      return { bkash: 0, cash: fallbackAdvance, bank: 0, nagad: 0 };
+    }
+    return payments.reduce(
+      (acc, payment) => {
+        const method = (payment.paymentMethod || payment.method || "").toUpperCase();
+        const amount = Number(payment.amount) || 0;
+        if (method === "BKASH") acc.bkash += amount;
+        else if (method === "CASH") acc.cash += amount;
+        else if (method === "BANK") acc.bank += amount;
+        else if (method === "NAGAD") acc.nagad += amount;
+        return acc;
+      },
+      { bkash: 0, cash: 0, bank: 0, nagad: 0 }
     );
   };
 
   const getCumulativeTotals = (booking) => {
-    const paymentTotals = getPaymentTotals(booking.payments);
+    const advance = Number(booking.advancePayment) || 0;
+    const paymentTotals = getPaymentTotals(booking.payments, advance);
 
     const totalBill = booking.totalBill || 0;
-    const advance = Number(booking.advancePayment) || 0;
+    const sumOfPaymentMethods = paymentTotals.bkash + paymentTotals.cash + paymentTotals.bank + paymentTotals.nagad;
+    const effectiveAdvance = sumOfPaymentMethods > 0 ? sumOfPaymentMethods : advance;
 
-    // Total paid = advance (initially) + sum of all daily amounts from invoiceDetails (subsequent additions)
     const sumOfDailyAmounts = (booking.invoiceDetails || []).reduce(
       (sum, entry) => sum + (Number(entry?.dailyAmount) || 0),
       0
     );
-    const totalPaid = advance + sumOfDailyAmounts;
+    const totalPaid = effectiveAdvance + sumOfDailyAmounts;
 
     const duePayment = Math.max(0, totalBill - totalPaid);
 
     return {
-      totalPaid: totalPaid,
+      totalPaid,
       dailyAmount: booking.dailyAmount || 0,
       duePayment,
-      advance,
       bkash: paymentTotals.bkash,
-      cash: paymentTotals.cash,
       bank: paymentTotals.bank,
       nagad: paymentTotals.nagad,
     };
@@ -155,28 +152,25 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           );
         });
 
-        // Unpaid = checkout has passed (relative to selected date) AND (due not yet cleared OR due was cleared on selected date).
-        // So: show until (and including) the day due is fully cleared; from the next day onwards hide.
+        // Unpaid = only when selected date is the checkout date (same day) AND due amount > 0
         const unPaidInvoice = allBookings.filter((booking) => {
+          if (!booking.checkOutDate) return false;
+          const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+          const isCheckoutDay = selectedDay.isSame(checkOut, "day");
+          if (!isCheckoutDay) return false;
           const totals = getCumulativeTotals(booking);
           const duePayment = totals.duePayment || 0;
-          const checkoutPassed =
-            booking.checkOutDate &&
-            dayjs(booking.checkOutDate).tz("Asia/Dhaka").isBefore(selectedDay, "day");
-          if (!checkoutPassed) return false;
-          if (duePayment > 0) return true;
-          const dueClearedDate = getDueClearedDate(booking);
-          return dueClearedDate != null && selectedDay.isSame(dueClearedDate, "day");
+          return duePayment > 0;
         });
 
-        // Regular = bookings active on selected date that are not in unpaid (checkout not passed or due cleared before selected day)
+        // Regular = bookings active on selected date (checkIn <= selected <= checkOut) that are not in unpaid
         const regularInvoice = bookingsForDate.filter((booking) => {
+          if (!booking.checkOutDate) return true;
+          const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+          const isCheckoutDay = selectedDay.isSame(checkOut, "day");
+          if (!isCheckoutDay) return true;
           const totals = getCumulativeTotals(booking);
-          const duePayment = totals.duePayment || 0;
-          const checkoutPassed =
-            booking.checkOutDate &&
-            dayjs(booking.checkOutDate).tz("Asia/Dhaka").isBefore(selectedDay, "day");
-          return !(checkoutPassed && (duePayment > 0 || (getDueClearedDate(booking) != null && selectedDay.isSame(getDueClearedDate(booking), "day"))));
+          return (totals.duePayment || 0) <= 0;
         });
 
         setBookings({
@@ -353,9 +347,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         totalPaid: acc.totalPaid + (totals.totalPaid || 0),
         dailyAmount: acc.dailyAmount + (dateEntry?.dailyAmount || 0),
         duePayment: acc.duePayment + (totals.duePayment || 0),
-        advance: acc.advance + (totals.advance || 0),
         bkash: acc.bkash + (totals.bkash || 0),
-        cash: acc.cash + (totals.cash || 0),
         bank: acc.bank + (totals.bank || 0),
         nagad: acc.nagad + (totals.nagad || 0),
       };
@@ -365,9 +357,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       totalPaid: 0,
       dailyAmount: 0,
       duePayment: 0,
-      advance: 0,
       bkash: 0,
-      cash: 0,
       bank: 0,
       nagad: 0,
     }
@@ -385,9 +375,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         totalPaid: acc.totalPaid + (totals.totalPaid || 0),
         dailyAmount: acc.dailyAmount + (dateEntry?.dailyAmount || 0),
         duePayment: acc.duePayment + (totals.duePayment || 0),
-        advance: acc.advance + (totals.advance || 0),
         bkash: acc.bkash + (totals.bkash || 0),
-        cash: acc.cash + (totals.cash || 0),
         bank: acc.bank + (totals.bank || 0),
         nagad: acc.nagad + (totals.nagad || 0),
       };
@@ -397,9 +385,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       totalPaid: 0,
       dailyAmount: 0,
       duePayment: 0,
-      advance: 0,
       bkash: 0,
-      cash: 0,
       bank: 0,
       nagad: 0,
     }
@@ -447,52 +433,49 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           <table className="w-full border-collapse min-w-[900px]" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
             <thead>
               <tr style={{ backgroundColor: '#2563eb' }}>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Sl No.
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
-                  Flat No.
+                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
+                  Room
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
-                  Invoice No.
+                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
+                  Invoice
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
-                  Guest Name
+                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
+                  Name
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
-                  Phone No.
+                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
+                  Phone
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Check In
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Check Out
                 </th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Nights
                 </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
-                  Total Bill
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
+                  Total
                 </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
-                  Advance
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Bkash
                 </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Bank
                 </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Total Paid
                 </th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Daily Amount
                 </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#dc2626', backgroundColor: '#fee2e2', fontWeight: 600, fontSize: '10px' }}>
                   Due Amount
                 </th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
+                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Update
                 </th>
               </tr>
@@ -501,14 +484,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="16" className="text-center p-4">
+                  <td colSpan="15" className="text-center p-4">
                     <Spin tip="Loading data..." />
                   </td>
                 </tr>
               ) : bookings.regularInvoice?.length === 0 &&
                 bookings.unPaidInvoice?.length === 0 ? (
                 <tr>
-                  <td colSpan="16" className="text-center p-4">
+                  <td colSpan="15" className="text-center p-4">
                     <Alert message="No bookings found" type="info" />
                   </td>
                 </tr>
@@ -572,10 +555,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                           {booking.totalBill || 0}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {totals.advance ?? booking.advancePayment ?? 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {totals.bkash || 0}
+                          {(totals.bkash || 0) + (totals.nagad || 0)}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
                           {totals.bank || 0}
@@ -615,7 +595,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             style={{ width: "80px", color: "#000" }}
                           />
                         </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
+                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
                           {totals.duePayment}
                         </td>
                         <td className="px-3 py-2.5 text-center border border-gray-300">
@@ -636,73 +616,27 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     );
                   })}
 
-                  {/* Regular Invoices Total Row */}
-                  {bookings.regularInvoice?.length > 0 && (
-                    <>
-                      <tr className="bg-gray-100">
-                        <td
-                          colSpan="8"
-                          className="px-2 py-1.5 text-right text-xs font-semibold text-gray-800 border border-gray-300"
-                        >
-                          Regular Invoices Total:
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                          {regularTotals?.totalBill}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                          {regularTotals?.advance}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                          {regularTotals?.bkash}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                          {regularTotals?.bank}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                          {regularTotals?.totalPaid}
-                        </td>
-                        <td className="px-3 py-2.5 text-center text-xs font-semibold text-gray-800 border border-gray-300">
-                          {regularTotals?.dailyAmount}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                          {regularTotals?.duePayment}
-                        </td>
-                        <td className="px-3 py-2.5 text-center border border-gray-300">
-                          -
-                        </td>
-                      </tr>
-                      {bookings.regularInvoice?.length > PAGE_SIZE && (
-                        <tr>
-                          <td colSpan="16" className="px-2 py-2 border border-gray-300 bg-gray-50">
-                            <div className="flex justify-end">
-                              <Pagination
-                                current={regularPage}
-                                total={bookings.regularInvoice?.length ?? 0}
-                                pageSize={PAGE_SIZE}
-                                onChange={setRegularPage}
-                                showSizeChanger={false}
-                                showTotal={(total) => `Total ${total} items`}
-                                size="small"
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                      <tr>
-                        <td colSpan="16" className="p-2"></td>
-                      </tr>
-                    </>
-                  )}
-
-                  {/* Unpaid Invoices Header */}
-                  {bookings.unPaidInvoice?.length > 0 && (
-                    <tr className="bg-yellow-50">
-                      <td
-                        colSpan="16"
-                        className="px-2 py-1.5 text-center text-xs font-semibold text-gray-800 uppercase border border-gray-300"
-                      >
-                        ⚠️ UNPAID INVOICES (checkout passed with due amount)
+                  {/* Regular Invoices Pagination */}
+                  {bookings.regularInvoice?.length > PAGE_SIZE && (
+                    <tr>
+                      <td colSpan="15" className="px-2 py-2 border border-gray-300 bg-gray-50">
+                        <div className="flex justify-end">
+                          <Pagination
+                            current={regularPage}
+                            total={bookings.regularInvoice?.length ?? 0}
+                            pageSize={PAGE_SIZE}
+                            onChange={setRegularPage}
+                            showSizeChanger={false}
+                            showTotal={(total) => `Total ${total} items`}
+                            size="small"
+                          />
+                        </div>
                       </td>
+                    </tr>
+                  )}
+                  {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
+                    <tr>
+                      <td colSpan="15" className="p-2"></td>
                     </tr>
                   )}
 
@@ -717,7 +651,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     return (
                       <tr
                         key={bookingId}
-                        className="hover:bg-gray-50 transition-colors bg-yellow-50"
+                        className="hover:bg-amber-200 transition-colors bg-amber-100"
                       >
                         <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 border border-gray-300">
                           {slNo}
@@ -764,10 +698,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                           {booking.totalBill || 0}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {totals.advance ?? booking.advancePayment ?? 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {totals.bkash || 0}
+                          {(totals.bkash || 0) + (totals.nagad || 0)}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
                           {totals.bank || 0}
@@ -807,7 +738,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             style={{ width: "80px", color: "#000" }}
                           />
                         </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
+                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
                           {totals.duePayment}
                         </td>
                         <td className="px-3 py-2.5 text-center border border-gray-300">
@@ -831,7 +762,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   {/* Unpaid Invoices Pagination */}
                   {bookings.unPaidInvoice?.length > PAGE_SIZE && (
                     <tr>
-                      <td colSpan="16" className="px-2 py-2 border border-gray-300 bg-yellow-50">
+                      <td colSpan="15" className="px-2 py-2 border border-gray-300 bg-amber-100">
                         <div className="flex justify-end">
                           <Pagination
                             current={unpaidPage}
@@ -847,35 +778,32 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     </tr>
                   )}
 
-                  {/* Unpaid Invoices Total Row */}
-                  {bookings.unPaidInvoice?.length > 0 && (
-                    <tr className="bg-yellow-100">
+                  {/* Grand Total: Regular + Unpaid */}
+                  {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
+                    <tr className="bg-blue-100 border-t-2 border-blue-300">
                       <td
                         colSpan="8"
-                        className="px-2 py-1.5 text-right text-xs font-semibold text-gray-800 border border-gray-300"
+                        className="px-2 py-1.5 text-right text-xs font-bold text-gray-900 border border-gray-300"
                       >
-                        Unpaid Invoices Total:
+                        Total:
                       </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                        {unpaidTotals?.totalBill}
+                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
+                        {(regularTotals?.totalBill || 0) + (unpaidTotals?.totalBill || 0)}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                        {unpaidTotals?.advance}
+                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
+                        {((regularTotals?.bkash || 0) + (regularTotals?.nagad || 0)) + ((unpaidTotals?.bkash || 0) + (unpaidTotals?.nagad || 0))}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                        {unpaidTotals?.bkash}
+                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
+                        {(regularTotals?.bank ?? 0) + (unpaidTotals?.bank ?? 0)}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                        {unpaidTotals?.bank}
+                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
+                        {(regularTotals?.totalPaid || 0) + (unpaidTotals?.totalPaid || 0)}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                        {unpaidTotals?.totalPaid}
+                      <td className="px-3 py-2.5 text-center text-xs font-bold text-gray-900 border border-gray-300">
+                        {(regularTotals?.dailyAmount || 0) + (unpaidTotals?.dailyAmount || 0)}
                       </td>
-                      <td className="px-3 py-2.5 text-center text-xs font-semibold text-gray-800 border border-gray-300">
-                        {unpaidTotals?.dailyAmount}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-semibold text-gray-800 border border-gray-300">
-                        {unpaidTotals?.duePayment}
+                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
+                        {(regularTotals?.duePayment || 0) + (unpaidTotals?.duePayment || 0)}
                       </td>
                       <td className="px-3 py-2.5 text-center border border-gray-300">
                         -
