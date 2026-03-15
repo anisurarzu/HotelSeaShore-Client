@@ -4,8 +4,11 @@ import {
   ArrowLeftOutlined,
   PrinterOutlined,
   DownloadOutlined,
+  DollarOutlined,
+  CreditCardOutlined,
+  MobileOutlined,
 } from "@ant-design/icons";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Button, Spin, message, Space } from "antd";
 import coreAxios from "@/utils/axiosInstance";
 import moment from "moment";
@@ -18,10 +21,8 @@ const Invoice = ({ params }) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
   const [totals, setTotals] = useState({
-    totalAdvance: 0,
     extraBedTotalBill: 0,
     kitchenTotalBill: 0,
-    totalDue: 0,
     totalBill: 0,
     finalTotal: 0,
   });
@@ -72,14 +73,6 @@ const Invoice = ({ params }) => {
   };
 
   const calculateTotals = (bookings) => {
-    const totalAdvance = bookings.reduce(
-      (sum, booking) => sum + (booking?.advancePayment || 0),
-      0
-    );
-    const totalDue = bookings.reduce(
-      (sum, booking) => sum + (booking?.duePayment || 0),
-      0
-    );
     const totalBill = bookings.reduce(
       (sum, booking) => sum + (booking?.totalBill || 0),
       0
@@ -95,14 +88,27 @@ const Invoice = ({ params }) => {
     const finalTotal = totalBill + kitchenTotalBill + extraBedTotalBill;
 
     setTotals({
-      totalAdvance,
-      totalDue,
       totalBill,
       kitchenTotalBill,
       extraBedTotalBill,
       finalTotal,
     });
   };
+
+  // Total Paid = sum of all payments from ALL invoices (same as Payment History)
+  const totalPaidFromInvoices = useMemo(() => {
+    let sum = 0;
+    (data || []).forEach((inv) => {
+      if (Array.isArray(inv.payments) && inv.payments.length > 0) {
+        inv.payments.forEach((p) => { sum += Number(p.amount) || 0; });
+      } else if (Number(inv?.advancePayment) > 0) {
+        sum += Number(inv.advancePayment);
+      }
+    });
+    return sum;
+  }, [data]);
+
+  const dueAmount = totals.finalTotal - totalPaidFromInvoices;
 
   // Function to get hotel-specific color scheme
   const getHotelColorScheme = (hotelID) => {
@@ -324,36 +330,50 @@ const Invoice = ({ params }) => {
             background: `linear-gradient(to right, ${hotelInfo.colorScheme.gradientFrom}, ${hotelInfo.colorScheme.gradientTo})`
           }}
         >
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center gap-4">
             {/* Logo */}
             <div className="flex-shrink-0">
               {hotelInfo.logo && (
                 <div className="bg-white p-3 rounded shadow-sm">
-                    <img
+                  <img
                     src={hotelInfo.logo}
                     alt={hotelInfo.name}
                     className="h-16 object-contain"
                   />
                 </div>
               )}
-                </div>
+            </div>
+
+            {/* Hotel Name – dynamic title between logo and invoice */}
+            <div className="flex-1 text-center">
+              <h2
+                className="text-white font-bold tracking-wide m-0"
+                style={{
+                  fontSize: "clamp(1.25rem, 4vw, 1.75rem)",
+                  letterSpacing: "0.08em",
+                  textShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                }}
+              >
+                {hotelInfo.name}
+              </h2>
+            </div>
 
             {/* Invoice Info */}
-            <div className="text-right text-white">
-              <h1 className="text-2xl font-bold tracking-tight mb-1 uppercase" style={{ letterSpacing: '0.05em' }}>
+            <div className="flex-shrink-0 text-right text-white">
+              <h1 className="text-2xl font-bold tracking-tight mb-1 uppercase" style={{ letterSpacing: "0.05em" }}>
                 Invoice
               </h1>
               <div className="text-xs space-y-0.5 opacity-90">
                 <p className="font-semibold">
                   #{data?.[0]?.bookingNo || "N/A"}
-                      </p>
+                </p>
                 <p className="font-normal">
                   {moment(data?.[0]?.createTime).format("MMM DD, YYYY") || "N/A"}
                 </p>
-                    </div>
-                  </div>
-                    </div>
-                  </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Content Section */}
         <div className="px-6 py-4 print:px-6 print:py-3" style={{ fontSize: '10px' }}>
@@ -593,113 +613,151 @@ const Invoice = ({ params }) => {
             </div>
           )}
 
-          {/* Totals Section */}
+          {/* Totals Section: Subtotal → VAT/Tax → Total → Total Paid → Due (no bg, formal) */}
           <div className="mt-4 flex justify-end">
             <div className="w-full max-w-xs">
-              <div 
-                className="rounded p-3 space-y-1.5"
-                style={{
-                  backgroundColor: hotelInfo.colorScheme.secondary
-                }}
-              >
-                <div className="flex justify-between text-xs">
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs py-0.5">
                   <span className="text-slate-600 font-semibold">Subtotal</span>
-                  <span className="text-slate-900 font-bold">
-                    ৳{totals.totalBill.toLocaleString()}
-                  </span>
+                  <span className="text-slate-900 font-bold tabular-nums">৳{totals.finalTotal.toLocaleString()}</span>
                 </div>
-                {totals.kitchenTotalBill > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-600 font-semibold">Kitchen</span>
-                    <span className="text-slate-900 font-bold">
-                      ৳{totals.kitchenTotalBill.toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                {totals.extraBedTotalBill > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-600 font-semibold">Extra Bed</span>
-                    <span className="text-slate-900 font-bold">
-                      ৳{totals.extraBedTotalBill.toLocaleString()}
-                    </span>
-                  </div>
-                )}
-                <div className="border-t border-slate-300 pt-2 mt-1">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-900 uppercase">
-                      Total
-                    </span>
-                    <span className="text-base font-bold text-slate-900">
-                      ৳{totals.finalTotal.toLocaleString()}
-                    </span>
-                  </div>
+                <div className="flex justify-between text-xs py-0.5">
+                  <span className="text-slate-600 font-semibold">VAT / Tax</span>
+                  <span className="text-slate-900 font-bold tabular-nums">৳0</span>
                 </div>
-                <div className="flex justify-between text-xs pt-1 border-t border-slate-200">
-                  <span className="text-slate-600 font-semibold">Advance</span>
-                  <span className="text-green-700 font-bold">
-                    -৳{totals.totalAdvance.toLocaleString()}
-                  </span>
+                <div className="flex justify-between text-xs py-0.5 border-t border-slate-200 pt-2 mt-1">
+                  <span className="text-slate-800 font-bold">Total</span>
+                  <span className="text-slate-900 font-bold tabular-nums">৳{totals.finalTotal.toLocaleString()}</span>
                 </div>
-                <div 
-                  className="text-white rounded p-2 mt-2"
-                  style={{
-                    backgroundColor: hotelInfo.colorScheme.primary
-                  }}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-xs uppercase">Due</span>
-                    <span className="font-bold text-base">
-                      ৳{totals.totalDue.toLocaleString()}
-                    </span>
-                  </div>
+                <div className="flex justify-between text-xs py-0.5 border-t border-slate-200 pt-2">
+                  <span className="text-slate-600 font-semibold">Total Paid</span>
+                  <span className="text-green-700 font-bold tabular-nums">৳{totalPaidFromInvoices.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs py-1.5 border-t-2 border-slate-300 pt-2 mt-1">
+                  <span className="font-bold text-slate-900">Due</span>
+                  <span className="font-bold text-slate-900 tabular-nums">৳{Math.max(0, dueAmount).toLocaleString()}</span>
                 </div>
               </div>
             </div>
-              </div>
+          </div>
 
-          {/* Payment Information */}
+          {/* Payment Information / Payment History */}
           <div 
             className="mt-4 pt-3 border-t"
             style={{
               borderColor: hotelInfo.colorScheme.accent
             }}
           >
-            <div className="grid grid-cols-2 gap-4">
-              <div 
-                className="p-2 rounded"
-                style={{
-                  backgroundColor: hotelInfo.colorScheme.secondary
-                }}
-              >
-                <p 
-                  className="text-xs font-semibold mb-0.5 uppercase"
-                  style={{ color: hotelInfo.colorScheme.tableHeader }}
+            <p 
+              className="text-xs font-semibold mb-2 uppercase"
+              style={{ color: hotelInfo.colorScheme.tableHeader }}
+            >
+              Payment History
+            </p>
+            {(() => {
+              const fmtTime = (t) => {
+                if (!t) return "—";
+                const [h, m] = String(t).split(":").map(Number);
+                if (h === 12) return `12:${String(m || 0).padStart(2, "0")} PM`;
+                if (h === 0) return `12:${String(m || 0).padStart(2, "0")} AM`;
+                return h > 12 ? `${h - 12}:${String(m || 0).padStart(2, "0")} PM` : `${h}:${String(m || 0).padStart(2, "0")} AM`;
+              };
+              const checkIn = data?.[0]?.hotelInformation?.checkInTime || "14:00";
+              const checkOut = data?.[0]?.hotelInformation?.checkOutTime || "11:00";
+              const timeBox = (
+                <div
+                  className="rounded-lg py-3 px-4 text-right shrink-0 h-full flex flex-col justify-center"
+                  style={{ minWidth: "140px" }}
                 >
-                  Payment Method
-                </p>
-                <p className="font-bold text-slate-900 text-xs">
-                  {data?.[0]?.paymentMethod || "N/A"}
-                </p>
-              </div>
-              {data?.[0]?.transactionId && (
-                <div 
-                  className="p-2 rounded"
-                  style={{
-                    backgroundColor: hotelInfo.colorScheme.secondary
-                  }}
-                >
-                  <p 
-                    className="text-xs font-semibold mb-0.5 uppercase"
-                    style={{ color: hotelInfo.colorScheme.tableHeader }}
-                  >
-                    Transaction ID
+                  <p className="text-slate-700 text-xs font-semibold mb-0.5">
+                    Check-in: <span className="text-slate-900 font-bold">{fmtTime(checkIn)}</span>
                   </p>
-                  <p className="font-bold text-slate-900 text-xs">
-                    {data[0].transactionId}
+                  <p className="text-slate-700 text-xs font-semibold mb-0">
+                    Check-out: <span className="text-slate-900 font-bold">{fmtTime(checkOut)}</span>
                   </p>
                 </div>
-              )}
-            </div>
+              );
+              // Collect payments from ALL invoices (data array)
+              const allPayments = [];
+              (data || []).forEach((inv) => {
+                if (Array.isArray(inv.payments) && inv.payments.length > 0) {
+                  inv.payments.forEach((p) => allPayments.push(p));
+                } else if (Number(inv?.advancePayment) > 0) {
+                  allPayments.push({
+                    paymentMethod: inv.paymentMethod || "CASH",
+                    transactionId: inv.transactionId || "",
+                    amount: inv.advancePayment,
+                  });
+                }
+              });
+              if (allPayments.length === 0) {
+                return (
+                  <div className="flex justify-between items-stretch gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-2 rounded">
+                        <p className="text-xs font-semibold mb-0.5 uppercase" style={{ color: hotelInfo.colorScheme.tableHeader }}>Payment Method</p>
+                        <p className="font-bold text-slate-900 text-xs">{data?.[0]?.paymentMethod || "N/A"}</p>
+                      </div>
+                      <div className="p-2 rounded">
+                        <p className="text-xs font-semibold mb-0.5 uppercase" style={{ color: hotelInfo.colorScheme.tableHeader }}>Transaction ID</p>
+                        <p className="font-bold text-slate-900 text-xs">
+                          {data?.[0]?.paymentMethod?.toUpperCase() === "CASH" && !data?.[0]?.transactionId ? "Cash" : (data?.[0]?.transactionId || "—")}
+                        </p>
+                      </div>
+                    </div>
+                    {timeBox}
+                  </div>
+                );
+              }
+              // Merge by method only: same method = one row, all amounts summed (e.g. all BKASH together)
+              const merged = {};
+              allPayments.forEach((p) => {
+                const method = ((p.paymentMethod || p.method || "").trim() || "CASH").toUpperCase();
+                const amount = Number(p.amount) || 0;
+                const txnId = (p.transactionId || "").trim();
+                if (!merged[method]) {
+                  merged[method] = { method, txnId: method === "CASH" ? "" : (txnId || "—"), total: amount };
+                } else {
+                  merged[method].total += amount;
+                  if (txnId && !merged[method].txnId) merged[method].txnId = txnId;
+                }
+              });
+              const rows = Object.values(merged).sort((a, b) => a.method.localeCompare(b.method));
+              const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+              return (
+                <div className="flex justify-between items-stretch gap-4">
+                  <div className="max-w-sm shrink-0">
+                    <div className="rounded-lg py-3 px-4 space-y-2 h-full">
+                      {rows.map((r) => {
+                        const displayLabel = r.method === "CASH" ? "CASH ()" : `${r.method} (${r.txnId})`;
+                        const isMobileWallet = /^(BKASH|NAGAD|ROCKET)$/i.test(r.method);
+                        const isBankOrCard = /^(BANK|CARD|BANK CARD|VISA|MASTERCARD)$/i.test(r.method);
+                        const PaymentIcon = isMobileWallet ? MobileOutlined : isBankOrCard ? CreditCardOutlined : DollarOutlined;
+                        return (
+                          <div key={r.method} className="flex justify-between items-baseline gap-3">
+                            <span className="font-semibold text-slate-800 text-xs flex items-center gap-1.5" style={{ fontFamily: "inherit" }}>
+                              <PaymentIcon className="shrink-0" style={{ fontSize: "14px", color: hotelInfo.colorScheme.tableHeader }} />
+                              {displayLabel}
+                            </span>
+                            <span className="font-bold text-slate-900 text-xs tabular-nums">
+                              {r.total.toLocaleString()}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      <div 
+                        className="flex justify-between items-baseline gap-3 pt-2 mt-2 border-t font-bold"
+                        style={{ borderColor: hotelInfo.colorScheme.accent }}
+                      >
+                        <span className="text-slate-800 text-xs">Total Paid</span>
+                        <span className="text-slate-900 text-xs tabular-nums">{grandTotal.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {timeBox}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Footer */}

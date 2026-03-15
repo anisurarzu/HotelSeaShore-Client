@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button, message, Spin, Alert, Tooltip, InputNumber, Pagination } from "antd";
+import { Button, message, Alert, Tooltip, InputNumber, Pagination, Skeleton } from "antd";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -50,67 +50,56 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     return dayjs(date1).isSame(dayjs(date2), "day");
   };
 
-  // Calculate payment totals by method (supports paymentMethod or method from backend)
-  const getPaymentTotals = (payments, fallbackAdvance = 0) => {
-    if (!Array.isArray(payments) || payments.length === 0) {
-      return { bkash: 0, cash: fallbackAdvance, bank: 0, nagad: 0 };
-    }
-    return payments.reduce(
-      (acc, payment) => {
-        const method = (payment.paymentMethod || payment.method || "").toUpperCase();
-        const amount = Number(payment.amount) || 0;
-        if (method === "BKASH") acc.bkash += amount;
-        else if (method === "CASH") acc.cash += amount;
-        else if (method === "BANK") acc.bank += amount;
-        else if (method === "NAGAD") acc.nagad += amount;
-        return acc;
-      },
-      { bkash: 0, cash: 0, bank: 0, nagad: 0 }
-    );
+  /** Group booking.payments by date (createdAt); for a given date return merged { cash, bkash, nagad, bank } */
+  const getPaymentsByDate = (booking, date) => {
+    const payments = booking.payments || [];
+    const dateKey = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+    const out = { cash: 0, bkash: 0, nagad: 0, bank: 0 };
+    payments.forEach((p) => {
+      const d = p.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").format("YYYY-MM-DD") : null;
+      if (d !== dateKey) return;
+      const method = (p.paymentMethod || p.method || "").toUpperCase();
+      const amount = Number(p.amount) || 0;
+      if (method === "CASH") out.cash += amount;
+      else if (method === "BKASH") out.bkash += amount;
+      else if (method === "NAGAD") out.nagad += amount;
+      else if (method === "BANK") out.bank += amount;
+    });
+    return out;
   };
 
-  const getCumulativeTotals = (booking) => {
-    const advance = Number(booking.advancePayment) || 0;
-    const paymentTotals = getPaymentTotals(booking.payments, advance);
-
-    const totalBill = booking.totalBill || 0;
-    const sumOfPaymentMethods = paymentTotals.bkash + paymentTotals.cash + paymentTotals.bank + paymentTotals.nagad;
-    const effectiveAdvance = sumOfPaymentMethods > 0 ? sumOfPaymentMethods : advance;
-
-    const sumOfDailyAmounts = (booking.invoiceDetails || []).reduce(
-      (sum, entry) => sum + (Number(entry?.dailyAmount) || 0),
-      0
-    );
-    const totalPaid = effectiveAdvance + sumOfDailyAmounts;
-
+  /** Total paid = sum of all payment amounts (payments array is source of truth); fallback advancePayment if no payments */
+  const getCumulativeTotals = (booking, selectedDateForRow = null) => {
+    const payments = booking.payments || [];
+    const totalBill = Number(booking.totalBill) || 0;
+    const totalPaid =
+      payments.length > 0
+        ? payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+        : Number(booking.advancePayment) || 0;
     const duePayment = Math.max(0, totalBill - totalPaid);
 
+    const byDate = selectedDateForRow ? getPaymentsByDate(booking, selectedDateForRow) : { cash: 0, bkash: 0, nagad: 0, bank: 0 };
     return {
       totalPaid,
-      dailyAmount: booking.dailyAmount || 0,
       duePayment,
-      bkash: paymentTotals.bkash,
-      bank: paymentTotals.bank,
-      nagad: paymentTotals.nagad,
+      dailyAmount: byDate.cash,
+      bkash: byDate.bkash + byDate.nagad,
+      bank: byDate.bank,
+      nagad: byDate.nagad,
     };
   };
 
-  /** First date (Asia/Dhaka) when due was fully cleared (total paid >= total bill), or null if not yet cleared */
+  /** First date when total paid >= total bill (using payments in date order) */
   const getDueClearedDate = (booking) => {
     const totalBill = Number(booking.totalBill) || 0;
-    const advance = Number(booking.advancePayment) || 0;
-    if (advance >= totalBill) {
-      return null; // cleared before any daily entry; treat as "no single clear date" – don't show in unpaid
-    }
-    const entries = [...(booking.invoiceDetails || [])].filter(
-      (e) => e?.date != null
-    );
-    entries.sort((a, b) => new Date(a.date) - new Date(b.date));
-    let running = advance;
-    for (const entry of entries) {
-      running += Number(entry?.dailyAmount) || 0;
+    const payments = [...(booking.payments || [])];
+    payments.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    let running = 0;
+    for (const p of payments) {
+      running += Number(p.amount) || 0;
       if (running >= totalBill) {
-        return dayjs(entry.date).tz("Asia/Dhaka").startOf("day");
+        const d = p.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").startOf("day") : null;
+        return d || null;
       }
     }
     return null;
@@ -180,26 +169,26 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
 
         const initialValues = {};
 
-        // Process all invoices – use dayjs for robust same-day comparison
         [...regularInvoice, ...unPaidInvoice].forEach((booking) => {
-          const dateEntry = booking.invoiceDetails?.find((entry) =>
-            entry?.date && dayjs(entry.date).isSame(date, "day")
-          );
-
           const id = booking._id || booking.id;
-          if (id) {
-            initialValues[id] = {
-              totalPaid: getCumulativeTotals(booking).totalPaid || 0,
-              dailyAmount: dateEntry?.dailyAmount ?? 0,
-            };
-          }
+          if (!id) return;
+          const byDate = getPaymentsByDate(booking, date);
+          const totals = getCumulativeTotals(booking, date);
+          initialValues[id] = {
+            totalPaid: totals.totalPaid || 0,
+            dailyAmount: byDate.cash ?? 0,
+            bkash: (byDate.bkash || 0) + (byDate.nagad || 0),
+            bank: byDate.bank ?? 0,
+          };
         });
 
         formik.setValues(initialValues, false);
 
-        // Calculate daily income
-        const calculatedDailyIncome = Object.values(initialValues).reduce(
-          (sum, value) => sum + (value.dailyAmount || 0),
+        const calculatedDailyIncome = [...regularInvoice, ...unPaidInvoice].reduce(
+          (sum, booking) => {
+            const byDate = getPaymentsByDate(booking, date);
+            return sum + (byDate.cash || 0) + (byDate.bkash || 0) + (byDate.nagad || 0) + (byDate.bank || 0);
+          },
           0
         );
         setDailyIncome(calculatedDailyIncome);
@@ -231,21 +220,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         throw new Error("Booking not found");
       }
 
-      // Get existing payment for the selected date if any
-      const existingPayment = booking.invoiceDetails?.find((payment) =>
-        dayjs(payment.date).isSame(selectedDate, "day")
-      );
-
-      // Get current totals from the booking
       const currentTotals = getCumulativeTotals(booking);
       const currentTotalPaid = currentTotals.totalPaid;
-      const currentDailyAmount = existingPayment?.dailyAmount || 0;
+      const byDate = getPaymentsByDate(booking, selectedDate);
+      const currentDailyAmount = byDate.cash || 0;
 
-      // Calculate new total paid
       const newTotalPaid = currentTotalPaid - currentDailyAmount + dailyAmount;
       const newDuePayment = (booking.totalBill || 0) - newTotalPaid;
 
-      // Validations
       if (newTotalPaid > (booking.totalBill || 0)) {
         throw new Error("Total paid cannot exceed total bill");
       }
@@ -253,24 +235,19 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         throw new Error("Daily amount cannot be negative");
       }
 
-      // Update invoiceDetails array
-      let updatedInvoiceDetails = booking.invoiceDetails || [];
-      if (existingPayment) {
-        // Update existing entry
+      const existingEntry = booking.invoiceDetails?.find((entry) =>
+        entry?.date && dayjs(entry.date).isSame(selectedDate, "day")
+      );
+      let updatedInvoiceDetails = Array.isArray(booking.invoiceDetails) ? [...booking.invoiceDetails] : [];
+      const newEntry = { date: selectedDate.toISOString(), dailyAmount };
+      if (existingEntry) {
         updatedInvoiceDetails = updatedInvoiceDetails.map((entry) =>
-          dayjs(entry.date).isSame(selectedDate, "day")
-            ? { ...entry, dailyAmount: dailyAmount, date: selectedDate.toISOString() }
-            : entry
+          entry?.date && dayjs(entry.date).isSame(selectedDate, "day") ? newEntry : entry
         );
       } else {
-        // Add new entry
-        updatedInvoiceDetails.push({
-          date: selectedDate.toISOString(),
-          dailyAmount: dailyAmount,
-        });
+        updatedInvoiceDetails.push(newEntry);
       }
 
-      // Use the correct API endpoint PUT /booking/:id
       const response = await coreAxios.put(`/booking/${bookingId}`, {
         totalPaid: newTotalPaid,
         duePayment: newDuePayment,
@@ -279,7 +256,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
 
       if (response.status === 200) {
         message.success(
-          existingPayment
+          existingEntry
             ? "Payment updated successfully"
             : "Payment added successfully"
         );
@@ -337,15 +314,11 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   // Calculate totals
   const regularTotals = bookings.regularInvoice?.reduce(
     (acc, booking) => {
-      const totals = getCumulativeTotals(booking);
-      const dateEntry = booking.invoiceDetails?.find((entry) =>
-        isSameDay(new Date(entry.date), selectedDate.toDate())
-      );
-
+      const totals = getCumulativeTotals(booking, selectedDate);
       return {
         totalBill: acc.totalBill + (booking.totalBill || 0),
         totalPaid: acc.totalPaid + (totals.totalPaid || 0),
-        dailyAmount: acc.dailyAmount + (dateEntry?.dailyAmount || 0),
+        dailyAmount: acc.dailyAmount + (totals.dailyAmount || 0),
         duePayment: acc.duePayment + (totals.duePayment || 0),
         bkash: acc.bkash + (totals.bkash || 0),
         bank: acc.bank + (totals.bank || 0),
@@ -365,15 +338,11 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
 
   const unpaidTotals = bookings.unPaidInvoice?.reduce(
     (acc, booking) => {
-      const totals = getCumulativeTotals(booking);
-      const dateEntry = booking.invoiceDetails?.find((entry) =>
-        isSameDay(new Date(entry.date), selectedDate.toDate())
-      );
-
+      const totals = getCumulativeTotals(booking, selectedDate);
       return {
         totalBill: acc.totalBill + (booking.totalBill || 0),
         totalPaid: acc.totalPaid + (totals.totalPaid || 0),
-        dailyAmount: acc.dailyAmount + (dateEntry?.dailyAmount || 0),
+        dailyAmount: acc.dailyAmount + (totals.dailyAmount || 0),
         duePayment: acc.duePayment + (totals.duePayment || 0),
         bkash: acc.bkash + (totals.bkash || 0),
         bank: acc.bank + (totals.bank || 0),
@@ -470,7 +439,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   Total Paid
                 </th>
                 <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Daily Amount
+                  Daily Cash
                 </th>
                 <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#dc2626', backgroundColor: '#fee2e2', fontWeight: 600, fontSize: '10px' }}>
                   Due Amount
@@ -483,11 +452,55 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
 
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan="15" className="text-center p-4">
-                    <Spin tip="Loading data..." />
-                  </td>
-                </tr>
+                Array.from({ length: 8 }).map((_, rowIdx) => (
+                  <tr key={`skeleton-${rowIdx}`}>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 24, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 32, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 70, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 80, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 70, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 28, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 56, height: 20 }} />
+                    </td>
+                  </tr>
+                ))
               ) : bookings.regularInvoice?.length === 0 &&
                 bookings.unPaidInvoice?.length === 0 ? (
                 <tr>
@@ -499,7 +512,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                 <>
                   {/* Regular Invoices */}
                   {regularDisplay.map((booking, index) => {
-                    const totals = getCumulativeTotals(booking);
+                    const totals = getCumulativeTotals(booking, selectedDate);
                     const remainingAmount =
                       (booking.totalBill || 0) - totals.totalPaid;
                     const bookingId = booking._id || booking.id;
@@ -555,7 +568,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                           {booking.totalBill || 0}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {(totals.bkash || 0) + (totals.nagad || 0)}
+                          {totals.bkash || 0}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
                           {totals.bank || 0}
@@ -642,7 +655,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
 
                   {/* Unpaid Invoices */}
                   {unpaidDisplay.map((booking, index) => {
-                    const totals = getCumulativeTotals(booking);
+                    const totals = getCumulativeTotals(booking, selectedDate);
                     const remainingAmount =
                       (booking.totalBill || 0) - totals.totalPaid;
                     const bookingId = booking._id || booking.id;
@@ -698,7 +711,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                           {booking.totalBill || 0}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {(totals.bkash || 0) + (totals.nagad || 0)}
+                          {totals.bkash || 0}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
                           {totals.bank || 0}
@@ -791,7 +804,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                         {(regularTotals?.totalBill || 0) + (unpaidTotals?.totalBill || 0)}
                       </td>
                       <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
-                        {((regularTotals?.bkash || 0) + (regularTotals?.nagad || 0)) + ((unpaidTotals?.bkash || 0) + (unpaidTotals?.nagad || 0))}
+                        {(regularTotals?.bkash || 0) + (unpaidTotals?.bkash || 0)}
                       </td>
                       <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
                         {(regularTotals?.bank ?? 0) + (unpaidTotals?.bank ?? 0)}

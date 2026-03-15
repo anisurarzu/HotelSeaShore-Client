@@ -82,6 +82,8 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
   const [searchTerm, setSearchTerm] = useState("");
   const [checkInDate, setCheckInDate] = useState(null);
   const [isHotelFromReference, setIsHotelFromReference] = useState(false);
+  /** In edit mode, number of payment rows that came from server (read-only). New rows after this can be edited and can duplicate methods. */
+  const [initialPaymentCount, setInitialPaymentCount] = useState(0);
 
   const hasHandledQueryParams = useRef(false);
 
@@ -492,7 +494,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       duePayment: 0,
       paymentMethod: "",
       transactionId: "",
-      payments: [{ paymentMethod: "CASH", amount: 0, transactionId: "" }],
+      payments: [{ paymentMethod: "", amount: 0, transactionId: "" }],
       note: "",
       bookedBy: userInfo2 ? userInfo2?.username : "",
       bookedByID: userInfo2 ? userInfo2?.loginID : "",
@@ -619,6 +621,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
           setIsEditing(false);
           setEditingKey(null);
           setPrevData(null);
+          setInitialPaymentCount(0);
         }, 500);
       } catch (error) {
         console.error("Error pre-filling form:", error);
@@ -842,6 +845,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     };
 
     formik.setValues(formValues);
+    setInitialPaymentCount(payments.length);
 
     if (data.roomCategoryID) {
       setTimeout(() => {
@@ -1262,6 +1266,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               setIsEditing(false);
                               setEditingKey(null);
                               setPrevData(null);
+                              setInitialPaymentCount(0);
                               setIsHotelFromReference(false);
                               setRoomCategories([]);
                               setRoomNumbers([]);
@@ -1321,10 +1326,13 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                             Nights
                           </th>
                           <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Advance
+                            Paid
                           </th>
                           <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Total
+                          </th>
+                          <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                            DUE
                           </th>
                           <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Payment Methods
@@ -1380,6 +1388,9 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                                   <Skeleton.Input active size="small" style={{ width: 70, height: 16 }} />
                                 </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-right border border-gray-300">
+                                <Skeleton.Input active size="small" style={{ width: 60, height: 16 }} />
                               </td>
                               <td className="px-2 py-1.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 90, height: 16 }} />
@@ -1450,23 +1461,46 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               {booking.nights}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-right border border-gray-300">
-                              {booking.advancePayment}
+                              {(() => {
+                                const totalFromPayments = (booking.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                                return totalFromPayments > 0 ? totalFromPayments : (booking.advancePayment ?? "—");
+                              })()}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-green-700 text-right border border-gray-300">
                               {booking.totalBill}
                             </td>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-right border border-gray-300">
+                              {(() => {
+                                const totalFromPayments = (booking.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                                const totalBill = Number(booking.totalBill) || 0;
+                                const due = Math.max(0, totalBill - totalFromPayments);
+                                return totalFromPayments > 0 ? due : (booking.duePayment != null ? Number(booking.duePayment) : Math.max(0, totalBill - (Number(booking.advancePayment) || 0)));
+                              })()}
+                            </td>
                             <td className="px-2 py-1.5 text-[10px] text-gray-700 border border-gray-300 align-top">
-                              {Array.isArray(booking.payments) && booking.payments.length > 0
-                                ? booking.payments
-                                    .filter((p) => (Number(p.amount) || 0) > 0)
-                                    .map((p, i) => (
-                                      <div key={i} className="leading-tight text-[10px]">
-                                        {(p.paymentMethod || p.method || "CASH").toUpperCase()}: {Number(p.amount) || 0}
+                              {(() => {
+                                const merged = {};
+                                (booking.payments || []).forEach((p) => {
+                                  const method = ((p.paymentMethod || p.method || "CASH") + "").toUpperCase();
+                                  const amt = Number(p.amount) || 0;
+                                  if (amt > 0) merged[method] = (merged[method] || 0) + amt;
+                                });
+                                if (!booking.payments?.length && booking.paymentMethod && (Number(booking.advancePayment) || 0) > 0) {
+                                  const m = (booking.paymentMethod + "").toUpperCase();
+                                  merged[m] = (merged[m] || 0) + (Number(booking.advancePayment) || 0);
+                                }
+                                const entries = Object.entries(merged).filter(([, amt]) => amt > 0);
+                                if (entries.length === 0) return "—";
+                                return (
+                                  <>
+                                    {entries.map(([method, amount]) => (
+                                      <div key={method} className="leading-tight text-[10px]">
+                                        {method}: {amount}
                                       </div>
-                                    ))
-                                : booking.paymentMethod
-                                  ? `${(booking.paymentMethod || "").toUpperCase()}: ${Number(booking.advancePayment) || 0}`
-                                  : "—"}
+                                    ))}
+                                  </>
+                                );
+                              })()}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-center border border-gray-300">
                               <span
@@ -1771,6 +1805,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                     setIsEditing(false);
                     setEditingKey(null);
                     setPrevData(null);
+                    setInitialPaymentCount(0);
                     setIsHotelFromReference(false);
                     formik.resetForm();
                     hasHandledQueryParams.current = false;
@@ -2191,7 +2226,8 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               value={formik.values.totalBill}
                               onChange={handleTotalBillChange}
                               placeholder="Total bill"
-                              style={{ height: "40px" }}
+                              style={{ height: "40px", backgroundColor: "#f5f5f5" }}
+                              disabled
                             />
                           </Form.Item>
                         </Col>
@@ -2207,7 +2243,8 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               )}
                               onChange={handleAdvanceTotalChange}
                               placeholder="Advance"
-                              style={{ height: "40px" }}
+                              style={{ height: "40px", backgroundColor: "#f5f5f5" }}
+                              disabled
                             />
                           </Form.Item>
                         </Col>
@@ -2220,31 +2257,42 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               value={formik.values.duePayment}
                               onChange={handleDuePaymentChange}
                               placeholder="Due"
-                              style={{ height: "40px" }}
+                              style={{ height: "40px", backgroundColor: "#f5f5f5" }}
+                              disabled
                             />
                           </Form.Item>
                         </Col>
                       </Row>
-                      {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map((_, index) => (
+                      {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map((_, index) => {
+                        const isExistingPayment = isEditing && index < initialPaymentCount;
+                        const usedMethods = !isEditing
+                          ? (formik.values.payments || [])
+                              .map((p, i) => (i !== index && (p.paymentMethod || "").trim() ? p.paymentMethod : null))
+                              .filter(Boolean)
+                          : [];
+                        return (
                         <Row key={index} gutter={[12, 0]} align="middle" className="mb-2">
                           <Col xs={24} sm={8} md={6}>
                             <Form.Item label={index === 0 ? "Method" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
                               <Select
-                                value={formik.values.payments[index]?.paymentMethod || "CASH"}
+                                value={formik.values.payments[index]?.paymentMethod ?? ""}
                                 onChange={(value) => {
                                   const next = [...formik.values.payments];
-                                  if (!next[index]) next[index] = { paymentMethod: "CASH", amount: 0, transactionId: "" };
-                                  next[index].paymentMethod = value;
+                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
+                                  next[index].paymentMethod = value ?? "";
                                   formik.setFieldValue("payments", next);
                                   syncAdvanceFromPayments(next);
                                 }}
                                 placeholder="Method"
                                 style={{ width: "100%", minWidth: 90 }}
+                                disabled={isExistingPayment}
+                                optionFilterProp="label"
+                                allowClear
                               >
-                                <Select.Option value="BKASH">BKASH</Select.Option>
-                                <Select.Option value="NAGAD">NAGAD</Select.Option>
-                                <Select.Option value="BANK">BANK</Select.Option>
-                                <Select.Option value="CASH">CASH</Select.Option>
+                                <Select.Option value="BKASH" label="BKASH" disabled={usedMethods.includes("BKASH")}>BKASH</Select.Option>
+                                <Select.Option value="NAGAD" label="NAGAD" disabled={usedMethods.includes("NAGAD")}>NAGAD</Select.Option>
+                                <Select.Option value="BANK" label="BANK" disabled={usedMethods.includes("BANK")}>BANK</Select.Option>
+                                <Select.Option value="CASH" label="CASH" disabled={usedMethods.includes("CASH")}>CASH</Select.Option>
                               </Select>
                             </Form.Item>
                           </Col>
@@ -2258,13 +2306,14 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                   const val = parseFloat(e.target.value) || 0;
                                   const totalBill = parseFloat(formik.values.totalBill) || 0;
                                   const next = [...formik.values.payments];
-                                  if (!next[index]) next[index] = { paymentMethod: "CASH", amount: 0, transactionId: "" };
+                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
                                   next[index].amount = val > totalBill ? totalBill : val;
                                   formik.setFieldValue("payments", next);
                                   syncAdvanceFromPayments(next);
                                 }}
                                 placeholder="Amount"
-                                style={{ width: "100%" }}
+                                style={{ width: "100%", ...(isExistingPayment ? { backgroundColor: "#f5f5f5" } : {}) }}
+                                disabled={isExistingPayment}
                               />
                             </Form.Item>
                           </Col>
@@ -2274,24 +2323,25 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 value={formik.values.payments[index]?.transactionId ?? ""}
                                 onChange={(e) => {
                                   const next = [...formik.values.payments];
-                                  if (!next[index]) next[index] = { paymentMethod: "CASH", amount: 0, transactionId: "" };
+                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
                                   next[index].transactionId = e.target.value;
                                   formik.setFieldValue("payments", next);
                                 }}
                                 placeholder="Trx ID (optional)"
-                                style={{ width: "100%" }}
+                                style={{ width: "100%", ...(isExistingPayment ? { backgroundColor: "#f5f5f5" } : {}) }}
+                                disabled={isExistingPayment}
                               />
                             </Form.Item>
                           </Col>
                           <Col xs={24} sm={2} md={4}>
-                            {formik.values.payments.length > 1 ? (
+                            {formik.values.payments.length > 1 && (!isEditing || index >= initialPaymentCount) ? (
                               <Button
                                 type="text"
                                 danger
                                 icon={<MinusCircleOutlined />}
                                 onClick={() => {
                                   const next = formik.values.payments.filter((_, i) => i !== index);
-                                  if (next.length === 0) next.push({ paymentMethod: "CASH", amount: 0, transactionId: "" });
+                                  if (next.length === 0) next.push({ paymentMethod: "", amount: 0, transactionId: "" });
                                   formik.setFieldValue("payments", next);
                                   syncAdvanceFromPayments(next);
                                 }}
@@ -2300,12 +2350,12 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                             ) : null}
                           </Col>
                         </Row>
-                      ))}
+                      ); })}
                       <Button
                         type="dashed"
                         icon={<PlusOutlined />}
                         onClick={() => {
-                          const next = [...(formik.values.payments || []), { paymentMethod: "CASH", amount: 0, transactionId: "" }];
+                          const next = [...(formik.values.payments || []), { paymentMethod: "", amount: 0, transactionId: "" }];
                           formik.setFieldValue("payments", next);
                         }}
                         style={{ marginTop: 4 }}
@@ -2386,6 +2436,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           setIsEditing(false);
                           setEditingKey(null);
                           setPrevData(null);
+                          setInitialPaymentCount(0);
                           setIsHotelFromReference(false);
                           formik.resetForm();
                         }}

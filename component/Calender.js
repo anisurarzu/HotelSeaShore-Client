@@ -28,6 +28,7 @@ import {
   DeleteOutlined,
   EyeOutlined,
   PlusOutlined,
+  MinusCircleOutlined,
   PhoneOutlined,
   UserOutlined,
 } from "@ant-design/icons";
@@ -73,7 +74,8 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
   const [submitLoading, setSubmitLoading] = useState(false);
   const [roomCategories, setRoomCategories] = useState([]);
   const [roomNumbers, setRoomNumbers] = useState([]);
-  
+  const [initialPaymentCount, setInitialPaymentCount] = useState(0);
+
   const userInfo = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("userInfo") || "{}") : {};
 
   // Generate dates for the selected month
@@ -231,7 +233,16 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       const checkOutDate = checkInDate.add(1, "day");
       
       if (bookingToEdit) {
-        // Pre-fill with existing booking data
+        const payments =
+          Array.isArray(bookingToEdit.payments) && bookingToEdit.payments.length > 0
+            ? bookingToEdit.payments.map((p) => ({
+                paymentMethod: p.paymentMethod || p.method || "",
+                amount: Number(p.amount) || 0,
+                transactionId: p.transactionId || "",
+              }))
+            : [{ paymentMethod: bookingToEdit.paymentMethod || "", amount: Number(bookingToEdit.advancePayment) || 0, transactionId: bookingToEdit.transactionId || "" }];
+        const totalFromPayments = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        setInitialPaymentCount(payments.length);
         formik.setValues({
           hotelID: hotel.hotelID,
           hotelName: hotel.hotelName || hotel.name,
@@ -256,15 +267,16 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
             ((Number(bookingToEdit.kitchenTotalBill) || 0) +
               (Number(bookingToEdit.extraBedTotalBill) || 0)),
           totalBill: bookingToEdit.totalBill || 0,
-          advancePayment: bookingToEdit.advancePayment || 0,
-          duePayment: bookingToEdit.duePayment || 0,
-          paymentMethod: bookingToEdit.paymentMethod || "",
-          transactionId: bookingToEdit.transactionId || "",
+          advancePayment: totalFromPayments,
+          duePayment: Math.max(0, (Number(bookingToEdit.totalBill) || 0) - totalFromPayments),
+          paymentMethod: "",
+          transactionId: "",
+          payments,
           note: bookingToEdit.note || "",
           reference: bookingToEdit.reference || "",
         });
       } else {
-        // Pre-fill for new booking
+        setInitialPaymentCount(0);
         const roomPrice = foundRoom.price || foundCategory.basePrice || 0;
         formik.setValues({
           hotelID: hotel.hotelID,
@@ -291,6 +303,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           breakfastTotalBill: 0,
           paymentMethod: "",
           transactionId: "",
+          payments: [{ paymentMethod: "", amount: 0, transactionId: "" }],
           note: "",
           reference: "",
         });
@@ -818,6 +831,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       duePayment: 0,
       paymentMethod: "",
       transactionId: "",
+      payments: [{ paymentMethod: "", amount: 0, transactionId: "" }],
       note: "",
       reference: "",
     },
@@ -826,24 +840,29 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     },
   });
 
-  // Calculate nights
+  const syncAdvanceFromPayments = (paymentsList) => {
+    const totalBill = Number(formik.values.totalBill) || 0;
+    const sum = (paymentsList || formik.values.payments || []).reduce(
+      (s, p) => s + (Number(p.amount) || 0),
+      0
+    );
+    const capped = sum > totalBill ? totalBill : sum;
+    formik.setFieldValue("advancePayment", capped);
+    formik.setFieldValue("duePayment", Math.max(0, totalBill - capped));
+  };
+
   const calculateNights = (checkIn, checkOut) => {
     if (checkIn && checkOut) {
       const checkInDate = dayjs(checkIn).startOf("day");
       const checkOutDate = dayjs(checkOut).startOf("day");
       const nights = checkOutDate.diff(checkInDate, "day");
       const calculatedNights = nights > 0 ? nights : 0;
-      
       formik.setFieldValue("nights", calculatedNights);
-      
       const roomPrice = Number(formik.values.roomPrice) || 0;
       const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
-      const totalBill = (calculatedNights * roomPrice) + breakfastTotalBill;
-      const advancePayment = Number(formik.values.advancePayment) || 0;
-      const duePayment = Math.max(0, totalBill - advancePayment);
-      
+      const totalBill = calculatedNights * roomPrice + breakfastTotalBill;
       formik.setFieldValue("totalBill", totalBill);
-      formik.setFieldValue("duePayment", duePayment);
+      syncAdvanceFromPayments(formik.values.payments);
     }
   };
 
@@ -865,6 +884,22 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       const bookedBy = userInfo?.username || userInfo?.loginID || "admin";
       const bookedByID = userInfo?.loginID || userInfo?.id || userInfo?._id || "";
 
+      const totalBill = Number(values.totalBill) || 0;
+      const paymentsList = Array.isArray(values.payments) ? values.payments : [{ paymentMethod: "", amount: 0, transactionId: "" }];
+      let advancePayment = paymentsList.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      if (advancePayment > totalBill) advancePayment = totalBill;
+      const duePayment = Math.max(0, totalBill - advancePayment);
+      const payments = paymentsList
+        .filter((p) => (Number(p.amount) || 0) > 0)
+        .map((p) => ({
+          paymentMethod: (p.paymentMethod || "CASH").trim() || "CASH",
+          amount: Number(p.amount) || 0,
+          transactionId: p.transactionId != null ? String(p.transactionId).trim() : "",
+        }));
+      if (payments.length === 0 && advancePayment > 0) {
+        payments.push({ paymentMethod: "CASH", amount: advancePayment, transactionId: "" });
+      }
+
       const bookingData = {
         fullName: values.fullName,
         phone: values.phone,
@@ -885,11 +920,12 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         children: Number(values.children) || 0,
         isBreakfast: values.isBreakfast || false,
         breakfastTotalBill: values.isBreakfast ? Number(values.breakfastTotalBill) || 0 : 0,
-        totalBill: Number(values.totalBill) || 0,
-        advancePayment: Number(values.advancePayment) || 0,
-        duePayment: Number(values.duePayment) || 0,
+        totalBill,
+        advancePayment,
+        duePayment,
         paymentMethod: values.paymentMethod || "",
         transactionId: values.transactionId || "",
+        payments,
         note: values.note || undefined,
         reference: values.reference || undefined,
         bookedBy: bookedBy,
@@ -909,8 +945,9 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         setBookingModalVisible(false);
         setIsEditingBooking(false);
         setSelectedBookingForEdit(null);
+        setInitialPaymentCount(0);
         formik.resetForm();
-        
+
         if (selectedHotelId && hotelData.length > 0) {
           await loadRoomsAndBookings(selectedHotelId, hotelData);
         }
@@ -1591,68 +1628,144 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                 />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Total Bill" required>
-                <Input
-                  value={formik.values.totalBill}
-                  readOnly
-                  className="bg-gray-50"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Advance Payment" required>
-                <Input
-                  type="number"
-                  value={formik.values.advancePayment}
-                  onChange={(e) => {
-                    const advance = Number(e.target.value) || 0;
-                    formik.setFieldValue("advancePayment", advance);
-                    const totalBill = Number(formik.values.totalBill) || 0;
-                    formik.setFieldValue("duePayment", Math.max(0, totalBill - advance));
-                  }}
-                  name="advancePayment"
-                  placeholder="Enter advance"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Due Payment">
-                <Input
-                  value={formik.values.duePayment}
-                  readOnly
-                  className="bg-gray-50"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Payment Method" required>
-                <Select
-                  value={formik.values.paymentMethod}
-                  onChange={(value) => formik.setFieldValue("paymentMethod", value)}
-                  placeholder="Select method"
-                  style={{ height: "40px" }}
-                >
-                  <Select.Option value="BKASH">BKASH</Select.Option>
-                  <Select.Option value="NAGAD">NAGAD</Select.Option>
-                  <Select.Option value="BANK">BANK</Select.Option>
-                  <Select.Option value="CASH">CASH</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Transaction ID" required>
-                <Input
-                  value={formik.values.transactionId}
-                  onChange={formik.handleChange}
-                  name="transactionId"
-                  placeholder="Enter transaction ID"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
+            <Col xs={24}>
+              <div className="text-sm font-semibold text-gray-800 mb-3">Payment Information</div>
+              <Row gutter={[16, 12]} className="mb-3">
+                <Col xs={24} sm={8}>
+                  <Form.Item label="Total Bill" required style={{ marginBottom: "12px" }}>
+                    <Input
+                      value={formik.values.totalBill}
+                      readOnly
+                      className="bg-gray-50"
+                      style={{ height: "40px" }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Form.Item label="Advance (total)" style={{ marginBottom: "12px" }}>
+                    <Input
+                      type="number"
+                      value={
+                        Array.isArray(formik.values.payments)
+                          ? formik.values.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                          : formik.values.advancePayment
+                      }
+                      readOnly
+                      className="bg-gray-50"
+                      style={{ height: "40px" }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Form.Item label="Due Payment" style={{ marginBottom: "12px" }}>
+                    <Input
+                      value={formik.values.duePayment}
+                      readOnly
+                      className="bg-gray-50"
+                      style={{ height: "40px" }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+              {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map((_, index) => {
+                const isExistingPayment = isEditingBooking && index < initialPaymentCount;
+                const usedMethods = !isEditingBooking
+                  ? (formik.values.payments || [])
+                      .map((p, i) => (i !== index && (p.paymentMethod || "").trim() ? p.paymentMethod : null))
+                      .filter(Boolean)
+                  : [];
+                return (
+                  <Row key={index} gutter={[12, 12]} align="middle" className="mb-2">
+                    <Col xs={24} sm={8} md={6}>
+                      <Form.Item label={index === 0 ? "Method" : ""} style={{ marginBottom: "12px" }}>
+                        <Select
+                          value={formik.values.payments[index]?.paymentMethod ?? ""}
+                          onChange={(value) => {
+                            const next = [...(formik.values.payments || [])];
+                            if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
+                            next[index].paymentMethod = value ?? "";
+                            formik.setFieldValue("payments", next);
+                            syncAdvanceFromPayments(next);
+                          }}
+                          placeholder="Method"
+                          style={{ width: "100%", minWidth: 90 }}
+                          disabled={isExistingPayment}
+                          allowClear
+                        >
+                          <Select.Option value="BKASH" disabled={usedMethods.includes("BKASH")}>BKASH</Select.Option>
+                          <Select.Option value="NAGAD" disabled={usedMethods.includes("NAGAD")}>NAGAD</Select.Option>
+                          <Select.Option value="BANK" disabled={usedMethods.includes("BANK")}>BANK</Select.Option>
+                          <Select.Option value="CASH" disabled={usedMethods.includes("CASH")}>CASH</Select.Option>
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={8} md={6}>
+                      <Form.Item label={index === 0 ? "Amount" : ""} style={{ marginBottom: "12px" }}>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={formik.values.payments[index]?.amount ?? ""}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const totalBill = Number(formik.values.totalBill) || 0;
+                            const next = [...(formik.values.payments || [])];
+                            if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
+                            next[index].amount = val > totalBill ? totalBill : val;
+                            formik.setFieldValue("payments", next);
+                            syncAdvanceFromPayments(next);
+                          }}
+                          placeholder="Amount"
+                          style={{ width: "100%", ...(isExistingPayment ? { backgroundColor: "#f5f5f5" } : {}) }}
+                          disabled={isExistingPayment}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={6} md={8}>
+                      <Form.Item label={index === 0 ? "Transaction ID" : ""} style={{ marginBottom: "12px" }}>
+                        <Input
+                          value={formik.values.payments[index]?.transactionId ?? ""}
+                          onChange={(e) => {
+                            const next = [...(formik.values.payments || [])];
+                            if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
+                            next[index].transactionId = e.target.value;
+                            formik.setFieldValue("payments", next);
+                          }}
+                          placeholder="Trx ID (optional)"
+                          style={{ width: "100%", ...(isExistingPayment ? { backgroundColor: "#f5f5f5" } : {}) }}
+                          disabled={isExistingPayment}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={2} md={4}>
+                      {formik.values.payments.length > 1 && (!isEditingBooking || index >= initialPaymentCount) ? (
+                        <Button
+                          type="text"
+                          danger
+                          icon={<MinusCircleOutlined />}
+                          onClick={() => {
+                            const next = (formik.values.payments || []).filter((_, i) => i !== index);
+                            if (next.length === 0) next.push({ paymentMethod: "", amount: 0, transactionId: "" });
+                            formik.setFieldValue("payments", next);
+                            syncAdvanceFromPayments(next);
+                          }}
+                          style={{ marginTop: index === 0 ? "30px" : 0 }}
+                        />
+                      ) : null}
+                    </Col>
+                  </Row>
+                );
+              })}
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const next = [...(formik.values.payments || []), { paymentMethod: "", amount: 0, transactionId: "" }];
+                  formik.setFieldValue("payments", next);
+                }}
+                style={{ marginTop: 4 }}
+              >
+                Add another payment
+              </Button>
             </Col>
             <Col xs={24} sm={12} md={8}>
               <Form.Item label="Adults">
@@ -1736,6 +1849,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                 setBookingModalVisible(false);
                 setIsEditingBooking(false);
                 setSelectedBookingForEdit(null);
+                setInitialPaymentCount(0);
                 formik.resetForm();
               }}
               style={{ height: "40px", padding: "0 24px" }}
