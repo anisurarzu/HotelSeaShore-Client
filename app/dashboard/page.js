@@ -107,12 +107,7 @@ const hotelMenuItems = [
     icon: <FileTextOutlined className="text-base" />,
     component: (props) => <BookingInfo {...props} />,
   },
-  {
-    key: "10",
-    label: "Report Dashboard",
-    icon: <BarChartOutlined className="text-base" />,
-    component: (props) => <AllBookingInfo hotelID={props?.hotelID || 1} contentPermissions={props?.contentPermissions} />,
-  },
+  
   {
     key: "11",
     label: "Daily Statement",
@@ -121,9 +116,15 @@ const hotelMenuItems = [
   },
   {
     key: "101",
-    label: "Expense",
+    label: "Daily Expense",
     icon: <WalletOutlined className="text-base" />,
     component: (props) => <ExpenseInfo {...props} />,
+  },
+  {
+    key: "10",
+    label: "Report Dashboard",
+    icon: <BarChartOutlined className="text-base" />,
+    component: (props) => <AllBookingInfo hotelID={props?.hotelID || 1} contentPermissions={props?.contentPermissions} />,
   },
   {
     key: "5",

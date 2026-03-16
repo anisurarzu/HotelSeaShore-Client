@@ -355,11 +355,15 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
 
       const payments = paymentsList
         .filter((p) => (Number(p.amount) || 0) > 0)
-        .map((p) => ({
-          paymentMethod: p.paymentMethod || "CASH",
-          amount: Number(p.amount) || 0,
-          ...(p.transactionId ? { transactionId: String(p.transactionId).trim() } : {}),
-        }));
+        .map((p) => {
+          const paymentDate = p.date ? dayjs(p.date) : dayjs();
+          return {
+            paymentMethod: p.paymentMethod || "CASH",
+            amount: Number(p.amount) || 0,
+            createdAt: paymentDate.toISOString(),
+            ...(p.transactionId ? { transactionId: String(p.transactionId).trim() } : {}),
+          };
+        });
       if (payments.length === 0) {
         payments.push({ paymentMethod: "CASH", amount: advancePayment });
       }
@@ -494,7 +498,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       duePayment: 0,
       paymentMethod: "",
       transactionId: "",
-      payments: [{ paymentMethod: "", amount: 0, transactionId: "" }],
+      payments: [{ paymentMethod: "", amount: 0, transactionId: "", date: dayjs() }],
       note: "",
       bookedBy: userInfo2 ? userInfo2?.username : "",
       bookedByID: userInfo2 ? userInfo2?.loginID : "",
@@ -793,7 +797,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     let advancePayment = Number(data.advancePayment) || 0;
     let paymentMethod = data.paymentMethod || "";
     let transactionId = data.transactionId || "";
-    let payments = [{ paymentMethod: "CASH", amount: 0, transactionId: "" }];
+    let payments = [{ paymentMethod: "CASH", amount: 0, transactionId: "", date: dayjs() }];
     if (Array.isArray(data.payments) && data.payments.length > 0) {
       advancePayment = data.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const first = data.payments[0];
@@ -803,9 +807,15 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
         paymentMethod: p.paymentMethod || p.method || "CASH",
         amount: Number(p.amount) || 0,
         transactionId: p.transactionId || "",
+        date: p.createdAt ? dayjs(p.createdAt) : dayjs(data.checkInDate || new Date()),
       }));
     } else {
-      payments = [{ paymentMethod: paymentMethod || "CASH", amount: advancePayment, transactionId: transactionId || "" }];
+      payments = [{
+        paymentMethod: paymentMethod || "CASH",
+        amount: advancePayment,
+        transactionId: transactionId || "",
+        date: dayjs(data.checkInDate || new Date()),
+      }];
     }
     const duePayment = Math.max(0, totalBill - advancePayment);
 
@@ -953,7 +963,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     formik.setFieldValue("advancePayment", advancePayment);
     formik.setFieldValue("duePayment", duePayment);
     const payments = [...(formik.values.payments || [])];
-    const first = payments[0] || { paymentMethod: "CASH", amount: 0, transactionId: "" };
+    const first = payments[0] || { paymentMethod: "CASH", amount: 0, transactionId: "", date: dayjs() };
     formik.setFieldValue("payments", [{ ...first, amount: advancePayment }]);
   };
 
@@ -968,7 +978,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     formik.setFieldValue("advancePayment", advancePayment);
     formik.setFieldValue("duePayment", duePayment);
     const payments = [...(formik.values.payments || [])];
-    const first = payments[0] || { paymentMethod: "CASH", amount: 0, transactionId: "" };
+    const first = payments[0] || { paymentMethod: "CASH", amount: 0, transactionId: "", date: dayjs() };
     formik.setFieldValue("payments", [{ ...first, amount: advancePayment }]);
   };
 
@@ -2272,7 +2282,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           : [];
                         return (
                         <Row key={index} gutter={[12, 0]} align="middle" className="mb-2">
-                          <Col xs={24} sm={8} md={6}>
+                          <Col xs={24} sm={8} md={5}>
                             <Form.Item label={index === 0 ? "Method" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
                               <Select
                                 value={formik.values.payments[index]?.paymentMethod ?? ""}
@@ -2296,7 +2306,24 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               </Select>
                             </Form.Item>
                           </Col>
-                          <Col xs={24} sm={8} md={6}>
+                          <Col xs={24} sm={8} md={7}>
+                            <Form.Item label={index === 0 ? "Payment Date" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
+                              <DatePicker
+                                value={formik.values.payments[index]?.date ? dayjs(formik.values.payments[index].date) : dayjs()}
+                                onChange={(date) => {
+                                  const next = [...formik.values.payments];
+                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "", date: dayjs() };
+                                  next[index].date = date || dayjs();
+                                  formik.setFieldValue("payments", next);
+                                }}
+                                format="YYYY-MM-DD"
+                                style={{ width: "100%", height: "40px" }}
+                                disabled={isExistingPayment}
+                                allowClear={false}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} sm={8} md={4}>
                             <Form.Item label={index === 0 ? "Amount" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
                               <Input
                                 type="number"
@@ -2317,7 +2344,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               />
                             </Form.Item>
                           </Col>
-                          <Col xs={24} sm={6} md={8}>
+                          <Col xs={24} sm={6} md={6}>
                             <Form.Item label={index === 0 ? "Transaction ID" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
                               <Input
                                 value={formik.values.payments[index]?.transactionId ?? ""}
@@ -2333,7 +2360,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               />
                             </Form.Item>
                           </Col>
-                          <Col xs={24} sm={2} md={4}>
+                          <Col xs={24} sm={2} md={2}>
                             {formik.values.payments.length > 1 && (!isEditing || index >= initialPaymentCount) ? (
                               <Button
                                 type="text"
@@ -2355,7 +2382,10 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                         type="dashed"
                         icon={<PlusOutlined />}
                         onClick={() => {
-                          const next = [...(formik.values.payments || []), { paymentMethod: "", amount: 0, transactionId: "" }];
+                          const next = [
+                            ...(formik.values.payments || []),
+                            { paymentMethod: "", amount: 0, transactionId: "", date: dayjs() },
+                          ];
                           formik.setFieldValue("payments", next);
                         }}
                         style={{ marginTop: 4 }}

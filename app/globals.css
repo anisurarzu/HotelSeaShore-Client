@@ -112,3 +112,59 @@ html {
   background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
   color: #ffffff !important;
 }
+
+/* Daily expense table – category-wise colors (green, purple, yellow, blue, orange) */
+.expense-row {
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.expense-row .ant-table-cell {
+  border-bottom-color: #e2e8f0 !important;
+}
+.expense-cat-green {
+  background: linear-gradient(90deg, #dcfce7 0%, #f0fdf4 100%) !important;
+  border-left: 3px solid #22c55e;
+}
+.expense-cat-green:hover {
+  background: linear-gradient(90deg, #bbf7d0 0%, #dcfce7 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.2);
+}
+.expense-cat-purple {
+  background: linear-gradient(90deg, #f3e8ff 0%, #faf5ff 100%) !important;
+  border-left: 3px solid #a855f7;
+}
+.expense-cat-purple:hover {
+  background: linear-gradient(90deg, #e9d5ff 0%, #f3e8ff 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.2);
+}
+.expense-cat-yellow {
+  background: linear-gradient(90deg, #fef9c3 0%, #fefce8 100%) !important;
+  border-left: 3px solid #eab308;
+}
+.expense-cat-yellow:hover {
+  background: linear-gradient(90deg, #fef08a 0%, #fef9c3 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.25);
+}
+.expense-cat-blue {
+  background: linear-gradient(90deg, #dbeafe 0%, #eff6ff 100%) !important;
+  border-left: 3px solid #3b82f6;
+}
+.expense-cat-blue:hover {
+  background: linear-gradient(90deg, #bfdbfe 0%, #dbeafe 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+.expense-cat-orange {
+  background: linear-gradient(90deg, #ffedd5 0%, #fff7ed 100%) !important;
+  border-left: 3px solid #f97316;
+}
+.expense-cat-orange:hover {
+  background: linear-gradient(90deg, #fed7aa 0%, #ffedd5 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.2);
+}
+.expense-cat-default {
+  background: #ffffff !important;
+  border-left: 3px solid #e2e8f0;
+}
+.expense-cat-default:hover {
+  background: #f8fafc !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button, message, Alert, Tooltip, InputNumber, Pagination, Skeleton } from "antd";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -35,6 +35,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   );
 
   const todayBD = () => dayjs().tz("Asia/Dhaka").startOf("day");
+  const summaryRef = useRef(null);
   const [submitting, setSubmitting] = useState({});
   const [dailyIncome, setDailyIncome] = useState(0);
   const PAGE_SIZE = 10;
@@ -141,12 +142,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           );
         });
 
-        // Unpaid = only when selected date is the checkout date (same day) AND due amount > 0
+        // Unpaid:
+        // - when selected date is on or after checkout date
+        // - AND there is still due amount > 0
         const unPaidInvoice = allBookings.filter((booking) => {
           if (!booking.checkOutDate) return false;
           const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
-          const isCheckoutDay = selectedDay.isSame(checkOut, "day");
-          if (!isCheckoutDay) return false;
+          const isOnOrAfterCheckout = !selectedDay.isBefore(checkOut, "day");
+          if (!isOnOrAfterCheckout) return false;
           const totals = getCumulativeTotals(booking);
           const duePayment = totals.duePayment || 0;
           return duePayment > 0;
@@ -187,11 +190,17 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         const calculatedDailyIncome = [...regularInvoice, ...unPaidInvoice].reduce(
           (sum, booking) => {
             const byDate = getPaymentsByDate(booking, date);
-            return sum + (byDate.cash || 0) + (byDate.bkash || 0) + (byDate.nagad || 0) + (byDate.bank || 0);
+            // For Daily Summary, Daily Income should reflect only daily CASH
+            return sum + (byDate.cash || 0);
           },
           0
         );
         setDailyIncome(calculatedDailyIncome);
+        try {
+          const dateKey = selectedDay.format("YYYY-MM-DD");
+          const payload = { dailyIncome: calculatedDailyIncome };
+          localStorage.setItem(`dailySummary:${dateKey}`, JSON.stringify(payload));
+        } catch (_) {}
       }
     } catch (error) {
       console.error("Error fetching bookings:", error);
@@ -295,15 +304,26 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       unpaidPage * PAGE_SIZE
     ) ?? [];
 
-  const handleDateChange = (date) => {
+  const handleDateChange = async (date) => {
     if (date) {
+      try {
+        await summaryRef.current?.save?.();
+      } catch (_) {}
       setSelectedDate(date);
     }
   };
 
-  const handlePreviousDay = () =>
+  const handlePreviousDay = async () => {
+    try {
+      await summaryRef.current?.save?.();
+    } catch (_) {}
     setSelectedDate((prev) => prev.subtract(1, "day"));
-  const handleNextDay = () => {
+  };
+
+  const handleNextDay = async () => {
+    try {
+      await summaryRef.current?.save?.();
+    } catch (_) {}
     const today = todayBD();
     setSelectedDate((prev) => {
       const next = prev.add(1, "day");
@@ -359,6 +379,15 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       nagad: 0,
     }
   );
+
+  // Total of Daily Cash column (formik) — this is what we send to Daily Summary as Daily Income and save
+  const totalDailyCashForSummary = useMemo(() => {
+    const all = [...(bookings.regularInvoice || []), ...(bookings.unPaidInvoice || [])];
+    return all.reduce(
+      (sum, b) => sum + (Number(formik.values[b._id || b.id]?.dailyAmount) || 0),
+      0
+    );
+  }, [bookings.regularInvoice, bookings.unPaidInvoice, formik.values]);
 
   if (!canView) {
     return <NoPermissionBanner />;
@@ -435,7 +464,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                 <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Bank
                 </th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
+                <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Total Paid
                 </th>
                 <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
@@ -578,7 +607,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             min={0}
                             value={totals.totalPaid}
                             disabled
-                            style={{ width: "80px", backgroundColor: "#f3f4f6", color: "#000" }}
+                            style={{ width: "80px", backgroundColor: "#f3f4f6", color: "#000", textAlign: "right" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-center border border-gray-300">
@@ -605,7 +634,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                               setDailyIncome(newDailyIncome);
                             }}
                             disabled={totals.duePayment <= 0 || !canEdit}
-                            style={{ width: "80px", color: "#000" }}
+                            style={{ width: "80px", color: "#000", textAlign: "right" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
@@ -664,7 +693,8 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     return (
                       <tr
                         key={bookingId}
-                        className="hover:bg-amber-200 transition-colors bg-amber-100"
+                        className="transition-colors"
+                        style={{ backgroundColor: "#fee2e2" }}
                       >
                         <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 border border-gray-300">
                           {slNo}
@@ -721,7 +751,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             min={0}
                             value={totals.totalPaid}
                             disabled
-                            style={{ width: "80px", backgroundColor: "#f3f4f6", color: "#000" }}
+                            style={{ width: "80px", backgroundColor: "#f3f4f6", color: "#000", textAlign: "right" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-center border border-gray-300">
@@ -748,7 +778,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                               setDailyIncome(newDailyIncome);
                             }}
                             disabled={totals.duePayment <= 0 || !canEdit}
-                            style={{ width: "80px", color: "#000" }}
+                            style={{ width: "80px", color: "#000", textAlign: "right" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
@@ -832,7 +862,12 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2">
         <div className="w-full">
-          <DailySummary selectedDate={selectedDate} dailyIncome={dailyIncome} />
+          <DailySummary
+            ref={summaryRef}
+            selectedDate={selectedDate}
+            dailyIncome={totalDailyCashForSummary}
+            hideSave
+          />
         </div>
       </div>
     </div>

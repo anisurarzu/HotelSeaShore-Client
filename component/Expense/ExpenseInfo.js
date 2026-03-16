@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Modal,
@@ -19,9 +19,15 @@ import {
 import { EditOutlined, DeleteOutlined, PlusOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { useFormik } from "formik";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import coreAxios from "@/utils/axiosInstance";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 import { toast } from "react-toastify";
 import NoPermissionBanner from "../Permission/NoPermissionBanner";
+import DailySummary from "../DailySummary";
 import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
 
 const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
@@ -47,9 +53,112 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
   const [categoryLoading, setCategoryLoading] = useState(false);
 
   // Daily sum
-  const [dailySumDate, setDailySumDate] = useState(dayjs());
+  const [dailySumDate, setDailySumDate] = useState(() => dayjs().tz("Asia/Dhaka").startOf("day"));
   const [dailySum, setDailySum] = useState(null);
   const [dailySumLoading, setDailySumLoading] = useState(false);
+  const [dailyIncomeForSummary, setDailyIncomeForSummary] = useState(0);
+
+  /** Same as DailyStatement: payments on given date (cash, bkash, nagad, bank) for one booking */
+  const getPaymentsByDate = (booking, date) => {
+    const payments = booking.payments || [];
+    const dateKey = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+    const out = { cash: 0, bkash: 0, nagad: 0, bank: 0 };
+    payments.forEach((p) => {
+      const d = p.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").format("YYYY-MM-DD") : null;
+      if (d !== dateKey) return;
+      const method = (p.paymentMethod || p.method || "").toUpperCase();
+      const amount = Number(p.amount) || 0;
+      if (method === "CASH") out.cash += amount;
+      else if (method === "BKASH") out.bkash += amount;
+      else if (method === "NAGAD") out.nagad += amount;
+      else if (method === "BANK") out.bank += amount;
+    });
+    return out;
+  };
+
+  /** Total paid from payments array; for due we need it */
+  const getDuePayment = (booking) => {
+    const totalBill = Number(booking.totalBill) || 0;
+    const payments = booking.payments || [];
+    const totalPaid = payments.length > 0
+      ? payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+      : Number(booking.advancePayment) || 0;
+    return Math.max(0, totalBill - totalPaid);
+  };
+
+  const fetchDailyIncomeFromBookings = async (date) => {
+    try {
+      const response = await coreAxios.get("/bookings");
+      if (response.status !== 200) {
+        setDailyIncomeForSummary(0);
+        return;
+      }
+      let allBookings = Array.isArray(response.data) ? response.data : [];
+      allBookings = allBookings.filter((b) => b && b.statusID !== 255);
+      try {
+        const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+        const userRole = userInfo?.role?.value;
+        const userHotelID = Number(userInfo?.hotelID);
+        if (userRole === "hoteladmin" && userHotelID) {
+          allBookings = allBookings.filter((b) => b && Number(b.hotelID) === userHotelID);
+        }
+      } catch (_) {}
+
+      const selectedDay = dayjs(date).tz("Asia/Dhaka").startOf("day");
+
+      const bookingsForDate = allBookings.filter((booking) => {
+        if (!booking.checkInDate || !booking.checkOutDate) return false;
+        const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka").startOf("day");
+        const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+        return !selectedDay.isBefore(checkIn) && !selectedDay.isAfter(checkOut);
+      });
+
+      const unPaidInvoice = allBookings.filter((booking) => {
+        if (!booking.checkOutDate) return false;
+        const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+        const isOnOrAfterCheckout = !selectedDay.isBefore(checkOut, "day");
+        if (!isOnOrAfterCheckout) return false;
+        const duePayment = getDuePayment(booking);
+        return duePayment > 0;
+      });
+
+      const regularInvoice = bookingsForDate.filter((booking) => {
+        if (!booking.checkOutDate) return true;
+        const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+        const isCheckoutDay = selectedDay.isSame(checkOut, "day");
+        if (!isCheckoutDay) return true;
+        const duePayment = getDuePayment(booking);
+        return duePayment <= 0;
+      });
+
+      const combined = [...regularInvoice, ...unPaidInvoice];
+      const calculated = combined.reduce((sum, booking) => {
+        const byDate = getPaymentsByDate(booking, date);
+        // Match DailyStatement: Daily Income row should show only daily CASH
+        return sum + (byDate.cash || 0);
+      }, 0);
+      setDailyIncomeForSummary(calculated);
+    } catch (error) {
+      console.error("Error fetching daily income for summary:", error);
+      setDailyIncomeForSummary(0);
+    }
+  };
+
+  const loadDailyIncomeFromStorage = (date) => {
+    try {
+      const dateStr = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+      const raw = typeof window !== "undefined"
+        ? localStorage.getItem(`dailySummary:${dateStr}`)
+        : null;
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.dailyIncome === "number") {
+        setDailyIncomeForSummary(parsed.dailyIncome || 0);
+      }
+    } catch (error) {
+      console.error("Error loading daily income from storage:", error);
+    }
+  };
 
   const fetchExpenses = async () => {
     try {
@@ -87,7 +196,7 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
   const fetchDailySum = async (date) => {
     try {
       setDailySumLoading(true);
-      const dateStr = dayjs(date).format("YYYY-MM-DD");
+      const dateStr = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
       const response = await coreAxios.get(`/expenses/sum/daily?date=${dateStr}`);
       if (response?.data) {
         setDailySum(response.data);
@@ -110,17 +219,33 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
 
   useEffect(() => {
     fetchDailySum(dailySumDate);
+    fetchDailyIncomeFromBookings(dailySumDate);
+    loadDailyIncomeFromStorage(dailySumDate);
   }, [dailySumDate]);
 
-  // Expenses for selected date only (table is date-wise)
-  const expensesForDate = expenses.filter(
-    (e) => e && e.expenseDate && dayjs(e.expenseDate).isSame(dailySumDate, "day")
-  );
+  // Expenses for selected date only (Bangladesh date)
+  const selectedDayBD = dayjs(dailySumDate).tz("Asia/Dhaka").startOf("day");
+  const expensesForDate = expenses.filter((e) => {
+    if (!e || !e.expenseDate) return false;
+    const expenseDayBD = dayjs(e.expenseDate).tz("Asia/Dhaka").startOf("day");
+    return expenseDayBD.isSame(selectedDayBD, "day");
+  });
 
   // Reset to page 1 when date changes
   useEffect(() => {
     setPagination((p) => ({ ...p, current: 1 }));
   }, [dailySumDate]);
+
+  // Category → color for row styling (green, purple, yellow, blue, orange)
+  const CATEGORY_COLORS = ["green", "purple", "yellow", "blue", "orange"];
+  const categoryColorMap = useMemo(() => {
+    const names = [...new Set(expensesForDate.map((e) => (e?.expenseCategory || "").trim()).filter(Boolean))].sort();
+    const map = {};
+    names.forEach((name, i) => {
+      map[name] = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+    });
+    return map;
+  }, [expensesForDate]);
 
   const defaultExpenseRow = () => ({
     expenseCategory: "",
@@ -131,8 +256,8 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
   const formik = useFormik({
     initialValues: {
       expenseItems: [defaultExpenseRow()],
-      expenseDate: dayjs(),
-      createdAt: dayjs(),
+      expenseDate: dayjs().tz("Asia/Dhaka").startOf("day"),
+      createdAt: dayjs().tz("Asia/Dhaka"),
       // Single-item mode for edit
       expenseCategory: "",
       expenseReason: "",
@@ -141,7 +266,7 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
     onSubmit: async (values, { resetForm }) => {
       setLoading(true);
       try {
-        const expenseDateStr = dayjs(values.expenseDate).format("YYYY-MM-DD");
+        const expenseDateStr = dayjs(values.expenseDate).tz("Asia/Dhaka").format("YYYY-MM-DD");
 
         if (isEditing) {
           const payload = {
@@ -188,8 +313,8 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
         resetForm({
           values: {
             expenseItems: [defaultExpenseRow()],
-            expenseDate: dayjs(),
-            createdAt: dayjs(),
+            expenseDate: dayjs().tz("Asia/Dhaka").startOf("day"),
+            createdAt: dayjs().tz("Asia/Dhaka"),
             expenseCategory: "",
             expenseReason: "",
             expenseAmount: 0,
@@ -272,8 +397,8 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
       expenseCategory: record.expenseCategory || "",
       expenseReason: record.expenseReason,
       expenseAmount: record.expenseAmount,
-      expenseDate: dayjs(record.expenseDate),
-      createdAt: dayjs(record.createdAt),
+      expenseDate: dayjs(record.expenseDate).tz("Asia/Dhaka"),
+      createdAt: dayjs(record.createdAt).tz("Asia/Dhaka"),
     });
     setVisible(true);
     setIsEditing(true);
@@ -319,35 +444,52 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
     }
   };
 
+  const headerCellStyle = {
+    backgroundColor: "#2563eb",
+    color: "#ffffff",
+    fontWeight: 600,
+    fontSize: "11px",
+    textAlign: "center",
+  };
+
   const expenseColumns = [
     {
-      title: "Expense Date",
-      dataIndex: "expenseDate",
-      key: "expenseDate",
-      render: (date) => dayjs(date).format("YYYY-MM-DD"),
-      sorter: (a, b) => new Date(a.expenseDate) - new Date(b.expenseDate),
+      title: "SL No.",
+      dataIndex: "sl",
+      key: "sl",
+      width: 70,
+      align: "center",
+      render: (_value, _record, index) =>
+        (pagination.current - 1) * pagination.pageSize + index + 1,
+      onHeaderCell: () => ({ style: headerCellStyle }),
     },
     {
-      title: "Category",
+      title: "Expense Category",
       dataIndex: "expenseCategory",
       key: "expenseCategory",
       render: (category) => category || "N/A",
+      onHeaderCell: () => ({ style: headerCellStyle }),
     },
     {
-      title: "Expense Reason",
+      title: "Expense Details",
       dataIndex: "expenseReason",
       key: "expenseReason",
+      onHeaderCell: () => ({ style: headerCellStyle }),
     },
     {
       title: "Amount (BDT)",
       dataIndex: "expenseAmount",
       key: "expenseAmount",
+      align: "right",
       render: (amount) => `৳${amount?.toFixed(2) || 0}`,
       sorter: (a, b) => (a.expenseAmount || 0) - (b.expenseAmount || 0),
+      onHeaderCell: () => ({ style: headerCellStyle }),
     },
     {
       title: "Actions",
       key: "actions",
+      align: "center",
+      onHeaderCell: () => ({ style: headerCellStyle }),
       render: (_, record) => (
         <Space size="middle">
           {canEdit && (
@@ -363,7 +505,8 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
               title="Are you sure to delete this expense?"
               onConfirm={() => handleDelete(record)}
               okText="Yes"
-              cancelText="No">
+              cancelText="No"
+            >
               <Button danger icon={<DeleteOutlined />} />
             </Popconfirm>
           )}
@@ -467,7 +610,7 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
           />
           <DatePicker
             value={dailySumDate}
-            onChange={(date) => setDailySumDate(date || dayjs())}
+            onChange={(date) => setDailySumDate(date ? dayjs(date).tz("Asia/Dhaka").startOf("day") : dayjs().tz("Asia/Dhaka").startOf("day"))}
             allowClear={false}
             format="DD MMM YYYY"
           />
@@ -488,22 +631,42 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-gray-200 text-sm">
                   <thead>
-                    <tr className="bg-gray-50">
-                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 w-[120px]">Expense Date</th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 w-[100px]">Category</th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 min-w-[140px]">Expense Reason</th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 w-[110px]">Amount (BDT)</th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-medium text-gray-700 w-[120px]">Actions</th>
+                    <tr style={{ backgroundColor: "#2563eb", color: "#ffffff" }}>
+                      <th className="border border-gray-200 px-3 py-2 text-center font-semibold text-xs w-[70px]">
+                        SL No.
+                      </th>
+                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-xs w-[140px]">
+                        Expense Category
+                      </th>
+                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-xs min-w-[160px]">
+                        Expense Details
+                      </th>
+                      <th className="border border-gray-200 px-3 py-2 text-right font-semibold text-xs w-[110px]">
+                        Amount (BDT)
+                      </th>
+                      <th className="border border-gray-200 px-3 py-2 text-center font-semibold text-xs w-[110px]">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {[...Array(10)].map((_, i) => (
                       <tr key={i}>
-                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
-                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
-                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
-                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
-                        <td className="border border-gray-200 px-3 py-2 align-middle"><Skeleton.Input active size="small" className="w-full" block /></td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle">
+                          <Skeleton.Input active size="small" className="w-full" block />
+                        </td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle">
+                          <Skeleton.Input active size="small" className="w-full" block />
+                        </td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle">
+                          <Skeleton.Input active size="small" className="w-full" block />
+                        </td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle">
+                          <Skeleton.Input active size="small" className="w-full" block />
+                        </td>
+                        <td className="border border-gray-200 px-3 py-2 align-middle">
+                          <Skeleton.Input active size="small" className="w-full" block />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -522,6 +685,10 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
                     )}
                     pagination={false}
                     rowKey={(record) => record._id || record.id}
+                    rowClassName={(record) => {
+                      const color = categoryColorMap[(record?.expenseCategory || "").trim()] || "default";
+                      return `expense-row expense-cat-${color}`;
+                    }}
                     onChange={handleTableChange}
                     scroll={{ x: true }}
                     bordered
@@ -537,10 +704,22 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
                 showSizeChanger
                 showTotal={(total, range) => `${range[0]}-${range[1]} of ${total}`}
                 onChange={(page, pageSize) =>
-                  setPagination((p) => ({ ...p, current: page, pageSize: pageSize || p.pageSize }))
+                  setPagination((p) => ({
+                    ...p,
+                    current: page,
+                    pageSize: pageSize || p.pageSize,
+                  }))
                 }
                 className="mt-4"
               />
+
+              <div className="mt-6">
+                <DailySummary
+                  selectedDate={dailySumDate}
+                  dailyIncome={dailyIncomeForSummary}
+                  hideSave
+                />
+              </div>
             </>
           )}
         </Col>
@@ -596,8 +775,8 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
           formik.resetForm({
             values: {
               expenseItems: [defaultExpenseRow()],
-              expenseDate: dayjs(),
-              createdAt: dayjs(),
+              expenseDate: dayjs().tz("Asia/Dhaka").startOf("day"),
+              createdAt: dayjs().tz("Asia/Dhaka"),
               expenseCategory: "",
               expenseReason: "",
               expenseAmount: 0,
@@ -681,7 +860,7 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
                 <DatePicker
                   style={{ width: "100%" }}
                   value={formik.values.expenseDate}
-                  onChange={(date) => formik.setFieldValue("expenseDate", date || dayjs())}
+                  onChange={(date) => formik.setFieldValue("expenseDate", date ? dayjs(date).tz("Asia/Dhaka").startOf("day") : dayjs().tz("Asia/Dhaka").startOf("day"))}
                   required
                 />
               </div>
