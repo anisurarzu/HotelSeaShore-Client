@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Button,
   Table,
@@ -59,6 +59,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
   const [roomList, setRoomList] = useState([]);
   const [bookingData, setBookingData] = useState({});
   const [allBookings, setAllBookings] = useState([]);
+  const calendarWrapperRef = useRef(null);
   const [showDateRange, setShowDateRange] = useState(false);
   const [dateRange, setDateRange] = useState([
     dayjs().startOf("month"),
@@ -94,6 +95,26 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       currentDate = currentDate.add(1, "day");
     }
     return dates;
+  };
+
+  const scrollToTodayColumn = () => {
+    try {
+      const wrapper = calendarWrapperRef.current;
+      if (!wrapper) return;
+      const body =
+        wrapper.querySelector(".ant-table-body") ||
+        wrapper.querySelector(".ant-table-container .ant-table-body");
+      if (!body) return;
+
+      const dates = generateDateColumns();
+      const today = dayjs();
+      const todayIdx = dates.findIndex((d) => d.isSame(today, "day"));
+
+      // Date columns width is configured as `width: 80` in getColumns()
+      const cellWidth = 80;
+      const target = todayIdx >= 0 ? todayIdx * cellWidth : 0;
+      body.scrollLeft = Math.max(0, target);
+    } catch (_) {}
   };
 
   // Calculate total booked days for a room
@@ -432,7 +453,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       dataIndex: 'flatNo',
       key: 'flatNo',
       fixed: 'left',
-      width: 52,
+      width: 72,
       onHeaderCell: () => ({
         style: { 
           background: roomNoColumnBg, 
@@ -458,6 +479,25 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           style={{ background: roomNoColumnBg, color: "white" }}
         >
           <div className="font-bold text-xs sm:text-sm text-white">{text}</div>
+          {record?.category && (
+            <div
+              className="text-white/85"
+              style={{
+                marginTop: 1,
+                fontSize: "6px",
+                fontWeight: 600,
+                lineHeight: 1.0,
+                letterSpacing: 0,
+                textAlign: "center",
+                width: "100%",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {record.category}
+            </div>
+          )}
           <div className="text-xs text-white/90">
             {calculateTotalBooked(record.key)}/{generateDateColumns().length}
           </div>
@@ -996,6 +1036,25 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     }
   };
 
+  // When table is ready (rooms loaded / dateRange changed), start view from today.
+  useEffect(() => {
+    if (loading) return;
+    // Wait a tick so antd renders tbody before we scroll.
+    const t = setTimeout(() => {
+      scrollToTodayColumn();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [loading, dateRange]);
+
+  // Extra safety: after room list updates, antd sometimes re-renders table body and resets scroll.
+  useEffect(() => {
+    if (loading) return;
+    const t = setTimeout(() => {
+      scrollToTodayColumn();
+    }, 50);
+    return () => clearTimeout(t);
+  }, [roomList.length, dateRange, loading]);
+
   if (!canView) {
     return <NoPermissionBanner />;
   }
@@ -1156,7 +1215,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto -mx-2 sm:mx-0">
+              <div ref={calendarWrapperRef} className="overflow-x-auto -mx-2 sm:mx-0">
                 <Table
                   columns={getColumns()}
                   dataSource={roomList}

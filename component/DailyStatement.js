@@ -12,6 +12,7 @@ dayjs.extend(timezone);
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
 import { CopyOutlined } from "@ant-design/icons";
+import { DownloadOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import DatePicker from "antd/es/date-picker";
 import { useFormik } from "formik";
@@ -537,6 +538,217 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     );
   }, [bookings.regularInvoice, bookings.unPaidInvoice, formik.values]);
 
+  const toBangladeshDateStr = (date) => dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+
+  const downloadDailyStatementAndSummaryPdf = async () => {
+    try {
+      const dateStr = toBangladeshDateStr(selectedDate);
+
+      const allBookings = [...(bookings.regularInvoice || []), ...(bookings.unPaidInvoice || [])];
+
+      // Statement rows (UI daily cash input + saved daily cash from backend)
+      const statementRows = allBookings.map((booking, idx) => {
+        const bookingId = booking._id || booking.id;
+        const totals = getCumulativeTotals(booking, selectedDate);
+        const byDate = getPaymentsByDate(booking, selectedDate);
+        const inputDailyCash = Number(formik.values?.[bookingId]?.dailyAmount) || 0;
+        const remainingAmount = (booking.totalBill || 0) - totals.totalPaid;
+
+        return {
+          sl: idx + 1,
+          room: booking.roomNumberName || booking.roomNumber || "N/A",
+          invoice: booking.bookingNo || booking.bookingNumber || "N/A",
+          guest: booking.fullName || booking.guestName || "N/A",
+          phone: booking.phone || booking.phoneNumber || "N/A",
+          checkIn: moment(booking.checkInDate).format("D MMM"),
+          checkOut: moment(booking.checkOutDate).format("D MMM"),
+          nights: booking.nights || 0,
+          totalBill: Number(booking.totalBill || 0),
+          bkash: Number(totals.bkash || 0),
+          bank: Number(totals.bank || 0),
+          totalPaid: Number(totals.totalPaid || 0),
+          dailyCashFromDb: Number(byDate.cash || 0),
+          inputDailyCash,
+          due: Number(totals.duePayment || 0),
+          remaining: Math.max(0, remainingAmount || 0),
+        };
+      });
+
+      // Summary values
+      const [sumRes, expRes] = await Promise.all([
+        coreAxios.get(`/daily-summary/${dateStr}`).catch(() => null),
+        coreAxios.get(`/expenses/sum/daily?date=${dateStr}`).catch(() => null),
+      ]);
+
+      const openingBalance = Number(sumRes?.status === 200 ? sumRes.data?.openingBalance : 0) || 0;
+      const dailyExpenses = Number(expRes?.status === 200 ? expRes.data?.totalAmount : 0) || 0;
+      const dailyIncome = Number(totalDailyCashForSummary) || 0;
+      const totalBalance = openingBalance + dailyIncome;
+      const closingBalance = totalBalance - dailyExpenses;
+
+      const statementRowsHtml = statementRows.length
+        ? statementRows
+            .map(
+              (r) => `
+                  <tr>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.sl}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;">${r.room}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;">${r.invoice}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;">${r.phone}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.checkIn}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.checkOut}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.nights}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.totalBill.toLocaleString()}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.bkash.toLocaleString()}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.bank.toLocaleString()}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.totalPaid.toLocaleString()}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.dailyCashFromDb.toLocaleString()}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;color:#dc2626;font-weight:600;">${Number(r.due ?? 0).toLocaleString()}</td>
+              </tr>
+            `
+            )
+            .join("")
+          : `<tr><td colspan="13" style="border:1px solid #e5e7eb;padding:8px;font-size:9px;text-align:center;">No records</td></tr>`;
+
+      const grandTotals = statementRows.reduce(
+        (acc, r) => {
+          acc.totalBill += Number(r?.totalBill || 0);
+          acc.bkash += Number(r?.bkash || 0);
+          acc.bank += Number(r?.bank || 0);
+          acc.totalPaid += Number(r?.totalPaid || 0);
+          acc.dailyCashFromDb += Number(r?.dailyCashFromDb || 0);
+          acc.duePayment += Number(r?.due || 0);
+          return acc;
+        },
+        {
+          totalBill: 0,
+          bkash: 0,
+          bank: 0,
+          totalPaid: 0,
+          dailyCashFromDb: 0,
+          duePayment: 0,
+        }
+      );
+
+      const totalRowHtml =
+        statementRows.length > 0
+          ? `
+              <tr>
+                <td colSpan="7" style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                  Total:
+                </td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                  ${grandTotals.totalBill.toLocaleString()}
+                </td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                  ${grandTotals.bkash.toLocaleString()}
+                </td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                  ${grandTotals.bank.toLocaleString()}
+                </td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                  ${grandTotals.totalPaid.toLocaleString()}
+                </td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                  ${grandTotals.dailyCashFromDb.toLocaleString()}
+                </td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#dc2626;line-height:1.1;">
+                  ${grandTotals.duePayment.toLocaleString()}
+                </td>
+              </tr>
+            `
+          : "";
+
+      const html = `
+        <div id="daily-pdf-root" style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#0f172a;">
+          <div style="padding:14px 18px;background:linear-gradient(135deg,#2563eb 0%, #1d4ed8 100%);color:#fff;text-align:center;">
+            <div style="font-size:18px;font-weight:800;letter-spacing:0.04em;">Daily Statement & Summary - Hotel Sea Shore</div>
+            <div style="font-size:12px;opacity:0.95;margin-top:4px;">Date: ${dateStr}</div>
+          </div>
+
+          <div style="padding:14px 18px;">
+            <div style="overflow:visible;">
+              <table style="width:100%;border-collapse:collapse;min-width:740px;">
+                <thead>
+                  <tr>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">SL</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Room</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Invoice</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Phone</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Check-in</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Check-out</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">N</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Total Bill</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Bkash</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Bank</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Total Paid</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Daily Cash</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Due</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${statementRowsHtml}
+                  ${totalRowHtml}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="padding:0 18px 18px 18px;">
+            <h3 style="margin:0 0 10px 0;font-size:14px;font-weight:800;color:#0f172a;border-bottom:3px solid #bbf7d0;padding-bottom:6px;width:100%;text-align:center;">Daily Summary</h3>
+            <div style="overflow:visible;display:flex;justify-content:center;">
+              <table style="width:50%;border-collapse:collapse;min-width:unset;">
+                <tbody>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Opening Balance</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(openingBalance || 0).toLocaleString()}</td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Daily Income (CASH)</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(dailyIncome || 0).toLocaleString()}</td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Daily Expenses</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(dailyExpenses || 0).toLocaleString()}</td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Closing Balance</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(closingBalance || 0).toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.left = "-99999px";
+      container.style.top = "0";
+      container.innerHTML = html;
+      document.body.appendChild(container);
+
+      const html2pdf = (await import("html2pdf.js")).default;
+      const element = container.querySelector("#daily-pdf-root");
+
+      const options = {
+        margin: [0.2, 0.2, 0.2, 0.2],
+        filename: `Daily-Statement-Summary-${dateStr}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true, allowTaint: true },
+        jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+
+      await html2pdf().from(element).set(options).save();
+      container.remove();
+    } catch (e) {
+      console.error("Download PDF failed", e);
+      message.error("Failed to download PDF");
+    }
+  };
+
   if (!canView) {
     return <NoPermissionBanner />;
   }
@@ -570,6 +782,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           >
             →
           </Button>
+          <Button
+            type="primary"
+            size="small"
+            icon={<DownloadOutlined />}
+            onClick={downloadDailyStatementAndSummaryPdf}
+          >
+            Download PDF
+          </Button>
         </div>
       </div>
 
@@ -587,9 +807,6 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                 </th>
                 <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Invoice
-                </th>
-                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Name
                 </th>
                 <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Phone
@@ -641,9 +858,6 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                       <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 70, height: 20 }} />
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 80, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
                       <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 70, height: 20 }} />
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300">
@@ -681,7 +895,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
               ) : bookings.regularInvoice?.length === 0 &&
                 bookings.unPaidInvoice?.length === 0 ? (
                 <tr>
-                  <td colSpan="15" className="text-center p-4">
+                  <td colSpan="14" className="text-center p-4">
                     <Alert message="No bookings found" type="info" />
                   </td>
                 </tr>
@@ -726,17 +940,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             </Tooltip>
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
-                          {booking.fullName || booking.guestName || "N/A"}
-                        </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                           {booking.phone || booking.phoneNumber || "N/A"}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {moment(booking.checkInDate).format("D MMM YYYY")}
+                          {moment(booking.checkInDate).format("D MMM")}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {moment(booking.checkOutDate).format("D MMM YYYY")}
+                          {moment(booking.checkOutDate).format("D MMM")}
                         </td>
                         <td className="px-3 py-2.5 text-center text-xs text-gray-700 border border-gray-300">
                           {booking.nights || 0}
@@ -782,7 +993,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                               setDailyIncome(newDailyIncome);
                             }}
                             disabled={totals.duePayment <= 0 || !canEdit}
-                            style={{ width: "80px", color: "#000", textAlign: "right" }}
+                            style={{ width: "70px", color: "#000", textAlign: "right", fontSize: "10px" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
@@ -809,7 +1020,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   {/* Regular Invoices Pagination */}
                   {bookings.regularInvoice?.length > PAGE_SIZE && (
                     <tr>
-                      <td colSpan="15" className="px-2 py-2 border border-gray-300 bg-gray-50">
+                      <td colSpan="14" className="px-2 py-2 border border-gray-300 bg-gray-50">
                         <div className="flex justify-end">
                           <Pagination
                             current={regularPage}
@@ -826,7 +1037,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   )}
                   {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
                     <tr>
-                      <td colSpan="15" className="p-2"></td>
+                  <td colSpan="14" className="p-2"></td>
                     </tr>
                   )}
 
@@ -870,17 +1081,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             </Tooltip>
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
-                          {booking.fullName || booking.guestName || "N/A"}
-                        </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                           {booking.phone || booking.phoneNumber || "N/A"}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {moment(booking.checkInDate).format("D MMM YYYY")}
+                          {moment(booking.checkInDate).format("D MMM")}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {moment(booking.checkOutDate).format("D MMM YYYY")}
+                          {moment(booking.checkOutDate).format("D MMM")}
                         </td>
                         <td className="px-3 py-2.5 text-center text-xs text-gray-700 border border-gray-300">
                           {booking.nights || 0}
@@ -926,7 +1134,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                               setDailyIncome(newDailyIncome);
                             }}
                             disabled={totals.duePayment <= 0 || !canEdit}
-                            style={{ width: "80px", color: "#000", textAlign: "right" }}
+                            style={{ width: "70px", color: "#000", textAlign: "right", fontSize: "10px" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
@@ -953,7 +1161,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   {/* Unpaid Invoices Pagination */}
                   {bookings.unPaidInvoice?.length > PAGE_SIZE && (
                     <tr>
-                      <td colSpan="15" className="px-2 py-2 border border-gray-300 bg-amber-100">
+                      <td colSpan="14" className="px-2 py-2 border border-gray-300 bg-amber-100">
                         <div className="flex justify-end">
                           <Pagination
                             current={unpaidPage}
@@ -973,7 +1181,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
                     <tr className="bg-blue-100 border-t-2 border-blue-300">
                       <td
-                        colSpan="8"
+                        colSpan="7"
                         className="px-2 py-1.5 text-right text-xs font-bold text-gray-900 border border-gray-300"
                       >
                         Total:

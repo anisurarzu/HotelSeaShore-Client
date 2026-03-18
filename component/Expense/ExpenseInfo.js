@@ -16,7 +16,7 @@ import {
   Col,
   Skeleton,
 } from "antd";
-import { EditOutlined, DeleteOutlined, PlusOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { EditOutlined, DeleteOutlined, PlusOutlined, LeftOutlined, RightOutlined, DownloadOutlined } from "@ant-design/icons";
 import { useFormik } from "formik";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -230,6 +230,12 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
     const expenseDayBD = dayjs(e.expenseDate).tz("Asia/Dhaka").startOf("day");
     return expenseDayBD.isSame(selectedDayBD, "day");
   });
+
+  const totalExpensesAmountForDate = useMemo(() => {
+    return expensesForDate.reduce((sum, e) => sum + (Number(e?.expenseAmount) || 0), 0);
+  }, [expensesForDate]);
+
+  const expenseCountForDate = expensesForDate.length;
 
   // Reset to page 1 when date changes
   useEffect(() => {
@@ -553,6 +559,168 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
     setPagination(pagination);
   };
 
+  const toBangladeshDateStr = (date) => dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+
+  const downloadDailyExpensePdf = async () => {
+    try {
+      const dateStr = toBangladeshDateStr(dailySumDate);
+      const dateLabel = dayjs(dailySumDate).tz("Asia/Dhaka").format("DD MMM YYYY");
+
+      const rows = expensesForDate.map((e, idx) => ({
+        sl: idx + 1,
+        category: e?.expenseCategory || "N/A",
+        reason: e?.expenseReason || e?.expenseDetails || "—",
+        amount: Number(e?.expenseAmount || 0),
+      }));
+
+      const totalAmount = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+      // Daily Summary values (match DailyStatement.js look)
+      const [sumRes, expRes] = await Promise.all([
+        coreAxios.get(`/daily-summary/${dateStr}`).catch(() => null),
+        coreAxios.get(`/expenses/sum/daily?date=${dateStr}`).catch(() => null),
+      ]);
+
+      const openingBalance =
+        Number(sumRes?.status === 200 ? sumRes.data?.openingBalance : 0) || 0;
+      const dailyExpenses =
+        Number(expRes?.status === 200 ? expRes.data?.totalAmount : 0) || 0;
+      const dailyIncome = Number(dailyIncomeForSummary) || 0;
+      const totalBalance = openingBalance + dailyIncome;
+      const closingBalance = totalBalance - dailyExpenses;
+
+      const statementRowsHtml = rows.length
+        ? rows
+            .map(
+              (r) => `
+              <tr>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.sl}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;">${r.category}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;">${r.reason}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">৳${Number(r.amount).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}</td>
+              </tr>
+            `
+            )
+            .join("")
+        : `<tr><td colspan="4" style="border:1px solid #e5e7eb;padding:8px;font-size:9px;text-align:center;">No records</td></tr>`;
+
+      const totalRowHtml = rows.length
+        ? `
+          <tr>
+            <td colSpan="3" style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+              Total:
+            </td>
+            <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+              ৳${Number(totalAmount).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </td>
+          </tr>
+        `
+        : "";
+
+      const html = `
+        <div id="daily-expense-pdf-root" style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#0f172a;">
+          <div style="padding:14px 18px;background:linear-gradient(135deg,#2563eb 0%, #1d4ed8 100%);color:#fff;text-align:center;">
+            <div style="font-size:18px;font-weight:800;letter-spacing:0.04em;">Daily Expenses & Summary - Hotel Sea Shore</div>
+            <div style="font-size:12px;opacity:0.95;margin-top:4px;">Date: ${dateLabel}</div>
+          </div>
+
+          <div style="padding:14px 18px 8px 18px;">
+            <div style="font-size:12px;font-weight:800;color:#0f172a;text-align:center;margin-bottom:8px;">Daily Expense</div>
+            <div style="overflow:visible;">
+              <table style="width:100%;border-collapse:collapse;min-width:640px;">
+                <thead>
+                  <tr>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">SL</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Category</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Details</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${statementRowsHtml}
+                  ${totalRowHtml}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="padding:0 18px 18px 18px;">
+            <h3 style="margin:0 0 10px 0;font-size:12px;font-weight:800;color:#0f172a;border-bottom:2px solid #93c5fd;padding-bottom:6px;width:100%;text-align:center;">
+              Daily Summary
+            </h3>
+            <div style="overflow:visible;display:flex;justify-content:center;">
+              <table style="width:50%;border-collapse:collapse;min-width:unset;">
+                <tbody>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Opening Balance</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">
+                      ${openingBalance.toLocaleString()}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Daily Income</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">
+                      ${dailyIncome.toLocaleString()}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Total Balance</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">
+                      ${totalBalance.toLocaleString()}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Daily Expenses</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">
+                      ${dailyExpenses.toLocaleString()}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Closing Balance</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">
+                      ${closingBalance.toLocaleString()}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.left = "-99999px";
+      container.style.top = "0";
+      container.innerHTML = html;
+      document.body.appendChild(container);
+
+      const html2pdf = (await import("html2pdf.js")).default;
+      const element = container.querySelector("#daily-expense-pdf-root");
+
+      const options = {
+        margin: [0.2, 0.2, 0.2, 0.2],
+        filename: `Daily-Expense-${dateStr}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true, allowTaint: true },
+        jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+
+      await html2pdf().from(element).set(options).save();
+      container.remove();
+    } catch (e) {
+      console.error("Download PDF failed", e);
+      toast.error("Failed to download PDF");
+    }
+  };
+
   if (!canView) {
     return <NoPermissionBanner />;
   }
@@ -620,6 +788,15 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
             onClick={() => setDailySumDate(dailySumDate.add(1, "day"))}
             aria-label="Next day"
           />
+          <Button
+            type="primary"
+            size="small"
+            icon={<DownloadOutlined />}
+            onClick={downloadDailyExpensePdf}
+            disabled={loading || dailySumLoading}
+          >
+            Download PDF
+          </Button>
         </div>
       </div>
 
@@ -685,6 +862,17 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
                     )}
                     pagination={false}
                     rowKey={(record) => record._id || record.id}
+                    summary={() => (
+                      <Table.Summary.Row>
+                        <Table.Summary.Cell index={0} colSpan={3} align="right">
+                          Total ({expenseCountForDate})
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={3} align="right">
+                          {`৳${totalExpensesAmountForDate.toFixed(2)}`}
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell index={4} />
+                      </Table.Summary.Row>
+                    )}
                     rowClassName={(record) => {
                       const color = categoryColorMap[(record?.expenseCategory || "").trim()] || "default";
                       return `expense-row expense-cat-${color}`;
