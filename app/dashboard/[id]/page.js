@@ -12,6 +12,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Button, Spin, message, Space } from "antd";
 import coreAxios from "@/utils/axiosInstance";
 import moment from "moment";
+import dayjs from "dayjs";
 
 // Shared layout for Print & PDF – same design
 const INVOICE_PAGE_MARGIN_IN = 0.3;
@@ -363,11 +364,11 @@ const Invoice = ({ params }) => {
               <h1 className="text-2xl font-bold tracking-tight mb-1 uppercase" style={{ letterSpacing: "0.05em" }}>
                 Invoice
               </h1>
-              <div className="text-xs space-y-0.5 opacity-90">
-                <p className="font-semibold">
+              <div className="space-y-0.5 opacity-90">
+                <p className="font-semibold text-sm">
                   #{data?.[0]?.bookingNo || "N/A"}
                 </p>
-                <p className="font-normal">
+                <p className="font-normal text-sm">
                   {moment(data?.[0]?.createTime).format("MMM DD, YYYY") || "N/A"}
                 </p>
               </div>
@@ -397,11 +398,7 @@ const Invoice = ({ params }) => {
                 {data?.[0]?.email && (
                   <p className="text-slate-600 text-xs">{data?.[0]?.email}</p>
                 )}
-                {data?.[0]?.nidPassport && (
-                  <p className="text-slate-600 text-xs">
-                    ID: {data?.[0]?.nidPassport}
-                  </p>
-                )}
+                {/* ID (NID/Passport) hidden on invoice as requested */}
                 {data?.[0]?.address && (
                   <p className="text-slate-600 text-xs">{data?.[0]?.address}</p>
                 )}
@@ -465,6 +462,12 @@ const Invoice = ({ params }) => {
                       borderColor: hotelInfo.colorScheme.accent
                     }}
                   >
+                    <th
+                      className="px-2 py-1.5 text-center text-xs font-bold uppercase"
+                      style={{ color: hotelInfo.colorScheme.tableHeader, width: 40 }}
+                    >
+                      SL
+                    </th>
                     <th 
                       className="px-2 py-1.5 text-left text-xs font-bold uppercase"
                       style={{ color: hotelInfo.colorScheme.tableHeader }}
@@ -512,15 +515,13 @@ const Invoice = ({ params }) => {
                 <tbody className="divide-y divide-slate-100">
                     {data?.map((booking, index) => (
                       <tr key={index}>
+                      <td className="px-2 py-1.5 text-xs text-center text-slate-600">
+                        {index + 1}
+                      </td>
                       <td className="px-2 py-1.5">
                         <div className="font-semibold text-slate-900 text-xs">
                           {booking?.roomCategoryName || "N/A"}
                         </div>
-                        {booking?.roomNumberName && (
-                          <div className="text-slate-500 text-xs">
-                            #{booking.roomNumberName}
-                          </div>
-                        )}
                         </td>
                       <td className="px-2 py-1.5 text-xs text-slate-600">
                         {moment(booking?.checkInDate).format("MMM DD, YY")}
@@ -613,70 +614,28 @@ const Invoice = ({ params }) => {
             </div>
           )}
 
-          {/* Totals Section: Subtotal → VAT/Tax → Total → Total Paid → Due (no bg, formal) */}
-          <div className="mt-4 flex justify-end">
-            <div className="w-full max-w-xs">
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs py-0.5">
-                  <span className="text-slate-600 font-semibold">Subtotal</span>
-                  <span className="text-slate-900 font-bold tabular-nums">৳{totals.finalTotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-xs py-0.5">
-                  <span className="text-slate-600 font-semibold">VAT / Tax</span>
-                  <span className="text-slate-900 font-bold tabular-nums">৳0</span>
-                </div>
-                <div className="flex justify-between text-xs py-0.5 border-t border-slate-200 pt-2 mt-1">
-                  <span className="text-slate-800 font-bold">Total</span>
-                  <span className="text-slate-900 font-bold tabular-nums">৳{totals.finalTotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-xs py-0.5 border-t border-slate-200 pt-2">
-                  <span className="text-slate-600 font-semibold">Total Paid</span>
-                  <span className="text-green-700 font-bold tabular-nums">৳{totalPaidFromInvoices.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-xs py-1.5 border-t-2 border-slate-300 pt-2 mt-1">
-                  <span className="font-bold text-slate-900">Due</span>
-                  <span className="font-bold text-slate-900 tabular-nums">৳{Math.max(0, dueAmount).toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Payment Information / Payment History */}
-          <div 
-            className="mt-4 pt-3 border-t"
-            style={{
-              borderColor: hotelInfo.colorScheme.accent
-            }}
-          >
-            <p 
-              className="text-xs font-semibold mb-2 uppercase"
-              style={{ color: hotelInfo.colorScheme.tableHeader }}
-            >
-              Payment History
-            </p>
-            {(() => {
+          {/* Payment History + Totals (same row) */}
+          <div className="mt-4 flex justify-between items-start gap-4">
+            {/* Payment Information / Payment History */}
+            <div className="flex-1 min-w-0">
+              <div
+                className="pt-3 border-t"
+                style={{
+                  borderColor: hotelInfo.colorScheme.accent
+                }}
+              >
+                <p
+                  className="text-xs font-semibold mb-2 uppercase"
+                  style={{ color: hotelInfo.colorScheme.tableHeader }}
+                >
+                  Payment History
+                </p>
+                {(() => {
               const fmtTime = (t) => {
                 if (!t) return "—";
-                const [h, m] = String(t).split(":").map(Number);
-                if (h === 12) return `12:${String(m || 0).padStart(2, "0")} PM`;
-                if (h === 0) return `12:${String(m || 0).padStart(2, "0")} AM`;
-                return h > 12 ? `${h - 12}:${String(m || 0).padStart(2, "0")} PM` : `${h}:${String(m || 0).padStart(2, "0")} AM`;
+                const d = dayjs(String(t), ["HH:mm", "H:mm"], true);
+                return d.isValid() ? d.format("h:mm A") : String(t);
               };
-              const checkIn = data?.[0]?.hotelInformation?.checkInTime || "14:00";
-              const checkOut = data?.[0]?.hotelInformation?.checkOutTime || "11:00";
-              const timeBox = (
-                <div
-                  className="rounded-lg py-3 px-4 text-right shrink-0 h-full flex flex-col justify-center"
-                  style={{ minWidth: "140px" }}
-                >
-                  <p className="text-slate-700 text-xs font-semibold mb-0.5">
-                    Check-in: <span className="text-slate-900 font-bold">{fmtTime(checkIn)}</span>
-                  </p>
-                  <p className="text-slate-700 text-xs font-semibold mb-0">
-                    Check-out: <span className="text-slate-900 font-bold">{fmtTime(checkOut)}</span>
-                  </p>
-                </div>
-              );
               // Collect payments from ALL invoices (data array)
               const allPayments = [];
               (data || []).forEach((inv) => {
@@ -699,74 +658,132 @@ const Invoice = ({ params }) => {
                         <p className="font-bold text-slate-900 text-xs">{data?.[0]?.paymentMethod || "N/A"}</p>
                       </div>
                       <div className="p-2 rounded">
-                        <p className="text-xs font-semibold mb-0.5 uppercase" style={{ color: hotelInfo.colorScheme.tableHeader }}>Transaction ID</p>
+                        <p className="text-xs font-semibold mb-0.5 uppercase" style={{ color: hotelInfo.colorScheme.tableHeader }}>Transaction</p>
                         <p className="font-bold text-slate-900 text-xs">
                           {data?.[0]?.paymentMethod?.toUpperCase() === "CASH" && !data?.[0]?.transactionId ? "Cash" : (data?.[0]?.transactionId || "—")}
                         </p>
                       </div>
                     </div>
-                    {timeBox}
                   </div>
                 );
               }
-              // Merge by method only: same method = one row, all amounts summed (e.g. all BKASH together)
-              const merged = {};
-              allPayments.forEach((p) => {
-                const method = ((p.paymentMethod || p.method || "").trim() || "CASH").toUpperCase();
-                const amount = Number(p.amount) || 0;
-                const txnId = (p.transactionId || "").trim();
-                if (!merged[method]) {
-                  merged[method] = { method, txnId: method === "CASH" ? "" : (txnId || "—"), total: amount };
-                } else {
-                  merged[method].total += amount;
-                  if (txnId && !merged[method].txnId) merged[method].txnId = txnId;
-                }
-              });
-              const rows = Object.values(merged).sort((a, b) => a.method.localeCompare(b.method));
-              const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+              // Table rows: show each payment as its own row (sorted by date if available)
+              const rows = [...allPayments]
+                .map((p) => ({
+                  method: ((p.paymentMethod || p.method || "").trim() || "CASH").toUpperCase(),
+                  txnId: (p.transactionId || "").trim(),
+                  amount: Number(p.amount) || 0,
+                  createdAt: p.createdAt || null,
+                }))
+                .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+              const grandTotal = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
               return (
-                <div className="flex justify-between items-stretch gap-4">
-                  <div className="max-w-sm shrink-0">
-                    <div className="rounded-lg py-3 px-4 space-y-2 h-full">
-                      {rows.map((r) => {
-                        const displayLabel = r.method === "CASH" ? "CASH ()" : `${r.method} (${r.txnId})`;
-                        const isMobileWallet = /^(BKASH|NAGAD|ROCKET)$/i.test(r.method);
-                        const isBankOrCard = /^(BANK|CARD|BANK CARD|VISA|MASTERCARD)$/i.test(r.method);
-                        const PaymentIcon = isMobileWallet ? MobileOutlined : isBankOrCard ? CreditCardOutlined : DollarOutlined;
-                        return (
-                          <div key={r.method} className="flex justify-between items-baseline gap-3">
-                            <span className="font-semibold text-slate-800 text-xs flex items-center gap-1.5" style={{ fontFamily: "inherit" }}>
-                              <PaymentIcon className="shrink-0" style={{ fontSize: "14px", color: hotelInfo.colorScheme.tableHeader }} />
-                              {displayLabel}
-                            </span>
-                            <span className="font-bold text-slate-900 text-xs tabular-nums">
-                              {r.total.toLocaleString()}
-                            </span>
-                          </div>
-                        );
-                      })}
-                      <div 
-                        className="flex justify-between items-baseline gap-3 pt-2 mt-2 border-t font-bold"
-                        style={{ borderColor: hotelInfo.colorScheme.accent }}
-                      >
-                        <span className="text-slate-800 text-xs">Total Paid</span>
-                        <span className="text-slate-900 text-xs tabular-nums">{grandTotal.toLocaleString()}</span>
-                      </div>
+                <div className="w-full">
+                  <div className="w-full">
+                    <div className="rounded-lg overflow-hidden border" style={{ borderColor: hotelInfo.colorScheme.accent }}>
+                      <table className="w-full border-collapse" style={{ fontSize: "11px" }}>
+                        <thead>
+                          <tr style={{ backgroundColor: hotelInfo.colorScheme.tableHeader }}>
+                            <th className="px-2 py-1.5 text-left font-semibold uppercase tracking-tight" style={{ color: "#ffffff", width: 55 }}>
+                              SL NO
+                            </th>
+                            <th className="px-2 py-1.5 text-left font-semibold uppercase tracking-tight" style={{ color: "#ffffff" }}>
+                              Method
+                            </th>
+                            <th className="px-2 py-1.5 text-left font-semibold uppercase tracking-tight" style={{ color: "#ffffff" }}>
+                              TnxId
+                            </th>
+                            <th className="px-2 py-1.5 text-right font-semibold uppercase tracking-tight" style={{ color: "#ffffff", width: 90 }}>
+                              Amount
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((r, idx) => (
+                            <tr key={`${r.method}-${r.txnId}-${idx}`} className="border-t" style={{ borderColor: hotelInfo.colorScheme.accent }}>
+                              <td className="px-2 py-1.5 text-slate-700">{idx + 1}</td>
+                              <td className="px-2 py-1.5 text-slate-800 font-semibold">{r.method}</td>
+                              <td className="px-2 py-1.5 text-slate-700">
+                                {r.method === "CASH" ? "—" : (r.txnId || "—")}
+                              </td>
+                              <td className="px-2 py-1.5 text-right text-slate-900 font-bold tabular-nums">
+                                {r.amount.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="border-t" style={{ borderColor: hotelInfo.colorScheme.accent, backgroundColor: hotelInfo.colorScheme.secondary }}>
+                            <td className="px-2 py-1.5" colSpan={3}>
+                              <span className="text-slate-800 font-bold">Total Paid</span>
+                            </td>
+                            <td className="px-2 py-1.5 text-right text-slate-900 font-bold tabular-nums">
+                              {grandTotal.toLocaleString()}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                  {timeBox}
                 </div>
               );
             })()}
+              </div>
+            </div>
+
+            {/* Totals Section: Subtotal → VAT/Tax → Total → Total Paid → Due */}
+            <div className="w-full max-w-xs shrink-0">
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs py-0.5">
+                  <span className="text-slate-600 font-semibold">Subtotal</span>
+                  <span className="text-slate-900 font-bold tabular-nums">৳{totals.finalTotal.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs py-0.5">
+                  {/* <span className="text-slate-600 font-semibold">VAT / Tax</span> */}
+                  {/* <span className="text-slate-900 font-bold tabular-nums">৳0</span> */}
+                </div>
+                {/* Total hidden (same as Subtotal) */}
+                <div className="flex justify-between text-xs py-0.5 border-t border-slate-200 pt-2">
+                  <span className="text-slate-600 font-semibold">Total Paid</span>
+                  <span className="text-green-700 font-bold tabular-nums">৳{totalPaidFromInvoices.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs py-1.5 border-t-2 border-slate-300 pt-2 mt-1">
+                  <span className="font-bold text-slate-900">Due</span>
+                  <span className="font-bold text-slate-900 tabular-nums">৳{Math.max(0, dueAmount).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Terms & Conditions (bottom) */}
+          {Array.isArray(data?.[0]?.hotelInformation?.termsAndConditions) &&
+            data?.[0]?.hotelInformation?.termsAndConditions?.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-slate-200">
+                <p
+                  className="text-xs font-semibold mb-2 uppercase"
+                  style={{ color: hotelInfo.colorScheme.tableHeader }}
+                >
+                  Terms & Conditions
+                </p>
+                <ol className="list-decimal pl-5 space-y-1">
+                  {data[0].hotelInformation.termsAndConditions.map((t, idx) => (
+                    <li key={idx} className="text-[11px] text-slate-700 leading-snug">
+                      {/check-?\s*in\s*time|check-?\s*out\s*time/i.test(String(t)) ? (
+                        <span className="font-bold text-slate-900">{t}</span>
+                      ) : (
+                        t
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
 
           {/* Footer */}
           <div className="mt-4 pt-3 border-t border-slate-200 text-center">
             <p className="text-xs text-slate-600 font-semibold mb-1">
-              Thank you for choosing {data?.[0]?.hotelName || hotelInfo.name}
+              Thank you for choosing {data?.[0]?.hotelName || hotelInfo.name}. We hope you enjoyed your stay.
             </p>
-            <p className="text-xs text-slate-500">
-              We hope you enjoyed your stay
+            <p className="text-[11px] text-slate-500">
+              This is a system-generated report and does not require a signature. Technical support provided by Cox&apos;s Web Solutions.
             </p>
           </div>
         </div>

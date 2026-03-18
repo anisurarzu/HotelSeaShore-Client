@@ -70,13 +70,50 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   };
 
   /** Total paid = sum of all payment amounts (payments array is source of truth); fallback advancePayment if no payments */
+  const getTotalPaidUpToDate = (booking, date) => {
+    if (!date) return 0;
+    const selectedDay = dayjs(date).tz("Asia/Dhaka").endOf("day");
+
+    // Preferred: backend-calculated per-day totals (controller: paidAmountsByDate)
+    if (Array.isArray(booking?.paidAmountsByDate) && booking.paidAmountsByDate.length > 0) {
+      return booking.paidAmountsByDate.reduce((sum, row) => {
+        const d = row?.date ? dayjs(row.date).tz("Asia/Dhaka").endOf("day") : null;
+        if (!d) return sum;
+        if (d.isAfter(selectedDay, "day")) return sum;
+        return sum + (Number(row.totalPaid) || 0);
+      }, 0);
+    }
+
+    // Fallback: sum payments up to date (inclusive)
+    const payments = Array.isArray(booking?.payments) ? booking.payments : [];
+    if (payments.length > 0) {
+      return payments.reduce((sum, p) => {
+        const d = p?.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").endOf("day") : null;
+        if (!d) return sum;
+        if (d.isAfter(selectedDay, "day")) return sum;
+        return sum + (Number(p.amount) || 0);
+      }, 0);
+    }
+
+    // Legacy fallback: treat advancePayment as paid on createdAt
+    if (Number(booking?.advancePayment) > 0) {
+      const created = booking?.createdAt ? dayjs(booking.createdAt).tz("Asia/Dhaka").endOf("day") : null;
+      if (!created || created.isAfter(selectedDay, "day")) return 0;
+      return Number(booking.advancePayment) || 0;
+    }
+    return 0;
+  };
+
   const getCumulativeTotals = (booking, selectedDateForRow = null) => {
     const payments = booking.payments || [];
     const totalBill = Number(booking.totalBill) || 0;
-    const totalPaid =
+    const totalPaidAllTime =
       payments.length > 0
         ? payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
         : Number(booking.advancePayment) || 0;
+    const totalPaid = selectedDateForRow
+      ? getTotalPaidUpToDate(booking, selectedDateForRow)
+      : totalPaidAllTime;
     const duePayment = Math.max(0, totalBill - totalPaid);
 
     const byDate = selectedDateForRow ? getPaymentsByDate(booking, selectedDateForRow) : { cash: 0, bkash: 0, nagad: 0, bank: 0 };
@@ -142,17 +179,15 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           );
         });
 
-        // Unpaid:
+        // Unpaid list:
         // - when selected date is on or after checkout date
-        // - AND there is still due amount > 0
+        // - keep invoice in this list even if due becomes 0 (history)
         const unPaidInvoice = allBookings.filter((booking) => {
           if (!booking.checkOutDate) return false;
           const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
           const isOnOrAfterCheckout = !selectedDay.isBefore(checkOut, "day");
           if (!isOnOrAfterCheckout) return false;
-          const totals = getCumulativeTotals(booking);
-          const duePayment = totals.duePayment || 0;
-          return duePayment > 0;
+          return true;
         });
 
         // Regular = bookings active on selected date (checkIn <= selected <= checkOut) that are not in unpaid
@@ -247,8 +282,18 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       const existingEntry = booking.invoiceDetails?.find((entry) =>
         entry?.date && dayjs(entry.date).isSame(selectedDate, "day")
       );
-      let updatedInvoiceDetails = Array.isArray(booking.invoiceDetails) ? [...booking.invoiceDetails] : [];
-      const newEntry = { date: selectedDate.toISOString(), dailyAmount };
+      let updatedInvoiceDetails = Array.isArray(booking.invoiceDetails)
+        ? [...booking.invoiceDetails]
+        : [];
+
+      // Save daily-wise info in DB: date, that day's payment (dailyAmount),
+      // and cumulative totalPaid / duePayment for that date
+      const newEntry = {
+        date: selectedDate.toISOString(),
+        dailyAmount,
+        totalPaid: newTotalPaid,
+        duePayment: newDuePayment,
+      };
       if (existingEntry) {
         updatedInvoiceDetails = updatedInvoiceDetails.map((entry) =>
           entry?.date && dayjs(entry.date).isSame(selectedDate, "day") ? newEntry : entry

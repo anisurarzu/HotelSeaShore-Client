@@ -439,7 +439,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           color: 'white', 
           borderColor: 'rgba(255,255,255,0.2)',
           position: 'sticky',
-          left: 28,
+          left: 0,
           zIndex: 19
         },
       }),
@@ -447,7 +447,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         style: { 
           background: roomNoColumnBg,
           position: 'sticky',
-          left: 28,
+          left: 0,
           zIndex: 14,
           backgroundColor: roomNoColumnBg
         } 
@@ -455,7 +455,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       render: (text, record) => (
         <div
           className="h-full min-h-[60px] flex flex-col justify-center py-1 text-center"
-          style={{ background: roomNoColumnBg, color: 'white' }}
+          style={{ background: roomNoColumnBg, color: "white" }}
         >
           <div className="font-bold text-xs sm:text-sm text-white">{text}</div>
           <div className="text-xs text-white/90">
@@ -604,7 +604,9 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       };
     });
 
-    return [categoryColumn, roomNoColumn, ...dateColumns];
+    const totalColSpan = 1 + dateColumns.length;
+
+    return [roomNoColumn, ...dateColumns];
   };
 
   // Fetch hotels from API
@@ -1183,23 +1185,12 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                             <tfoot>
                               <tr>
                                 <td 
-                                  className="text-center border"
-                                  style={{ 
-                                    padding: 0, 
-                                    position: 'sticky', 
-                                    left: 0, 
-                                    zIndex: 15, 
-                                    background: '#15803d', 
-                                    width: 28 
-                                  }}
-                                />
-                                <td 
                                   className="text-center bg-gray-100 font-semibold border"
                                   style={{ 
                                     padding: '8px 4px', 
                                     fontSize: '10px', 
                                     position: 'sticky', 
-                                    left: 28, 
+                                    left: 0, 
                                     zIndex: 14, 
                                     background: '#f3f4f6' 
                                   }}
@@ -1908,25 +1899,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           background: #fafafa !important;
         }
         
-        .calendar-table .ant-table-row:hover td:first-child,
-        .calendar-table .ant-table-row:hover td:nth-child(2) {
-          background: inherit !important;
-        }
-        
-        .calendar-table .ant-table-row:hover td:first-child {
-          background: #15803d !important;
-        }
-        
-        .calendar-table .ant-table-row:hover td:nth-child(2) {
-          background: #2563eb !important;
-        }
-        
         .calendar-table .ant-table-thead > tr > th:first-child {
-          z-index: 21;
-          background: #15803d !important;
-        }
-        
-        .calendar-table .ant-table-thead > tr > th:nth-child(2) {
           z-index: 20;
           background: #2563eb !important;
         }
@@ -1935,13 +1908,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           position: sticky !important;
           left: 0 !important;
           z-index: 15;
-          background: #15803d !important;
-        }
-        
-        .calendar-table .ant-table-tbody > tr > td:nth-child(2) {
-          position: sticky !important;
-          left: 28px !important;
-          z-index: 14;
           background: #2563eb !important;
         }
         

@@ -152,6 +152,14 @@ const HotelInformation = () => {
     enableReinitialize: true,
     initialValues: {
       hotelName: hotelData?.hotelName || "",
+      termsAndConditions: Array.isArray(hotelData?.termsAndConditions)
+        ? hotelData.termsAndConditions
+            .map((t) => (typeof t === "string" ? t : String(t)))
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : typeof hotelData?.termsAndConditions === "string" && hotelData.termsAndConditions.trim()
+          ? [hotelData.termsAndConditions.trim()]
+          : [""],
       address: {
         address1:
           hotelData?.address?.address1 ||
@@ -227,6 +235,13 @@ const HotelInformation = () => {
         const allImageUrls = [...existingImageUrls, ...uploadedImageUrls];
         
         // Prepare JSON payload
+        const termsAndConditions = Array.isArray(values.termsAndConditions)
+          ? values.termsAndConditions
+              .map((t) => (typeof t === "string" ? t : String(t)))
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : [];
+
         const payload = {
           hotelName: values.hotelName,
           status: values.status,
@@ -234,6 +249,7 @@ const HotelInformation = () => {
           contact: values.contact,
           checkInTime: values.checkInTime || "14:00",
           checkOutTime: values.checkOutTime || "11:00",
+          termsAndConditions,
           images: allImageUrls.length > 0 ? allImageUrls : undefined,
         };
 
@@ -543,6 +559,7 @@ const HotelInformation = () => {
     hotelFormik.resetForm();
     hotelFormik.setValues({
       hotelName: "",
+      termsAndConditions: [""],
       address: {
         address1: "",
         address2: "",
@@ -563,15 +580,32 @@ const HotelInformation = () => {
   };
 
   const handleEditHotel = () => {
+    const normalizedTerms = Array.isArray(hotelData?.termsAndConditions)
+      ? hotelData.termsAndConditions
+          .map((t) => (typeof t === "string" ? t : String(t)))
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : typeof hotelData?.termsAndConditions === "string" && hotelData.termsAndConditions.trim()
+        ? [hotelData.termsAndConditions.trim()]
+        : [];
+
     hotelFormik.setValues({
       hotelName: hotelData?.hotelName || "",
       hotelDescription: hotelData?.hotelDescription || "",
+      termsAndConditions: normalizedTerms.length > 0 ? normalizedTerms : [""],
       address: {
-        street: hotelData?.address?.street || "",
-        city: hotelData?.address?.city || "",
-        state: hotelData?.address?.state || "",
-        zipCode: hotelData?.address?.zipCode || "",
-        country: hotelData?.address?.country || "",
+        address1:
+          hotelData?.address?.address1 ||
+          hotelData?.address?.street ||
+          "",
+        address2:
+          hotelData?.address?.address2 ||
+          hotelData?.address?.city ||
+          "",
+        address3:
+          hotelData?.address?.address3 ||
+          hotelData?.address?.state ||
+          "",
       },
       contact: {
         phone: hotelData?.contact?.phone || "",
@@ -1413,6 +1447,52 @@ const HotelInformation = () => {
               </Form.Item>
             </Col>
           </Row>
+          <Divider orientation="left">Terms & Conditions</Divider>
+          <Form.Item
+            label="Terms & Conditions"
+            extra="Each line will be saved as a separate item (array) in the database."
+          >
+            <div className="space-y-2">
+              {(hotelFormik.values.termsAndConditions || []).map((term, idx) => (
+                <div key={idx} className="flex gap-2 items-start">
+                  <Input
+                    value={term}
+                    onChange={(e) => {
+                      const next = [...(hotelFormik.values.termsAndConditions || [])];
+                      next[idx] = e.target.value;
+                      hotelFormik.setFieldValue("termsAndConditions", next);
+                    }}
+                    placeholder={`Term ${idx + 1}`}
+                  />
+                  <Button
+                    danger
+                    type="default"
+                    icon={<MinusCircleOutlined />}
+                    onClick={() => {
+                      const current = [...(hotelFormik.values.termsAndConditions || [])];
+                      const next = current.filter((_, i) => i !== idx);
+                      hotelFormik.setFieldValue(
+                        "termsAndConditions",
+                        next.length > 0 ? next : [""]
+                      );
+                    }}
+                  />
+                </div>
+              ))}
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const next = [...(hotelFormik.values.termsAndConditions || [])];
+                  next.push("");
+                  hotelFormik.setFieldValue("termsAndConditions", next);
+                }}
+                block
+              >
+                Add Term
+              </Button>
+            </div>
+          </Form.Item>
           <Divider orientation="left">Logo</Divider>
           <Form.Item label="Hotel Logo">
             <Upload
@@ -1557,6 +1637,18 @@ const HotelInformation = () => {
                   </Col>
                 </Row>
               </Panel>
+              {Array.isArray(selectedHotelForDetails.termsAndConditions) &&
+                selectedHotelForDetails.termsAndConditions.length > 0 && (
+                  <Panel header="Terms & Conditions" key="terms">
+                    <ul className="list-disc pl-5">
+                      {selectedHotelForDetails.termsAndConditions.map((t, idx) => (
+                        <li key={idx} className="mb-1">
+                          {t}
+                        </li>
+                      ))}
+                    </ul>
+                  </Panel>
+                )}
               {selectedHotelForDetails.address && (
                 <Panel header="Address" key="address">
                   <div className="ml-4">
@@ -1597,6 +1689,18 @@ const HotelInformation = () => {
                       <div className="mb-2">
                         <MailOutlined className="mr-2" />
                         {selectedHotelForDetails.contact.email}
+                      </div>
+                    )}
+                    {(selectedHotelForDetails.checkInTime || selectedHotelForDetails.checkOutTime) && (
+                      <div className="mt-3">
+                        <div className="mb-2">
+                          <Text strong>Check-in Time:</Text>{" "}
+                          <Text>{selectedHotelForDetails.checkInTime || "—"}</Text>
+                        </div>
+                        <div>
+                          <Text strong>Check-out Time:</Text>{" "}
+                          <Text>{selectedHotelForDetails.checkOutTime || "—"}</Text>
+                        </div>
                       </div>
                     )}
                     {selectedHotelForDetails.contact.website && (
