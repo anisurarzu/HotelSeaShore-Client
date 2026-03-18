@@ -70,6 +70,31 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   };
 
   /** Total paid = sum of all payment amounts (payments array is source of truth); fallback advancePayment if no payments */
+  const getTotalPaidOnDate = (booking, date) => {
+    if (!date) return 0;
+    const selectedKey = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+
+    // Preferred: backend-calculated per-day totals (controller: paidAmountsByDate)
+    if (Array.isArray(booking?.paidAmountsByDate) && booking.paidAmountsByDate.length > 0) {
+      const row = booking.paidAmountsByDate.find((r) => {
+        const rowKey = r?.date ? dayjs(r.date).tz("Asia/Dhaka").format("YYYY-MM-DD") : null;
+        return rowKey === selectedKey;
+      });
+      return Number(row?.totalPaid) || 0;
+    }
+
+    // Fallback: sum payments on that exact date
+    const payments = Array.isArray(booking?.payments) ? booking.payments : [];
+    if (payments.length > 0) {
+      return payments.reduce((sum, p) => {
+        const rowKey = p?.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").format("YYYY-MM-DD") : null;
+        if (!rowKey || rowKey !== selectedKey) return sum;
+        return sum + (Number(p.amount) || 0);
+      }, 0);
+    }
+    return 0;
+  };
+
   const getTotalPaidUpToDate = (booking, date) => {
     if (!date) return 0;
     const selectedDay = dayjs(date).tz("Asia/Dhaka").endOf("day");
@@ -111,14 +136,15 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       payments.length > 0
         ? payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
         : Number(booking.advancePayment) || 0;
-    const totalPaid = selectedDateForRow
-      ? getTotalPaidUpToDate(booking, selectedDateForRow)
-      : totalPaidAllTime;
+    const totalPaid = selectedDateForRow ? getTotalPaidUpToDate(booking, selectedDateForRow) : totalPaidAllTime;
+    const totalPaidOnDate =
+      selectedDateForRow ? getTotalPaidOnDate(booking, selectedDateForRow) : totalPaidAllTime;
     const duePayment = Math.max(0, totalBill - totalPaid);
 
     const byDate = selectedDateForRow ? getPaymentsByDate(booking, selectedDateForRow) : { cash: 0, bkash: 0, nagad: 0, bank: 0 };
     return {
       totalPaid,
+      totalPaidOnDate,
       duePayment,
       dailyAmount: byDate.cash,
       bkash: byDate.bkash + byDate.nagad,
@@ -190,14 +216,15 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           return true;
         });
 
-        // Regular = bookings active on selected date (checkIn <= selected <= checkOut) that are not in unpaid
+        // Regular = active bookings on selected date, but exclude anything that belongs to unpaid tab (checkout day & after)
+        const unpaidIds = new Set(
+          unPaidInvoice
+            .map((b) => b?._id || b?.id)
+            .filter(Boolean)
+        );
         const regularInvoice = bookingsForDate.filter((booking) => {
-          if (!booking.checkOutDate) return true;
-          const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
-          const isCheckoutDay = selectedDay.isSame(checkOut, "day");
-          if (!isCheckoutDay) return true;
-          const totals = getCumulativeTotals(booking);
-          return (totals.duePayment || 0) <= 0;
+          const id = booking?._id || booking?.id;
+          return id ? !unpaidIds.has(id) : true;
         });
 
         setBookings({
@@ -264,11 +291,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         throw new Error("Booking not found");
       }
 
-      const currentTotals = getCumulativeTotals(booking);
+      // Cumulative Total Paid up to the selectedDate (used for Due calculation)
+      const currentTotals = getCumulativeTotals(booking, selectedDate);
       const currentTotalPaid = currentTotals.totalPaid;
       const byDate = getPaymentsByDate(booking, selectedDate);
       const currentDailyAmount = byDate.cash || 0;
 
+      // Replace selectedDate CASH amount:
+      // newCumulativePaid = currentCumulativePaid - oldDailyCash + newDailyCash
       const newTotalPaid = currentTotalPaid - currentDailyAmount + dailyAmount;
       const newDuePayment = (booking.totalBill || 0) - newTotalPaid;
 
@@ -279,33 +309,102 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         throw new Error("Daily amount cannot be negative");
       }
 
-      const existingEntry = booking.invoiceDetails?.find((entry) =>
-        entry?.date && dayjs(entry.date).isSame(selectedDate, "day")
-      );
+      const selectedKey = dayjs(selectedDate).tz("Asia/Dhaka").format("YYYY-MM-DD");
+      // Send UTC midnight for backend dateKey (slice(0,10)) to match selectedKey
+      const selectedISOForBackend = `${selectedKey}T00:00:00.000Z`;
+
+      const existingEntry = booking.invoiceDetails?.find((entry) => {
+        if (!entry?.date) return false;
+        const entryKey = dayjs(entry.date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+        return entryKey === selectedKey;
+      });
       let updatedInvoiceDetails = Array.isArray(booking.invoiceDetails)
         ? [...booking.invoiceDetails]
         : [];
 
-      // Save daily-wise info in DB: date, that day's payment (dailyAmount),
-      // and cumulative totalPaid / duePayment for that date
+      // Save daily-wise info in DB: selected date & that date's CASH total
+      const newDailyAmountForDate = dailyAmount;
       const newEntry = {
-        date: selectedDate.toISOString(),
-        dailyAmount,
-        totalPaid: newTotalPaid,
+        // Use fixed ISO date so backend's toISOString().slice(0,10) matches BD calendar date
+        date: selectedISOForBackend,
+        dailyAmount: newDailyAmountForDate,
+        totalPaid: newTotalPaid, // (backend ignores, but keep for consistency)
         duePayment: newDuePayment,
       };
       if (existingEntry) {
         updatedInvoiceDetails = updatedInvoiceDetails.map((entry) =>
-          entry?.date && dayjs(entry.date).isSame(selectedDate, "day") ? newEntry : entry
+          entry?.date &&
+          dayjs(entry.date).tz("Asia/Dhaka").format("YYYY-MM-DD") === selectedKey
+            ? newEntry
+            : entry
         );
       } else {
         updatedInvoiceDetails.push(newEntry);
       }
 
+      // Normalize ALL invoiceDetails dates to UTC midnight based on Bangladesh day.
+      // This prevents older shifted entries (UTC slicing) from overriding daily CASH rebuilds.
+      updatedInvoiceDetails = updatedInvoiceDetails.map((entry) => {
+        const k = entry?.date
+          ? dayjs(entry.date).tz("Asia/Dhaka").format("YYYY-MM-DD")
+          : selectedKey;
+        return {
+          ...entry,
+          date: `${k}T00:00:00.000Z`,
+          dailyAmount: Number(entry?.dailyAmount) || 0,
+        };
+      });
+
+      // Build explicit CASH payments from invoiceDetails so backend dateKey matches.
+      // Some controller variants only rely on `payments` to compute paidAmountsByDate.
+      const datesInInvoice = new Set(
+        updatedInvoiceDetails
+          .map((e) => (e?.date ? new Date(e.date).toISOString().slice(0, 10) : null))
+          .filter(Boolean)
+      );
+
+      const existingPayments = Array.isArray(booking.payments) ? booking.payments : [];
+      const existingNonCashPayments = existingPayments.filter(
+        (p) => String(p?.paymentMethod || "").toUpperCase() !== "CASH"
+      );
+      const existingCashPayments = existingPayments.filter((p) => {
+        const method = String(p?.paymentMethod || "").toUpperCase();
+        if (method !== "CASH") return true;
+        if (!p?.createdAt) return true;
+        const d = new Date(p.createdAt).toISOString().slice(0, 10);
+        // Remove cash payments for any invoice date we are updating
+        return !datesInInvoice.has(d);
+      });
+
+      const cashPaymentsFromInvoice = updatedInvoiceDetails
+        .map((e) => ({
+          paymentMethod: "CASH",
+          amount: Number(e?.dailyAmount) || 0,
+          transactionId: "",
+          createdAt: e?.date,
+        }))
+        .filter((p) => Number(p.amount) > 0);
+
+      const mergedPayments = [
+        ...existingNonCashPayments,
+        ...existingCashPayments,
+        ...cashPaymentsFromInvoice,
+      ];
+
+      const computedTotalPaid = mergedPayments.reduce(
+        (sum, p) => sum + (Number(p?.amount) || 0),
+        0
+      );
+      const computedDuePayment = Math.max(
+        0,
+        (booking?.totalBill || 0) - computedTotalPaid
+      );
+
       const response = await coreAxios.put(`/booking/${bookingId}`, {
-        totalPaid: newTotalPaid,
-        duePayment: newDuePayment,
+        totalPaid: computedTotalPaid,
+        duePayment: computedDuePayment,
         invoiceDetails: updatedInvoiceDetails,
+        payments: mergedPayments,
       });
 
       if (response.status === 200) {
@@ -383,6 +482,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       return {
         totalBill: acc.totalBill + (booking.totalBill || 0),
         totalPaid: acc.totalPaid + (totals.totalPaid || 0),
+        totalPaidOnDate: acc.totalPaidOnDate + (totals.totalPaidOnDate || 0),
         dailyAmount: acc.dailyAmount + (totals.dailyAmount || 0),
         duePayment: acc.duePayment + (totals.duePayment || 0),
         bkash: acc.bkash + (totals.bkash || 0),
@@ -393,6 +493,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     {
       totalBill: 0,
       totalPaid: 0,
+      totalPaidOnDate: 0,
       dailyAmount: 0,
       duePayment: 0,
       bkash: 0,
@@ -407,6 +508,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       return {
         totalBill: acc.totalBill + (booking.totalBill || 0),
         totalPaid: acc.totalPaid + (totals.totalPaid || 0),
+        totalPaidOnDate: acc.totalPaidOnDate + (totals.totalPaidOnDate || 0),
         dailyAmount: acc.dailyAmount + (totals.dailyAmount || 0),
         duePayment: acc.duePayment + (totals.duePayment || 0),
         bkash: acc.bkash + (totals.bkash || 0),
@@ -417,6 +519,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     {
       totalBill: 0,
       totalPaid: 0,
+      totalPaidOnDate: 0,
       dailyAmount: 0,
       duePayment: 0,
       bkash: 0,

@@ -22,11 +22,30 @@ import { useFormik } from "formik";
 import dayjs from "dayjs";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import moment from "moment";
 
 // Extend dayjs with plugins
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// Backend slices date using UTC: dt.toISOString().slice(0,10).
+// If we send Asia/Dhaka midnight, UTC date becomes previous day.
+// So we set a "safe" time (noon) in Asia/Dhaka to keep UTC date equal to Dhaka calendar date.
+const toDhIsoSafeForUtcDate = (dateLike) => {
+  const d = dayjs(dateLike);
+  if (!d.isValid()) return dayjs().tz("Asia/Dhaka").startOf("day").toISOString();
+  return d
+    .tz("Asia/Dhaka")
+    .hour(12)
+    .minute(0)
+    .second(0)
+    .millisecond(0)
+    .toISOString();
+};
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
 import { CopyOutlined, ReloadOutlined, PlusOutlined, SearchOutlined, MinusCircleOutlined } from "@ant-design/icons";
@@ -360,7 +379,8 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
           return {
             paymentMethod: p.paymentMethod || "CASH",
             amount: Number(p.amount) || 0,
-            createdAt: paymentDate.toISOString(),
+            // Use Bangladesh timezone safe time to prevent 1-day shift
+            createdAt: toDhIsoSafeForUtcDate(paymentDate),
             ...(p.transactionId ? { transactionId: String(p.transactionId).trim() } : {}),
           };
         });
