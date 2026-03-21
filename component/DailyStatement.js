@@ -796,7 +796,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       {/* Main Table - constrained width on large screens for better readability */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden max-w-full lg:max-w-6xl lg:mx-auto">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[900px]" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
+          <table className="w-full border-collapse min-w-[980px]" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
             <thead>
               <tr style={{ backgroundColor: '#2563eb' }}>
                 <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
@@ -807,6 +807,9 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                 </th>
                 <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Invoice
+                </th>
+                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
+                  Guest
                 </th>
                 <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Phone
@@ -858,6 +861,9 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                       <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 70, height: 20 }} />
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300">
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 88, height: 20 }} />
+                    </td>
+                    <td className="px-2 py-1.5 border border-gray-300">
                       <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 70, height: 20 }} />
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300">
@@ -895,7 +901,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
               ) : bookings.regularInvoice?.length === 0 &&
                 bookings.unPaidInvoice?.length === 0 ? (
                 <tr>
-                  <td colSpan="14" className="text-center p-4">
+                  <td colSpan="15" className="text-center p-4">
                     <Alert message="No bookings found" type="info" />
                   </td>
                 </tr>
@@ -939,6 +945,12 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                               </CopyToClipboard>
                             </Tooltip>
                           </span>
+                        </td>
+                        <td
+                          className="px-2 py-1.5 text-xs text-gray-700 border border-gray-300 max-w-[140px] truncate"
+                          title={booking.fullName || booking.guestName || ""}
+                        >
+                          {booking.fullName || booking.guestName || "N/A"}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                           {booking.phone || booking.phoneNumber || "N/A"}
@@ -1020,7 +1032,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   {/* Regular Invoices Pagination */}
                   {bookings.regularInvoice?.length > PAGE_SIZE && (
                     <tr>
-                      <td colSpan="14" className="px-2 py-2 border border-gray-300 bg-gray-50">
+                      <td colSpan="15" className="px-2 py-2 border border-gray-300 bg-gray-50">
                         <div className="flex justify-end">
                           <Pagination
                             current={regularPage}
@@ -1037,7 +1049,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   )}
                   {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
                     <tr>
-                  <td colSpan="14" className="p-2"></td>
+                  <td colSpan="15" className="p-2"></td>
                     </tr>
                   )}
 
@@ -1080,6 +1092,12 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                               </CopyToClipboard>
                             </Tooltip>
                           </span>
+                        </td>
+                        <td
+                          className="px-2 py-1.5 text-xs text-gray-700 border border-gray-300 max-w-[140px] truncate"
+                          title={booking.fullName || booking.guestName || ""}
+                        >
+                          {booking.fullName || booking.guestName || "N/A"}
                         </td>
                         <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                           {booking.phone || booking.phoneNumber || "N/A"}
@@ -1161,7 +1179,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   {/* Unpaid Invoices Pagination */}
                   {bookings.unPaidInvoice?.length > PAGE_SIZE && (
                     <tr>
-                      <td colSpan="14" className="px-2 py-2 border border-gray-300 bg-amber-100">
+                      <td colSpan="15" className="px-2 py-2 border border-gray-300 bg-amber-100">
                         <div className="flex justify-end">
                           <Pagination
                             current={unpaidPage}
@@ -1181,7 +1199,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
                     <tr className="bg-blue-100 border-t-2 border-blue-300">
                       <td
-                        colSpan="7"
+                        colSpan="8"
                         className="px-2 py-1.5 text-right text-xs font-bold text-gray-900 border border-gray-300"
                       >
                         Total:
