@@ -101,9 +101,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
   const [searchTerm, setSearchTerm] = useState("");
   const [checkInDate, setCheckInDate] = useState(null);
   const [isHotelFromReference, setIsHotelFromReference] = useState(false);
-  /** In edit mode, number of payment rows that came from server (read-only). New rows after this can be edited and can duplicate methods. */
-  const [initialPaymentCount, setInitialPaymentCount] = useState(0);
-
   const hasHandledQueryParams = useRef(false);
 
   // Fetch hotels list
@@ -645,7 +642,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
           setIsEditing(false);
           setEditingKey(null);
           setPrevData(null);
-          setInitialPaymentCount(0);
         }, 500);
       } catch (error) {
         console.error("Error pre-filling form:", error);
@@ -875,7 +871,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     };
 
     formik.setValues(formValues);
-    setInitialPaymentCount(payments.length);
 
     if (data.roomCategoryID) {
       setTimeout(() => {
@@ -1296,7 +1291,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               setIsEditing(false);
                               setEditingKey(null);
                               setPrevData(null);
-                              setInitialPaymentCount(0);
                               setIsHotelFromReference(false);
                               setRoomCategories([]);
                               setRoomNumbers([]);
@@ -1835,7 +1829,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                     setIsEditing(false);
                     setEditingKey(null);
                     setPrevData(null);
-                    setInitialPaymentCount(0);
                     setIsHotelFromReference(false);
                     formik.resetForm();
                     hasHandledQueryParams.current = false;
@@ -2294,18 +2287,24 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                         </Col>
                       </Row>
                       {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map((_, index) => {
-                        const isExistingPayment = isEditing && index < initialPaymentCount;
-                        const usedMethods = !isEditing
-                          ? (formik.values.payments || [])
-                              .map((p, i) => (i !== index && (p.paymentMethod || "").trim() ? p.paymentMethod : null))
-                              .filter(Boolean)
-                          : [];
+                        // Prevent duplicate methods across rows (also when editing / updating booking)
+                        const usedMethods = (formik.values.payments || [])
+                          .map((p, i) =>
+                            i !== index && (p.paymentMethod || "").trim()
+                              ? String(p.paymentMethod).trim().toUpperCase()
+                              : null
+                          )
+                          .filter(Boolean);
                         return (
                         <Row key={index} gutter={[12, 0]} align="middle" className="mb-2">
                           <Col xs={24} sm={8} md={5}>
                             <Form.Item label={index === 0 ? "Method" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
                               <Select
-                                value={formik.values.payments[index]?.paymentMethod ?? ""}
+                                value={
+                                  formik.values.payments[index]?.paymentMethod
+                                    ? String(formik.values.payments[index].paymentMethod).trim().toUpperCase()
+                                    : undefined
+                                }
                                 onChange={(value) => {
                                   const next = [...formik.values.payments];
                                   if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
@@ -2315,7 +2314,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 }}
                                 placeholder="Method"
                                 style={{ width: "100%", minWidth: 90 }}
-                                disabled={isExistingPayment}
                                 optionFilterProp="label"
                                 allowClear
                               >
@@ -2338,7 +2336,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 }}
                                 format="YYYY-MM-DD"
                                 style={{ width: "100%", height: "40px" }}
-                                disabled={isExistingPayment}
                                 allowClear={false}
                               />
                             </Form.Item>
@@ -2359,8 +2356,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                   syncAdvanceFromPayments(next);
                                 }}
                                 placeholder="Amount"
-                                style={{ width: "100%", ...(isExistingPayment ? { backgroundColor: "#f5f5f5" } : {}) }}
-                                disabled={isExistingPayment}
+                                style={{ width: "100%" }}
                               />
                             </Form.Item>
                           </Col>
@@ -2375,13 +2371,12 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                   formik.setFieldValue("payments", next);
                                 }}
                                 placeholder="Trx ID (optional)"
-                                style={{ width: "100%", ...(isExistingPayment ? { backgroundColor: "#f5f5f5" } : {}) }}
-                                disabled={isExistingPayment}
+                                style={{ width: "100%" }}
                               />
                             </Form.Item>
                           </Col>
                           <Col xs={24} sm={2} md={2}>
-                            {formik.values.payments.length > 1 && (!isEditing || index >= initialPaymentCount) ? (
+                            {formik.values.payments.length > 1 ? (
                               <Button
                                 type="text"
                                 danger
@@ -2486,7 +2481,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           setIsEditing(false);
                           setEditingKey(null);
                           setPrevData(null);
-                          setInitialPaymentCount(0);
                           setIsHotelFromReference(false);
                           formik.resetForm();
                         }}
