@@ -813,7 +813,7 @@ const Invoice = ({ params }) => {
           </div>
 
           {(data?.[0]?.bookedBy || data?.[0]?.bookedByID) && (
-            <div className="mt-3">
+            <div className="mt-12">
               <p className="text-slate-600 text-xs">
                 Booked By: {data?.[0]?.bookedBy || data?.[0]?.bookedByID}
               </p>
