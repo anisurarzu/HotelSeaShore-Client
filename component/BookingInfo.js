@@ -1371,6 +1371,9 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Status
                           </th>
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                            Booked By
+                          </th>
                           <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Actions
                           </th>
@@ -1430,6 +1433,9 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 <div style={{ display: "flex", justifyContent: "center" }}>
                                   <Skeleton.Button active size="small" style={{ width: 70, height: 24 }} />
                                 </div>
+                              </td>
+                              <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
+                                <Skeleton.Input active size="small" style={{ width: 110, height: 16 }} />
                               </td>
                               <td className="px-3 py-2.5 text-center border border-gray-300">
                                 <div style={{ display: "flex", justifyContent: "center", gap: "4px" }}>
@@ -1543,6 +1549,9 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               >
                                 {booking.statusID === 255 ? "Canceled" : "Confirmed"}
                               </span>
+                            </td>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
+                              {booking.bookedBy || booking.bookedByID || "—"}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
                               <div className="flex gap-1.5 justify-center items-center">
