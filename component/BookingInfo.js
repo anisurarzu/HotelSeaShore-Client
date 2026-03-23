@@ -773,7 +773,8 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     let data = record;
     try {
       if (record.bookingNo) {
-        const details = await fetchBookingDetails(record.bookingNo, false);
+        const targetBookingId = record._id || record.id;
+        const details = await fetchBookingDetails(record.bookingNo, false, targetBookingId);
         if (details) {
           data = { ...record, ...details };
         }
@@ -1048,7 +1049,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     pagination.current * pagination.pageSize
   );
 
-  const fetchBookingDetails = async (bookingNo, guestInfoOnly = false) => {
+  const fetchBookingDetails = async (bookingNo, guestInfoOnly = false, targetBookingId = null) => {
     try {
       const response = await coreAxios.get(`/bookings/bookingNo/${bookingNo}`);
       
@@ -1056,7 +1057,13 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
         let bookingDetails = null;
         
         if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-          bookingDetails = response.data[0];
+          if (targetBookingId) {
+            bookingDetails =
+              response.data.find((b) => String(b?._id || b?.id) === String(targetBookingId)) ||
+              response.data[0];
+          } else {
+            bookingDetails = response.data[0];
+          }
         } else if (response.data && typeof response.data === 'object') {
           bookingDetails = response.data;
         }
