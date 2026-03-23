@@ -419,7 +419,7 @@ const DashboardContent = ({ sliders }) => {
   );
 
   // Calculate dashboard statistics from bookings API data
-  const calculateDashboardStats = useCallback((bookingsData) => {
+  const calculateDashboardStats = useCallback((bookingsData, maxRoomsParam) => {
     const today = dayjs().tz("Asia/Dhaka");
     const todayStart = today.startOf("day");
     const todayEnd = today.endOf("day");
@@ -431,16 +431,28 @@ const DashboardContent = ({ sliders }) => {
     let currentMonthBookingAmount = 0;
     let todayCheckIns = 0;
     let todayCheckOuts = 0;
-    let todayActiveBookings = 0;
-    let currentMonthActiveBookings = 0;
+    const todayActiveRoomsSet = new Set();
+
+    const daysCount = monthEnd.diff(monthStart, "day") + 1;
+    const monthActiveRoomsSets =
+      daysCount > 0
+        ? Array.from({ length: daysCount }, () => new Set())
+        : [];
 
     bookingsData.forEach((booking) => {
       // Parse dates properly
       const checkInDate = dayjs(booking.checkInDate).tz("Asia/Dhaka");
       const checkOutDate = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
-      
+      if (!checkInDate.isValid() || !checkOutDate.isValid()) return;
+
       // Get booking details
       const totalBill = parseFloat(booking.totalBill) || 0;
+      const roomKey =
+        booking.roomNumberID ||
+        booking.roomNumberId ||
+        booking.roomNumberName ||
+        booking.roomNumber ||
+        "";
 
       // Today's Booking Amount (bookings with check-in date today)
       if (checkInDate.isSame(todayStart, "day")) {
@@ -459,30 +471,60 @@ const DashboardContent = ({ sliders }) => {
         todayCheckOuts++;
       }
 
-      // Today's Occupancy (active bookings today)
-      const isActiveToday = checkInDate.isSameOrBefore(todayEnd, "day") && 
-                       checkOutDate.isSameOrAfter(todayStart, "day");
-      if (isActiveToday) {
-        todayActiveBookings++;
-      }
+      // Today's Occupancy (exclusive checkout):
+      // active on "day" if check-in <= day AND check-out > day
+      const isActiveToday =
+        checkInDate.startOf("day").isSameOrBefore(todayStart, "day") &&
+        checkOutDate.startOf("day").isAfter(todayStart, "day");
+      if (isActiveToday && roomKey) todayActiveRoomsSet.add(String(roomKey));
 
-      // Current Month Occupancy (active bookings in current month)
-      const isActiveInMonth = checkInDate.isSameOrBefore(monthEnd, "day") && 
-                             checkOutDate.isSameOrAfter(monthStart, "day");
-      if (isActiveInMonth) {
-        currentMonthActiveBookings++;
+      // Used for current month occupancy: count active rooms per day (exclusive checkout)
+      const isActiveInMonth =
+        checkInDate.startOf("day").isSameOrBefore(monthEnd, "day") &&
+        checkOutDate.startOf("day").isAfter(monthStart, "day");
+      if (!isActiveInMonth) return;
+      if (!roomKey) return;
+
+      const startIndex = Math.max(
+        0,
+        checkInDate.startOf("day").diff(monthStart, "day")
+      );
+      // End at checkoutDayIndex - 1 (room not active on checkout date)
+      const endIndex = Math.min(
+        daysCount - 1,
+        checkOutDate.startOf("day").diff(monthStart, "day") - 1
+      );
+      for (let i = startIndex; i <= endIndex; i++) {
+        monthActiveRoomsSets[i].add(String(roomKey));
       }
     });
 
-    // Calculate occupancy rates (assuming max 10 rooms available)
-    // TODO: Get from hotel data
-    const maxRooms = 10;
-    const todayOccupancyRate = todayActiveBookings > 0 
-      ? Math.min(100, Math.round((todayActiveBookings / maxRooms) * 100))
-      : 0;
-    const currentMonthOccupancyRate = currentMonthActiveBookings > 0
-      ? Math.min(100, Math.round((currentMonthActiveBookings / maxRooms) * 100))
-      : 0;
+    const maxRooms = Number(maxRoomsParam) || 0;
+    const todayActiveRoomsCount = todayActiveRoomsSet.size;
+
+    const todayOccupancyRate =
+      maxRooms > 0
+        ? Math.min(
+            100,
+            Math.round((todayActiveRoomsCount / maxRooms) * 100)
+          )
+        : 0;
+
+    // Average daily occupancy across the month (room-based)
+    let sumActiveRoomsByDay = 0;
+    if (maxRooms > 0 && daysCount > 0 && monthActiveRoomsSets.length > 0) {
+      for (let i = 0; i < daysCount; i++) {
+        sumActiveRoomsByDay += monthActiveRoomsSets[i]?.size || 0;
+      }
+    }
+
+    const currentMonthOccupancyRate =
+      maxRooms > 0 && daysCount > 0
+        ? Math.min(
+            100,
+            Math.round((sumActiveRoomsByDay / (maxRooms * daysCount)) * 100)
+          )
+        : 0;
 
     setDashboardStats({
       todayBookingAmount,
@@ -502,7 +544,16 @@ const DashboardContent = ({ sliders }) => {
       const userRole = userInfo?.role?.value;
       const userHotelID = Number(hotelID);
 
-      const response = await coreAxios.get("/bookings");
+      const [response, hotelsResponse, hotelByIdResponse] = await Promise.all([
+        coreAxios.get("/bookings"),
+        // Use the real hotel source that includes roomCategories/roomNumbers.
+        // (Backend route: GET /hotel)
+        coreAxios.get(`/hotel?page=1&limit=200`).catch(() => null),
+        // Fallback: if the /hotel list doesn't include the current hotel in its first page.
+        userHotelID
+          ? coreAxios.get(`/hotels/${userHotelID}`).catch(() => null)
+          : Promise.resolve(null),
+      ]);
 
       if (response.status === 200) {
         let bookingsData = Array.isArray(response.data) ? response.data : [];
@@ -517,8 +568,62 @@ const DashboardContent = ({ sliders }) => {
         // Filter out cancelled bookings (statusID 255)
         bookingsData = bookingsData.filter((booking) => booking.statusID !== 255);
 
+        // Compute room capacity from real hotel data (used for occupancy rate)
+        const hotelsList =
+          hotelsResponse?.data?.data?.hotels ||
+          hotelsResponse?.data?.hotels ||
+          [];
+
+        const hotel =
+          hotelsList.find((h) => Number(h?.hotelID) === userHotelID) ||
+          hotelsList.find((h) => String(h?._id) === String(userHotelID)) ||
+          hotelByIdResponse?.data?.data ||
+          null;
+
+        const categories = hotel?.roomCategories || hotel?.categories || [];
+
+        const fallbackCount = Array.isArray(categories)
+          ? categories.reduce((sum, c) => {
+              const roomNumbers = Array.isArray(c?.roomNumbers)
+                ? c.roomNumbers
+                : Array.isArray(c?.rooms)
+                  ? c.rooms
+                  : [];
+              return sum + roomNumbers.length;
+            }, 0)
+          : 0;
+
+        // Prefer backend-provided totalRooms. If missing, compute unique rooms.
+        const uniqueRoomIds = new Set();
+        if (Array.isArray(categories)) {
+          categories.forEach((c) => {
+            const roomNumbers = Array.isArray(c?.roomNumbers)
+              ? c.roomNumbers
+              : Array.isArray(c?.rooms)
+                ? c.rooms
+                : [];
+            (roomNumbers || []).forEach((r) => {
+              const id =
+                r?._id ??
+                r?.roomId ??
+                r?.id ??
+                r?.name ??
+                r?.roomNumberID ??
+                r?.roomNumber ??
+                null;
+              if (id !== null && id !== undefined && String(id).trim() !== "") {
+                uniqueRoomIds.add(String(id));
+              }
+            });
+          });
+        }
+
+        const roomsCount =
+          Number(hotel?.totalRooms) ||
+          (uniqueRoomIds.size > 0 ? uniqueRoomIds.size : fallbackCount);
+
         setBookings(bookingsData);
-        calculateDashboardStats(bookingsData);
+        calculateDashboardStats(bookingsData, roomsCount);
       }
     } catch (error) {
       console.error("Error fetching bookings:", error);

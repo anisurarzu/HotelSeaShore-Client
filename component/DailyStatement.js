@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Button, message, Alert, Tooltip, InputNumber, Pagination, Skeleton } from "antd";
+import { Button, message, Alert, Tooltip, InputNumber, Skeleton } from "antd";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -39,9 +39,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   const summaryRef = useRef(null);
   const [submitting, setSubmitting] = useState({});
   const [dailyIncome, setDailyIncome] = useState(0);
-  const PAGE_SIZE = 10;
-  const [regularPage, setRegularPage] = useState(1);
-  const [unpaidPage, setUnpaidPage] = useState(1);
+  // No pagination in this page
 
   const formik = useFormik({
     initialValues: {},
@@ -159,6 +157,15 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     const totalBill = Number(booking.totalBill) || 0;
     const payments = [...(booking.payments || [])];
     payments.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    if (payments.length === 0) {
+      const advance = Number(booking.advancePayment) || 0;
+      if (advance > 0 && advance >= totalBill) {
+        return booking.createdAt
+          ? dayjs(booking.createdAt).tz("Asia/Dhaka").startOf("day")
+          : null;
+      }
+      return null;
+    }
     let running = 0;
     for (const p of payments) {
       running += Number(p.amount) || 0;
@@ -196,36 +203,48 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         // Use selected date (from date picker) for "today" so lists and form reflect that day
         const selectedDay = dayjs(date).tz("Asia/Dhaka").startOf("day");
 
-        // Show bookings where selected date is within stay (checkIn <= selected <= checkOut)
-        const bookingsForDate = allBookings.filter((booking) => {
+        // Precompute due-cleared day per booking (first day when totalPaid >= totalBill)
+        const dueClearedCache = new Map();
+        const getDueClearedDayCached = (booking) => {
+          const id = booking?._id || booking?.id;
+          if (!id) return getDueClearedDate(booking);
+          if (dueClearedCache.has(id)) return dueClearedCache.get(id);
+          const d = getDueClearedDate(booking);
+          dueClearedCache.set(id, d);
+          return d;
+        };
+
+        // Regular list (upper list):
+        // - active during stay EXCLUDING checkout day: checkIn <= selected < checkOut
+        // - show only up to due-cleared day (inclusive); after that hide from both lists
+        const regularInvoice = allBookings.filter((booking) => {
           if (!booking.checkInDate || !booking.checkOutDate) return false;
           const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka").startOf("day");
           const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
-          return (
-            !selectedDay.isBefore(checkIn) && !selectedDay.isAfter(checkOut)
-          );
-        });
+          if (selectedDay.isBefore(checkIn, "day")) return false;
+          if (!selectedDay.isBefore(checkOut, "day")) return false; // checkout day excluded
 
-        // Unpaid list:
-        // - when selected date is on or after checkout date
-        // - keep invoice in this list even if due becomes 0 (history)
-        const unPaidInvoice = allBookings.filter((booking) => {
-          if (!booking.checkOutDate) return false;
-          const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
-          const isOnOrAfterCheckout = !selectedDay.isBefore(checkOut, "day");
-          if (!isOnOrAfterCheckout) return false;
+          const dueClearedDay = getDueClearedDayCached(booking); // dayjs or null
+          if (dueClearedDay) {
+            // hide after due is cleared; show on due-cleared day
+            if (selectedDay.isAfter(dueClearedDay, "day")) return false;
+          }
           return true;
         });
 
-        // Regular = active bookings on selected date, but exclude anything that belongs to unpaid tab (checkout day & after)
-        const unpaidIds = new Set(
-          unPaidInvoice
-            .map((b) => b?._id || b?.id)
-            .filter(Boolean)
-        );
-        const regularInvoice = bookingsForDate.filter((booking) => {
-          const id = booking?._id || booking?.id;
-          return id ? !unpaidIds.has(id) : true;
+        // Unpaid list (history list):
+        // - show starting from checkout day (selected >= checkOut)
+        // - show only until due-cleared day (inclusive); after that hide
+        const unPaidInvoice = allBookings.filter((booking) => {
+          if (!booking.checkOutDate) return false;
+          const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+          if (selectedDay.isBefore(checkOut, "day")) return false; // checkout day excluded from regular
+
+          const dueClearedDay = getDueClearedDayCached(booking);
+          if (dueClearedDay) {
+            if (selectedDay.isAfter(dueClearedDay, "day")) return false;
+          }
+          return true;
         });
 
         setBookings({
@@ -433,21 +452,9 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     fetchBookingsByDate(selectedDate);
   }, [selectedDate]);
 
-  useEffect(() => {
-    setRegularPage(1);
-    setUnpaidPage(1);
-  }, [bookings.regularInvoice?.length, bookings.unPaidInvoice?.length]);
-
-  const regularDisplay =
-    bookings.regularInvoice?.slice(
-      (regularPage - 1) * PAGE_SIZE,
-      regularPage * PAGE_SIZE
-    ) ?? [];
-  const unpaidDisplay =
-    bookings.unPaidInvoice?.slice(
-      (unpaidPage - 1) * PAGE_SIZE,
-      unpaidPage * PAGE_SIZE
-    ) ?? [];
+  // No pagination: show all rows
+  const regularDisplay = bookings.regularInvoice ?? [];
+  const unpaidDisplay = bookings.unPaidInvoice ?? [];
 
   const handleDateChange = async (date) => {
     if (date) {
@@ -592,15 +599,15 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
               (r) => `
                   <tr>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.sl}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;">${r.room}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;">${r.invoice}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;">${r.phone}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.room}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:left;">${r.invoice}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:left;">${r.guest}</td>
+                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:left;">${r.phone}</td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.checkIn}</td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.checkOut}</td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.nights}</td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.totalBill.toLocaleString()}</td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.bkash.toLocaleString()}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.bank.toLocaleString()}</td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.totalPaid.toLocaleString()}</td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.dailyCashFromDb.toLocaleString()}</td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;color:#dc2626;font-weight:600;">${Number(r.due ?? 0).toLocaleString()}</td>
@@ -634,7 +641,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         statementRows.length > 0
           ? `
               <tr>
-                <td colSpan="7" style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                <td colSpan="8" style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
                   Total:
                 </td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
@@ -642,9 +649,6 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                 </td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
                   ${grandTotals.bkash.toLocaleString()}
-                </td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
-                  ${grandTotals.bank.toLocaleString()}
                 </td>
                 <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
                   ${grandTotals.totalPaid.toLocaleString()}
@@ -674,13 +678,13 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">SL</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Room</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Invoice</th>
+                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Guest</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Phone</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Check-in</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Check-out</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">N</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Total Bill</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Bkash</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Bank</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Total Paid</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Daily Cash</th>
                     <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Due</th>
@@ -706,6 +710,10 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                   <tr>
                     <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Daily Income (CASH)</td>
                     <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(dailyIncome || 0).toLocaleString()}</td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Total Balance</td>
+                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(totalBalance || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
                     <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Daily Expenses</td>
@@ -838,7 +846,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                 <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
                   Daily Cash
                 </th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#dc2626', backgroundColor: '#fee2e2', fontWeight: 600, fontSize: '10px' }}>
+                <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#dc2626', backgroundColor: '#fee2e2', fontWeight: 600, fontSize: '10px' }}>
                   Due Amount
                 </th>
                 <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
@@ -913,7 +921,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     const remainingAmount =
                       (booking.totalBill || 0) - totals.totalPaid;
                     const bookingId = booking._id || booking.id;
-                    const slNo = (regularPage - 1) * PAGE_SIZE + index + 1;
+                    const slNo = index + 1;
 
                     return (
                       <tr
@@ -1029,24 +1037,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     );
                   })}
 
-                  {/* Regular Invoices Pagination */}
-                  {bookings.regularInvoice?.length > PAGE_SIZE && (
-                    <tr>
-                      <td colSpan="15" className="px-2 py-2 border border-gray-300 bg-gray-50">
-                        <div className="flex justify-end">
-                          <Pagination
-                            current={regularPage}
-                            total={bookings.regularInvoice?.length ?? 0}
-                            pageSize={PAGE_SIZE}
-                            onChange={setRegularPage}
-                            showSizeChanger={false}
-                            showTotal={(total) => `Total ${total} items`}
-                            size="small"
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                  {/* No pagination */}
                   {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
                     <tr>
                   <td colSpan="15" className="p-2"></td>
@@ -1059,7 +1050,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     const remainingAmount =
                       (booking.totalBill || 0) - totals.totalPaid;
                     const bookingId = booking._id || booking.id;
-                    const slNo = (unpaidPage - 1) * PAGE_SIZE + index + 1;
+                    const slNo = index + 1;
 
                     return (
                       <tr
@@ -1176,24 +1167,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                     );
                   })}
 
-                  {/* Unpaid Invoices Pagination */}
-                  {bookings.unPaidInvoice?.length > PAGE_SIZE && (
-                    <tr>
-                      <td colSpan="15" className="px-2 py-2 border border-gray-300 bg-amber-100">
-                        <div className="flex justify-end">
-                          <Pagination
-                            current={unpaidPage}
-                            total={bookings.unPaidInvoice?.length ?? 0}
-                            pageSize={PAGE_SIZE}
-                            onChange={setUnpaidPage}
-                            showSizeChanger={false}
-                            showTotal={(total) => `Total ${total} items`}
-                            size="small"
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                  {/* No pagination */}
 
                   {/* Grand Total: Regular + Unpaid */}
                   {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (

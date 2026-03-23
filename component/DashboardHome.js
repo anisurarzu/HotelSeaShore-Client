@@ -23,6 +23,7 @@ const { Title, Text } = Typography;
 const DashboardHome = ({ hotelID = 1 }) => {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
+  const [totalRooms, setTotalRooms] = useState(0);
 
   // Fetch bookings data
   const fetchBookings = useCallback(async () => {
@@ -32,7 +33,16 @@ const DashboardHome = ({ hotelID = 1 }) => {
       const userRole = userInfo?.role?.value;
       const userHotelID = Number(hotelID);
 
-      const response = await coreAxios.get("/bookings");
+      const [response, hotelsResponse, hotelByIdResponse] = await Promise.all([
+        coreAxios.get("/bookings"),
+        // Use the real hotel source that includes roomCategories/roomNumbers.
+        // (Backend route: GET /hotel)
+        coreAxios.get(`/hotel?page=1&limit=200`).catch(() => null),
+        // Fallback: in case the /hotel list doesn't include the current hotel in its first page.
+        userHotelID
+          ? coreAxios.get(`/hotels/${userHotelID}`).catch(() => null)
+          : Promise.resolve(null),
+      ]);
 
       if (response.status === 200) {
         let bookingsData = Array.isArray(response.data) ? response.data : [];
@@ -49,9 +59,68 @@ const DashboardHome = ({ hotelID = 1 }) => {
 
         setBookings(bookingsData);
       }
+
+      // Compute room capacity from the real hotel data (used for occupancy rate)
+      const hotelsList =
+        hotelsResponse?.data?.data?.hotels ||
+        hotelsResponse?.data?.hotels ||
+        [];
+
+      const hotel =
+        hotelsList.find((h) => Number(h?.hotelID) === userHotelID) ||
+        hotelsList.find((h) => String(h?._id) === String(userHotelID)) ||
+        hotelByIdResponse?.data?.data ||
+        null;
+
+      const categories = hotel?.roomCategories || hotel?.categories || [];
+      const fallbackCount = Array.isArray(categories)
+        ? categories.reduce((sum, c) => {
+            const roomNumbers = Array.isArray(c?.roomNumbers)
+              ? c.roomNumbers
+              : Array.isArray(c?.rooms)
+                ? c.rooms
+                : [];
+            return sum + roomNumbers.length;
+          }, 0)
+        : 0;
+
+      // Prefer backend-provided totalRooms when available.
+      const totalRoomsFromHotel = Number(hotel?.totalRooms) || 0;
+
+      // Unique room count (prevents wrong occupancy when API duplicates/overlaps)
+      const uniqueRoomIds = new Set();
+      if (Array.isArray(categories)) {
+        categories.forEach((c) => {
+          const roomNumbers = Array.isArray(c?.roomNumbers)
+            ? c.roomNumbers
+            : Array.isArray(c?.rooms)
+              ? c.rooms
+              : [];
+          (roomNumbers || []).forEach((r) => {
+            const id =
+              r?._id ??
+              r?.roomId ??
+              r?.id ??
+              r?.name ??
+              r?.roomNumberID ??
+              r?.roomNumber ??
+              null;
+            if (id !== null && id !== undefined && String(id).trim() !== "") {
+              uniqueRoomIds.add(String(id));
+            }
+          });
+        });
+      }
+
+      const finalRoomsCount =
+        totalRoomsFromHotel ||
+        (uniqueRoomIds.size > 0 ? uniqueRoomIds.size : fallbackCount);
+
+      setTotalRooms(finalRoomsCount);
     } catch (error) {
       console.error("Error fetching bookings:", error);
       setBookings([]);
+      setTotalRooms(0);
     } finally {
       setLoading(false);
     }
@@ -70,6 +139,11 @@ const DashboardHome = ({ hotelID = 1 }) => {
         todayCheckIns: 0,
         todayCheckOuts: 0,
         todayOccupancyRate: 0,
+        todayOccupiedRoomsCount: 0,
+        todayOccupiedRoomNames: [],
+        tomorrowOccupancyRate: 0,
+        tomorrowOccupiedRoomsCount: 0,
+        tomorrowOccupiedRoomNames: [],
         currentMonthOccupancyRate: 0,
       };
     }
@@ -84,13 +158,32 @@ const DashboardHome = ({ hotelID = 1 }) => {
     let currentMonthBookingAmount = 0;
     let todayCheckIns = 0;
     let todayCheckOuts = 0;
-    let todayActiveBookings = 0;
-    let currentMonthActiveBookings = 0;
+    let todayActiveRoomsCount = 0;
+    const todayActiveRoomsSet = new Set();
+    const todayActiveRoomNamesSet = new Set();
+
+    const daysCount = monthEnd.diff(monthStart, "day") + 1;
+    const monthActiveRoomsSets =
+      daysCount > 0
+        ? Array.from({ length: daysCount }, () => new Set())
+        : [];
+
+    const tomorrowStart = todayStart.add(1, "day");
+    const tomorrowActiveRoomsSet = new Set();
+    const tomorrowActiveRoomNamesSet = new Set();
 
     bookings.forEach((booking) => {
       const checkInDate = dayjs(booking.checkInDate).tz("Asia/Dhaka");
       const checkOutDate = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
+      if (!checkInDate.isValid() || !checkOutDate.isValid()) return;
       const totalBill = parseFloat(booking.totalBill) || 0;
+      const roomKey =
+        booking.roomNumberID ||
+        booking.roomNumberId ||
+        booking.roomNumberName ||
+        booking.roomNumber ||
+        "";
+      const roomNameKey = booking.roomNumberName || booking.roomNumber || "";
 
       // Today's Booking Amount (bookings with check-in date today)
       if (checkInDate.isSame(todayStart, "day")) {
@@ -109,29 +202,81 @@ const DashboardHome = ({ hotelID = 1 }) => {
         todayCheckOuts++;
       }
 
-      // Today's Occupancy (active bookings today)
-      const isActiveToday = checkInDate.isSameOrBefore(todayEnd, "day") && 
-                           checkOutDate.isSameOrAfter(todayStart, "day");
-      if (isActiveToday) {
-        todayActiveBookings++;
+      // Today's Occupancy (exclusive checkout):
+      // room active on "day" if check-in <= day AND check-out > day
+      const isActiveToday =
+        checkInDate.startOf("day").isSameOrBefore(todayStart, "day") &&
+        checkOutDate.startOf("day").isAfter(todayStart, "day");
+      if (isActiveToday && roomKey) {
+        todayActiveRoomsSet.add(String(roomKey));
+        if (roomNameKey) todayActiveRoomNamesSet.add(String(roomNameKey));
       }
 
-      // Current Month Occupancy (active bookings in current month)
-      const isActiveInMonth = checkInDate.isSameOrBefore(monthEnd, "day") && 
-                             checkOutDate.isSameOrAfter(monthStart, "day");
-      if (isActiveInMonth) {
-        currentMonthActiveBookings++;
+      // Used for month occupancy: count active rooms per day (exclusive checkout)
+      const isActiveInMonth =
+        checkInDate.startOf("day").isSameOrBefore(monthEnd, "day") &&
+        checkOutDate.startOf("day").isAfter(monthStart, "day");
+      if (!isActiveInMonth) return;
+      if (!roomKey) return;
+
+      // Tomorrow occupancy (exclusive checkout)
+      const isActiveTomorrow =
+        checkInDate.startOf("day").isSameOrBefore(tomorrowStart, "day") &&
+        checkOutDate.startOf("day").isAfter(tomorrowStart, "day");
+      if (isActiveTomorrow) {
+        tomorrowActiveRoomsSet.add(String(roomKey));
+        if (roomNameKey) tomorrowActiveRoomNamesSet.add(String(roomNameKey));
+      }
+
+      const startIndex = Math.max(
+        0,
+        checkInDate.startOf("day").diff(monthStart, "day")
+      );
+      // End at checkoutDayIndex - 1 (room not active on checkout date)
+      const endIndex = Math.min(
+        daysCount - 1,
+        checkOutDate.startOf("day").diff(monthStart, "day") - 1
+      );
+      for (let i = startIndex; i <= endIndex; i++) {
+        monthActiveRoomsSets[i].add(String(roomKey));
       }
     });
 
-    // Calculate occupancy rates (assuming max 10 rooms - should come from hotel data)
-    const maxRooms = 10; // TODO: Get from hotel data
-    const todayOccupancyRate = todayActiveBookings > 0 
-      ? Math.min(100, Math.round((todayActiveBookings / maxRooms) * 100))
-      : 0;
-    const currentMonthOccupancyRate = currentMonthActiveBookings > 0
-      ? Math.min(100, Math.round((currentMonthActiveBookings / maxRooms) * 100))
-      : 0;
+    const maxRooms = Number(totalRooms) || 0;
+    todayActiveRoomsCount = todayActiveRoomsSet.size;
+    const todayOccupiedRoomsCount = todayActiveRoomsCount;
+    const todayOccupiedRoomNames = [...todayActiveRoomNamesSet];
+    const tomorrowOccupiedRoomsCount = tomorrowActiveRoomsSet.size;
+    const tomorrowOccupiedRoomNames = [...tomorrowActiveRoomNamesSet];
+    const todayOccupancyRate =
+      maxRooms > 0
+        ? Math.min(100, Math.round((todayActiveRoomsCount / maxRooms) * 100))
+        : 0;
+
+    // Current Month Occupancy (average daily occupancy across the whole month)
+    let sumActiveRoomsByDay = 0;
+    if (maxRooms > 0 && daysCount > 0 && monthActiveRoomsSets.length > 0) {
+      for (let i = 0; i < daysCount; i++) {
+        sumActiveRoomsByDay += monthActiveRoomsSets[i]?.size || 0;
+      }
+    }
+    const currentMonthOccupancyRate =
+      maxRooms > 0 && daysCount > 0
+        ? Math.min(
+            100,
+            Math.round(
+              (sumActiveRoomsByDay / (maxRooms * daysCount)) * 100
+            )
+          )
+        : 0;
+
+    const tomorrowOccupancyRate =
+      maxRooms > 0
+        ? Math.min(
+            100,
+            Math.round((tomorrowOccupiedRoomsCount / maxRooms) * 100)
+          )
+        : 0;
 
     return {
       todayBookingAmount,
@@ -139,6 +284,11 @@ const DashboardHome = ({ hotelID = 1 }) => {
       todayCheckIns,
       todayCheckOuts,
       todayOccupancyRate,
+      todayOccupiedRoomsCount,
+      todayOccupiedRoomNames,
+      tomorrowOccupancyRate,
+      tomorrowOccupiedRoomsCount,
+      tomorrowOccupiedRoomNames,
       currentMonthOccupancyRate,
     };
   };
@@ -184,7 +334,7 @@ const DashboardHome = ({ hotelID = 1 }) => {
       gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
     },
     {
-      label: "Today's Occupancy Rate",
+      label: `Today's Occupancy Rate (${statsData.todayOccupiedRoomsCount}/${totalRooms} rooms)`,
       value: statsData.todayOccupancyRate,
       isCurrency: false,
       isPercentage: true,
@@ -192,6 +342,12 @@ const DashboardHome = ({ hotelID = 1 }) => {
       color: "#b45309",
       bgColor: "#fffbeb",
       gradient: "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
+      footnote:
+        statsData.todayOccupiedRoomNames?.length
+          ? `Rooms: ${statsData.todayOccupiedRoomNames
+              .slice(0, 8)
+              .join(", ")}${statsData.todayOccupiedRoomNames.length > 8 ? "..." : ""}`
+          : "No rooms occupied today",
     },
     {
       label: "Current Month Occupancy Rate",
@@ -203,9 +359,25 @@ const DashboardHome = ({ hotelID = 1 }) => {
       bgColor: "#fef3c7",
       gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
     },
+    {
+      label: `Tomorrow Occupancy Rate (${statsData.tomorrowOccupiedRoomsCount}/${totalRooms} rooms)`,
+      value: statsData.tomorrowOccupancyRate,
+      isCurrency: false,
+      isPercentage: true,
+      icon: HomeOutlined,
+      color: "#92400e",
+      bgColor: "#fef3c7",
+      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      footnote:
+        statsData.tomorrowOccupiedRoomNames?.length
+          ? `Rooms: ${statsData.tomorrowOccupiedRoomNames
+              .slice(0, 8)
+              .join(", ")}${statsData.tomorrowOccupiedRoomNames.length > 8 ? "..." : ""}`
+          : "No rooms occupied tomorrow",
+    },
   ];
 
-  const StatCard = ({ label, value, isCurrency, isPercentage, Icon, color, bgColor, gradient }) => (
+  const StatCard = ({ label, value, isCurrency, isPercentage, icon: Icon, color, bgColor, gradient, footnote }) => (
     <Card
       hoverable
       bordered={false}
@@ -243,6 +415,11 @@ const DashboardHome = ({ hotelID = 1 }) => {
           >
             {isCurrency ? `৳${value.toLocaleString()}` : isPercentage ? `${value}%` : value.toLocaleString()}
           </Title>
+          {footnote ? (
+            <Text className="text-[11px] text-gray-500 mt-1 block">
+              {footnote}
+            </Text>
+          ) : null}
         </div>
         <div
           className="p-3 rounded-xl"
