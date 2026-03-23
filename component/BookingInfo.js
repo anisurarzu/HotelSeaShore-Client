@@ -778,7 +778,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       if (record.bookingNo) {
         const targetBookingId = record._id || record.id;
         const details = await fetchBookingDetails(record.bookingNo, false, targetBookingId);
-        if (details) {
+        if (details && String(details?._id || details?.id) === String(targetBookingId)) {
           data = { ...record, ...details };
         }
       }
@@ -815,27 +815,34 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
 
     const totalBill = Number(data.totalBill) || 0;
     let advancePayment = Number(data.advancePayment) || 0;
-    let paymentMethod = data.paymentMethod || "";
-    let transactionId = data.transactionId || "";
-    let payments = [{ paymentMethod: "CASH", amount: 0, transactionId: "", date: dayjs() }];
+    let paymentMethod = "";
+    let transactionId = "";
+    let payments = [{ paymentMethod: "", amount: 0, transactionId: "", date: null }];
     if (Array.isArray(data.payments) && data.payments.length > 0) {
       advancePayment = data.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const first = data.payments[0];
-      paymentMethod = first.paymentMethod || first.method || paymentMethod;
+      paymentMethod = String(first.paymentMethod || first.method || "").trim().toUpperCase();
       transactionId = first.transactionId || transactionId;
       payments = data.payments.map((p) => ({
-        paymentMethod: p.paymentMethod || p.method || "CASH",
+        _id: p._id || p.id || undefined,
+        paymentMethod: String(p.paymentMethod || p.method || "").trim().toUpperCase(),
         amount: Number(p.amount) || 0,
         transactionId: p.transactionId || "",
         date: p.createdAt ? dayjs(p.createdAt) : dayjs(data.checkInDate || new Date()),
       }));
     } else {
+      // No payment rows from backend -> keep method empty in update modal.
+      const normalizedLegacyMethod = String(data.paymentMethod || "").trim().toUpperCase();
+      const normalizedLegacyTxn = String(data.transactionId || "").trim();
+      const hasLegacyPaidAmount = advancePayment > 0;
       payments = [{
-        paymentMethod: paymentMethod || "CASH",
+        paymentMethod: hasLegacyPaidAmount ? normalizedLegacyMethod : "",
         amount: advancePayment,
-        transactionId: transactionId || "",
-        date: dayjs(data.checkInDate || new Date()),
+        transactionId: hasLegacyPaidAmount ? normalizedLegacyTxn : "",
+        date: hasLegacyPaidAmount ? dayjs(data.checkInDate || new Date()) : null,
       }];
+      paymentMethod = hasLegacyPaidAmount ? normalizedLegacyMethod : "";
+      transactionId = hasLegacyPaidAmount ? normalizedLegacyTxn : "";
     }
     const duePayment = Math.max(0, totalBill - advancePayment);
 
@@ -886,23 +893,51 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     setVisible(true);
   };
 
-  const clearBookingPaymentsByBookingId = async (bookingId) => {
-    if (!bookingId) return;
+  const deleteBookingPaymentById = async (bookingId, paymentRowOrId, rowIndex) => {
+    const rawPaymentId =
+      paymentRowOrId?._id ??
+      paymentRowOrId?.id ??
+      paymentRowOrId?.paymentId ??
+      paymentRowOrId ??
+      null;
+
+    let normalizedPaymentId = null;
+    if (rawPaymentId != null) {
+      if (typeof rawPaymentId === "string" || typeof rawPaymentId === "number") {
+        normalizedPaymentId = String(rawPaymentId);
+      } else if (typeof rawPaymentId === "object") {
+        const nestedId = rawPaymentId?.$oid ?? rawPaymentId?.toString?.();
+        if (nestedId && nestedId !== "[object Object]") {
+          normalizedPaymentId = String(nestedId);
+        }
+      }
+    }
+
+    if (!bookingId || !normalizedPaymentId) {
+      message.error("Payment id not found");
+      return;
+    }
     setSubmitLoading(true);
     try {
-      const res = await coreAxios.put(`/bookings/booking/${bookingId}/payments/clear`);
+      const res = await coreAxios.delete(
+        `/bookings/booking/${bookingId}/payments/${encodeURIComponent(normalizedPaymentId)}`
+      );
       if (res.status === 200) {
-        message.success(res.data?.message || "Booking payments cleared successfully");
+        message.success(res.data?.message || "Booking payment removed successfully");
       }
-      const emptyPayments = [{ paymentMethod: "", amount: 0, transactionId: "", date: dayjs() }];
-      formik.setFieldValue("payments", emptyPayments);
-      formik.setFieldValue("paymentMethod", "");
-      formik.setFieldValue("transactionId", "");
-      syncAdvanceFromPayments(emptyPayments);
-      setInitialPaymentCount(0);
+
+      // Remove only that row from form; keep rest locked as existing.
+      const next = [...(formik.values.payments || [])].filter((_, i) => i !== rowIndex);
+      if (next.length === 0) {
+        next.push({ paymentMethod: "", amount: 0, transactionId: "", date: null });
+      }
+      formik.setFieldValue("payments", next);
+      syncAdvanceFromPayments(next);
+      const remainingExisting = next.filter((p) => p?._id).length;
+      setInitialPaymentCount(remainingExisting);
     } catch (error) {
-      console.error("Error clearing booking payments:", error);
-      message.error(error.response?.data?.error || error.response?.data?.message || "Failed to clear booking payments");
+      console.error("Error deleting booking payment:", error);
+      message.error(error.response?.data?.error || error.response?.data?.message || "Failed to remove booking payment");
     } finally {
       setSubmitLoading(false);
     }
@@ -1005,7 +1040,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     formik.setFieldValue("advancePayment", advancePayment);
     formik.setFieldValue("duePayment", duePayment);
     const payments = [...(formik.values.payments || [])];
-    const first = payments[0] || { paymentMethod: "CASH", amount: 0, transactionId: "", date: dayjs() };
+    const first = payments[0] || { paymentMethod: "", amount: 0, transactionId: "", date: dayjs() };
     formik.setFieldValue("payments", [{ ...first, amount: advancePayment }]);
   };
 
@@ -1020,7 +1055,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     formik.setFieldValue("advancePayment", advancePayment);
     formik.setFieldValue("duePayment", duePayment);
     const payments = [...(formik.values.payments || [])];
-    const first = payments[0] || { paymentMethod: "CASH", amount: 0, transactionId: "", date: dayjs() };
+    const first = payments[0] || { paymentMethod: "", amount: 0, transactionId: "", date: dayjs() };
     formik.setFieldValue("payments", [{ ...first, amount: advancePayment }]);
   };
 
@@ -1094,6 +1129,15 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
           bookingDetails = response.data;
         }
         
+        if (
+          targetBookingId &&
+          bookingDetails &&
+          String(bookingDetails?._id || bookingDetails?.id) !== String(targetBookingId)
+        ) {
+          // Avoid mixing a different booking row when bookingNo has multiple entries.
+          return null;
+        }
+
         if (bookingDetails && !guestInfoOnly && bookingDetails.hotelID) {
           setSelectedHotelId(bookingDetails.hotelID);
           const selectedHotel = hotelInfo.find(h => h.hotelID === bookingDetails.hotelID);
@@ -2372,16 +2416,16 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           <Col xs={24} sm={8} md={7}>
                             <Form.Item label={index === 0 ? "Payment Date" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
                               <DatePicker
-                                value={formik.values.payments[index]?.date ? dayjs(formik.values.payments[index].date) : dayjs()}
+                                value={formik.values.payments[index]?.date ? dayjs(formik.values.payments[index].date) : null}
                                 onChange={(date) => {
                                   const next = [...formik.values.payments];
-                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "", date: dayjs() };
-                                  next[index].date = date || dayjs();
+                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "", date: null };
+                                  next[index].date = date || null;
                                   formik.setFieldValue("payments", next);
                                 }}
                                 format="YYYY-MM-DD"
                                 style={{ width: "100%", height: "40px" }}
-                                allowClear={false}
+                                allowClear
                                 disabled={isExistingPayment}
                               />
                             </Form.Item>
@@ -2426,9 +2470,15 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           <Col xs={24} sm={2} md={2}>
                             {isExistingPayment ? (
                               <Popconfirm
-                                title="Clear all existing payments?"
-                                description="Existing payment rows are locked. Clear them to add new entries."
-                                onConfirm={() => clearBookingPaymentsByBookingId(editingKey)}
+                                title="Delete this payment?"
+                                description="This will remove only this payment row from booking."
+                                onConfirm={() =>
+                                  deleteBookingPaymentById(
+                                    editingKey,
+                                    formik.values.payments[index],
+                                    index
+                                  )
+                                }
                                 okText="Yes"
                                 cancelText="No"
                               >
@@ -2447,7 +2497,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 icon={<MinusCircleOutlined />}
                                 onClick={() => {
                                   const next = formik.values.payments.filter((_, i) => i !== index);
-                                  if (next.length === 0) next.push({ paymentMethod: "", amount: 0, transactionId: "", date: dayjs() });
+                                  if (next.length === 0) next.push({ paymentMethod: "", amount: 0, transactionId: "", date: null });
                                   formik.setFieldValue("payments", next);
                                   syncAdvanceFromPayments(next);
                                 }}
@@ -2463,7 +2513,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                         onClick={() => {
                           const next = [
                             ...(formik.values.payments || []),
-                            { paymentMethod: "", amount: 0, transactionId: "", date: dayjs() },
+                            { paymentMethod: "", amount: 0, transactionId: "", date: null },
                           ];
                           formik.setFieldValue("payments", next);
                         }}

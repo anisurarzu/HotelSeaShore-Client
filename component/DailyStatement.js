@@ -50,13 +50,31 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     return dayjs(date1).isSame(dayjs(date2), "day");
   };
 
+  const unwrapDate = (value) => {
+    if (!value) return null;
+    if (dayjs.isDayjs(value)) return value.toDate();
+    if (typeof value === "object") {
+      if (value.$date) return value.$date;
+      if (value.date) return value.date;
+    }
+    return value;
+  };
+
+  const toDhakaDayjs = (value) => {
+    const raw = unwrapDate(value);
+    if (!raw) return null;
+    const d = dayjs(raw).tz("Asia/Dhaka");
+    return d.isValid() ? d : null;
+  };
+
   /** Group booking.payments by date (createdAt); for a given date return merged { cash, bkash, nagad, bank } */
   const getPaymentsByDate = (booking, date) => {
     const payments = booking.payments || [];
-    const dateKey = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+    const dateKey = toDhakaDayjs(date)?.format("YYYY-MM-DD");
     const out = { cash: 0, bkash: 0, nagad: 0, bank: 0 };
+    if (!dateKey) return out;
     payments.forEach((p) => {
-      const d = p.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").format("YYYY-MM-DD") : null;
+      const d = toDhakaDayjs(p.createdAt)?.format("YYYY-MM-DD");
       if (d !== dateKey) return;
       const method = (p.paymentMethod || p.method || "").toUpperCase();
       const amount = Number(p.amount) || 0;
@@ -71,12 +89,13 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   /** Total paid = sum of all payment amounts (payments array is source of truth); fallback advancePayment if no payments */
   const getTotalPaidOnDate = (booking, date) => {
     if (!date) return 0;
-    const selectedKey = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+    const selectedKey = toDhakaDayjs(date)?.format("YYYY-MM-DD");
+    if (!selectedKey) return 0;
 
     // Preferred: backend-calculated per-day totals (controller: paidAmountsByDate)
     if (Array.isArray(booking?.paidAmountsByDate) && booking.paidAmountsByDate.length > 0) {
       const row = booking.paidAmountsByDate.find((r) => {
-        const rowKey = r?.date ? dayjs(r.date).tz("Asia/Dhaka").format("YYYY-MM-DD") : null;
+        const rowKey = toDhakaDayjs(r?.date)?.format("YYYY-MM-DD");
         return rowKey === selectedKey;
       });
       return Number(row?.totalPaid) || 0;
@@ -86,7 +105,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     const payments = Array.isArray(booking?.payments) ? booking.payments : [];
     if (payments.length > 0) {
       return payments.reduce((sum, p) => {
-        const rowKey = p?.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").format("YYYY-MM-DD") : null;
+        const rowKey = toDhakaDayjs(p?.createdAt)?.format("YYYY-MM-DD");
         if (!rowKey || rowKey !== selectedKey) return sum;
         return sum + (Number(p.amount) || 0);
       }, 0);
@@ -96,12 +115,13 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
 
   const getTotalPaidUpToDate = (booking, date) => {
     if (!date) return 0;
-    const selectedDay = dayjs(date).tz("Asia/Dhaka").endOf("day");
+    const selectedDay = toDhakaDayjs(date)?.endOf("day");
+    if (!selectedDay) return 0;
 
     // Preferred: backend-calculated per-day totals (controller: paidAmountsByDate)
     if (Array.isArray(booking?.paidAmountsByDate) && booking.paidAmountsByDate.length > 0) {
       return booking.paidAmountsByDate.reduce((sum, row) => {
-        const d = row?.date ? dayjs(row.date).tz("Asia/Dhaka").endOf("day") : null;
+        const d = toDhakaDayjs(row?.date)?.endOf("day");
         if (!d) return sum;
         if (d.isAfter(selectedDay, "day")) return sum;
         return sum + (Number(row.totalPaid) || 0);
@@ -112,7 +132,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     const payments = Array.isArray(booking?.payments) ? booking.payments : [];
     if (payments.length > 0) {
       return payments.reduce((sum, p) => {
-        const d = p?.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").endOf("day") : null;
+        const d = toDhakaDayjs(p?.createdAt)?.endOf("day");
         if (!d) return sum;
         if (d.isAfter(selectedDay, "day")) return sum;
         return sum + (Number(p.amount) || 0);
@@ -121,7 +141,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
 
     // Legacy fallback: treat advancePayment as paid on createdAt
     if (Number(booking?.advancePayment) > 0) {
-      const created = booking?.createdAt ? dayjs(booking.createdAt).tz("Asia/Dhaka").endOf("day") : null;
+      const created = toDhakaDayjs(booking?.createdAt)?.endOf("day");
       if (!created || created.isAfter(selectedDay, "day")) return 0;
       return Number(booking.advancePayment) || 0;
     }
@@ -156,13 +176,15 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   const getDueClearedDate = (booking) => {
     const totalBill = Number(booking.totalBill) || 0;
     const payments = [...(booking.payments || [])];
-    payments.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    payments.sort((a, b) => {
+      const ad = toDhakaDayjs(a.createdAt)?.valueOf() || 0;
+      const bd = toDhakaDayjs(b.createdAt)?.valueOf() || 0;
+      return ad - bd;
+    });
     if (payments.length === 0) {
       const advance = Number(booking.advancePayment) || 0;
       if (advance > 0 && advance >= totalBill) {
-        return booking.createdAt
-          ? dayjs(booking.createdAt).tz("Asia/Dhaka").startOf("day")
-          : null;
+        return toDhakaDayjs(booking.createdAt)?.startOf("day") || null;
       }
       return null;
     }
@@ -170,7 +192,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     for (const p of payments) {
       running += Number(p.amount) || 0;
       if (running >= totalBill) {
-        const d = p.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").startOf("day") : null;
+        const d = toDhakaDayjs(p.createdAt)?.startOf("day");
         return d || null;
       }
     }
@@ -201,7 +223,12 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         } catch (_) {}
 
         // Use selected date (from date picker) for "today" so lists and form reflect that day
-        const selectedDay = dayjs(date).tz("Asia/Dhaka").startOf("day");
+        const selectedDay = toDhakaDayjs(date)?.startOf("day");
+        if (!selectedDay) {
+          setBookings({ regularInvoice: [], unPaidInvoice: [] });
+          setLoading(false);
+          return;
+        }
 
         // Precompute due-cleared day per booking (first day when totalPaid >= totalBill)
         const dueClearedCache = new Map();
@@ -219,16 +246,12 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         // - show only up to due-cleared day (inclusive); after that hide from both lists
         const regularInvoice = allBookings.filter((booking) => {
           if (!booking.checkInDate || !booking.checkOutDate) return false;
-          const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka").startOf("day");
-          const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+          const checkIn = toDhakaDayjs(booking.checkInDate)?.startOf("day");
+          const checkOut = toDhakaDayjs(booking.checkOutDate)?.startOf("day");
+          if (!checkIn || !checkOut) return false;
           if (selectedDay.isBefore(checkIn, "day")) return false;
           if (!selectedDay.isBefore(checkOut, "day")) return false; // checkout day excluded
-
-          const dueClearedDay = getDueClearedDayCached(booking); // dayjs or null
-          if (dueClearedDay) {
-            // hide after due is cleared; show on due-cleared day
-            if (selectedDay.isAfter(dueClearedDay, "day")) return false;
-          }
+          // IMPORTANT: even if due clears on day-1/day-1st, still show until checkout previous day.
           return true;
         });
 
@@ -237,8 +260,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         // - show only until due-cleared day (inclusive); after that hide
         const unPaidInvoice = allBookings.filter((booking) => {
           if (!booking.checkOutDate) return false;
-          const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
+          const checkOut = toDhakaDayjs(booking.checkOutDate)?.startOf("day");
+          if (!checkOut) return false;
           if (selectedDay.isBefore(checkOut, "day")) return false; // checkout day excluded from regular
+
+          // Show unpaid from checkout day only when due still exists at checkout day.
+          const totalBill = Number(booking.totalBill) || 0;
+          const paidUptoCheckout = getTotalPaidUpToDate(booking, checkOut);
+          if (Math.max(0, totalBill - paidUptoCheckout) <= 0) return false;
 
           const dueClearedDay = getDueClearedDayCached(booking);
           if (dueClearedDay) {
