@@ -2303,14 +2303,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                         </Col>
                       </Row>
                       {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map((_, index) => {
-                        // Prevent duplicate methods across rows (also when editing / updating booking)
-                        const usedMethods = (formik.values.payments || [])
-                          .map((p, i) =>
-                            i !== index && (p.paymentMethod || "").trim()
-                              ? String(p.paymentMethod).trim().toUpperCase()
-                              : null
-                          )
-                          .filter(Boolean);
                         return (
                         <Row key={index} gutter={[12, 0]} align="middle" className="mb-2">
                           <Col xs={24} sm={8} md={5}>
@@ -2333,10 +2325,10 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 optionFilterProp="label"
                                 allowClear
                               >
-                                <Select.Option value="BKASH" label="BKASH" disabled={usedMethods.includes("BKASH")}>BKASH</Select.Option>
-                                <Select.Option value="NAGAD" label="NAGAD" disabled={usedMethods.includes("NAGAD")}>NAGAD</Select.Option>
-                                <Select.Option value="BANK" label="BANK" disabled={usedMethods.includes("BANK")}>BANK</Select.Option>
-                                <Select.Option value="CASH" label="CASH" disabled={usedMethods.includes("CASH")}>CASH</Select.Option>
+                                <Select.Option value="BKASH" label="BKASH">BKASH</Select.Option>
+                                <Select.Option value="NAGAD" label="NAGAD">NAGAD</Select.Option>
+                                <Select.Option value="BANK" label="BANK">BANK</Select.Option>
+                                <Select.Option value="CASH" label="CASH">CASH</Select.Option>
                               </Select>
                             </Form.Item>
                           </Col>

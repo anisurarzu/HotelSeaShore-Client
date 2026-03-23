@@ -368,7 +368,7 @@ const Invoice = ({ params }) => {
                   #{data?.[0]?.bookingNo || "N/A"}
                 </p>
                 <p className="font-normal text-sm">
-                  {moment(data?.[0]?.createTime).format("MMM DD, YYYY") || "N/A"}
+                  {moment(data?.[0]?.createTime).format("D MMMM, YYYY") || "N/A"}
                 </p>
               </div>
             </div>
@@ -397,7 +397,11 @@ const Invoice = ({ params }) => {
                 {data?.[0]?.email && (
                   <p className="text-slate-600 text-xs">{data?.[0]?.email}</p>
                 )}
-                {/* ID (NID/Passport) hidden on invoice as requested */}
+                {(data?.[0]?.nidPassport || data?.[0]?.nid) && (
+                  <p className="text-slate-600 text-xs">
+                    NID: {data?.[0]?.nidPassport || data?.[0]?.nid}
+                  </p>
+                )}
                 {data?.[0]?.address && (
                   <p className="text-slate-600 text-xs">{data?.[0]?.address}</p>
                 )}
@@ -807,6 +811,14 @@ const Invoice = ({ params }) => {
               </div>
             </div>
           </div>
+
+          {(data?.[0]?.bookedBy || data?.[0]?.bookedByID) && (
+            <div className="mt-3">
+              <p className="text-slate-600 text-xs">
+                Booked By: {data?.[0]?.bookedBy || data?.[0]?.bookedByID}
+              </p>
+            </div>
+          )}
 
           {/* Terms & Conditions (bottom) */}
           {Array.isArray(data?.[0]?.hotelInformation?.termsAndConditions) &&
