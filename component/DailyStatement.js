@@ -481,9 +481,27 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     fetchBookingsByDate(selectedDate);
   }, [selectedDate]);
 
+  const getRoomSortKey = (booking) => {
+    const raw = String(booking?.roomNumberName || booking?.roomNumber || "").trim();
+    const numericPart = raw.match(/\d+/)?.[0];
+    return {
+      numeric: numericPart ? Number(numericPart) : Number.POSITIVE_INFINITY,
+      text: raw.toUpperCase(),
+    };
+  };
+
+  const sortBookingsByRoomNo = (list = []) => {
+    return [...list].sort((a, b) => {
+      const ka = getRoomSortKey(a);
+      const kb = getRoomSortKey(b);
+      if (ka.numeric !== kb.numeric) return ka.numeric - kb.numeric;
+      return ka.text.localeCompare(kb.text);
+    });
+  };
+
   // No pagination: show all rows
-  const regularDisplay = bookings.regularInvoice ?? [];
-  const unpaidDisplay = bookings.unPaidInvoice ?? [];
+  const regularDisplay = sortBookingsByRoomNo(bookings.regularInvoice ?? []);
+  const unpaidDisplay = sortBookingsByRoomNo(bookings.unPaidInvoice ?? []);
 
   const handleDateChange = async (date) => {
     if (date) {
@@ -580,7 +598,10 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
     try {
       const dateStr = toBangladeshDateStr(selectedDate);
 
-      const allBookings = [...(bookings.regularInvoice || []), ...(bookings.unPaidInvoice || [])];
+      const allBookings = sortBookingsByRoomNo([
+        ...(bookings.regularInvoice || []),
+        ...(bookings.unPaidInvoice || []),
+      ]);
 
       // Statement rows (UI daily cash input + saved daily cash from backend)
       const statementRows = allBookings.map((booking, idx) => {
@@ -627,24 +648,24 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
             .map(
               (r) => `
                   <tr>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.sl}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.room}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:left;">${r.invoice}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:left;">${r.guest}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:left;">${r.phone}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.checkIn}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.checkOut}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:center;">${r.nights}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.totalBill.toLocaleString()}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.bkash.toLocaleString()}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.totalPaid.toLocaleString()}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;">${r.dailyCashFromDb.toLocaleString()}</td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;color:#dc2626;font-weight:600;">${Number(r.due ?? 0).toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.sl}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.room}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:left;line-height:1.35;">${r.invoice}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:left;line-height:1.35;">${r.guest}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:left;line-height:1.35;">${r.phone}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.checkIn}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.checkOut}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.nights}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;line-height:1.35;">${r.totalBill.toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;line-height:1.35;">${r.bkash.toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;line-height:1.35;">${r.totalPaid.toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;line-height:1.35;">${r.dailyCashFromDb.toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;border-right:1px solid #000000;box-shadow: inset -1px 0 0 #000000;padding:6px 6px;font-size:9px;text-align:right;color:#b91c1c;font-weight:700;line-height:1.35;">${Number(r.due ?? 0).toLocaleString()}</td>
               </tr>
             `
             )
             .join("")
-          : `<tr><td colspan="13" style="border:1px solid #e5e7eb;padding:8px;font-size:9px;text-align:center;">No records</td></tr>`;
+          : `<tr><td colspan="13" style="border:0.8px solid #000000;padding:8px 6px;font-size:9px;text-align:center;line-height:1.35;">No records</td></tr>`;
 
       const grandTotals = statementRows.reduce(
         (acc, r) => {
@@ -670,22 +691,22 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         statementRows.length > 0
           ? `
               <tr>
-                <td colSpan="8" style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                <td colSpan="8" style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
                   Total:
                 </td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
                   ${grandTotals.totalBill.toLocaleString()}
                 </td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
                   ${grandTotals.bkash.toLocaleString()}
                 </td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
                   ${grandTotals.totalPaid.toLocaleString()}
                 </td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.1;">
+                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
                   ${grandTotals.dailyCashFromDb.toLocaleString()}
                 </td>
-                <td style="border:1px solid #e5e7eb;padding:5px 4px;font-size:9px;text-align:right;font-weight:800;color:#dc2626;line-height:1.1;">
+                <td style="border:0.8px solid #000000;border-right:1px solid #000000;box-shadow: inset -1px 0 0 #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#b91c1c;line-height:1.35;">
                   ${grandTotals.duePayment.toLocaleString()}
                 </td>
               </tr>
@@ -693,33 +714,33 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           : "";
 
       const html = `
-        <div id="daily-pdf-root" style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#0f172a;">
-          <div style="padding:14px 18px;background:linear-gradient(135deg,#2563eb 0%, #1d4ed8 100%);color:#fff;text-align:center;">
+        <div id="daily-pdf-root" style="font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#0f172a;">
+          <div style="padding:14px 18px;background:linear-gradient(135deg,#1f2937 0%, #111827 100%);color:#fff;text-align:center;">
             <div style="font-size:18px;font-weight:800;letter-spacing:0.04em;">Daily Statement & Summary - Hotel Sea Shore</div>
             <div style="font-size:12px;opacity:0.95;margin-top:4px;">Date: ${dateStr}</div>
           </div>
 
           <div style="padding:14px 18px;">
             <div style="overflow:visible;">
-              <table style="width:100%;border-collapse:collapse;min-width:740px;">
+              <table style="width:100%;border-collapse:collapse;border-spacing:0;margin:0;padding:0;min-width:740px;border:0.8px solid #000000;">
                 <thead>
-                  <tr>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">SL</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Room</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Invoice</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Guest</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Phone</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Check-in</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">Check-out</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;">N</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Total Bill</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Bkash</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Total Paid</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Daily Cash</th>
-                    <th style="border:1px solid #1d4ed8;padding:6px 4px;font-size:9px;background:#2563eb;color:#ffffff;text-align:right;">Due</th>
+                  <tr style="margin:0;padding:0;">
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">SL</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Room</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Invoice</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Guest</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Phone</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Check-in</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Check-out</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">N</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Total Bill</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Bkash</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Total Paid</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Daily Cash</th>
+                    <th style="border:0.8px solid #000000;border-right:1px solid #000000;box-shadow: inset -1px 0 0 #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Due</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody style="margin:0;padding:0;">
                   ${statementRowsHtml}
                   ${totalRowHtml}
                 </tbody>
@@ -728,29 +749,29 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           </div>
 
           <div style="padding:0 18px 18px 18px;">
-            <h3 style="margin:0 0 10px 0;font-size:14px;font-weight:800;color:#0f172a;border-bottom:3px solid #bbf7d0;padding-bottom:6px;width:100%;text-align:center;">Daily Summary</h3>
+            <h3 style="margin:0 0 10px 0;font-size:14px;font-weight:800;color:#0f172a;border-bottom:0.8px solid #000000;padding-bottom:6px;width:100%;text-align:center;">Daily Summary</h3>
             <div style="overflow:visible;display:flex;justify-content:center;">
               <table style="width:50%;border-collapse:collapse;min-width:unset;">
                 <tbody>
                   <tr>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Opening Balance</td>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(openingBalance || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Opening Balance</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(openingBalance || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Daily Income (CASH)</td>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(dailyIncome || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Daily Income (CASH)</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(dailyIncome || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Total Balance</td>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(totalBalance || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Total Balance</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(totalBalance || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Daily Expenses</td>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(dailyExpenses || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Daily Expenses</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(dailyExpenses || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:700;color:#0f172a;">Closing Balance</td>
-                    <td style="border:1px solid #e5e7eb;padding:6px 4px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;">৳${Number(closingBalance || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Closing Balance</td>
+                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(closingBalance || 0).toLocaleString()}</td>
                   </tr>
                 </tbody>
               </table>
