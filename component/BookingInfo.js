@@ -101,6 +101,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
   const [searchTerm, setSearchTerm] = useState("");
   const [checkInDate, setCheckInDate] = useState(null);
   const [isHotelFromReference, setIsHotelFromReference] = useState(false);
+  const [initialPaymentCount, setInitialPaymentCount] = useState(0);
   const hasHandledQueryParams = useRef(false);
 
   // Fetch hotels list
@@ -449,6 +450,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
         setIsEditing(false);
         setEditingKey(null);
         setPrevData(null);
+        setInitialPaymentCount(0);
         setIsHotelFromReference(false);
         formik.resetForm();
         
@@ -642,6 +644,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
           setIsEditing(false);
           setEditingKey(null);
           setPrevData(null);
+          setInitialPaymentCount(0);
         }, 500);
       } catch (error) {
         console.error("Error pre-filling form:", error);
@@ -872,6 +875,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     };
 
     formik.setValues(formValues);
+    setInitialPaymentCount(payments.length);
 
     if (data.roomCategoryID) {
       setTimeout(() => {
@@ -880,6 +884,28 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     }
 
     setVisible(true);
+  };
+
+  const clearBookingPaymentsByBookingId = async (bookingId) => {
+    if (!bookingId) return;
+    setSubmitLoading(true);
+    try {
+      const res = await coreAxios.put(`/bookings/booking/${bookingId}/payments/clear`);
+      if (res.status === 200) {
+        message.success(res.data?.message || "Booking payments cleared successfully");
+      }
+      const emptyPayments = [{ paymentMethod: "", amount: 0, transactionId: "", date: dayjs() }];
+      formik.setFieldValue("payments", emptyPayments);
+      formik.setFieldValue("paymentMethod", "");
+      formik.setFieldValue("transactionId", "");
+      syncAdvanceFromPayments(emptyPayments);
+      setInitialPaymentCount(0);
+    } catch (error) {
+      console.error("Error clearing booking payments:", error);
+      message.error(error.response?.data?.error || error.response?.data?.message || "Failed to clear booking payments");
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   // Soft delete (cancel): DELETE /booking/soft/:id with body { canceledBy, reason }
@@ -1298,6 +1324,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               setIsEditing(false);
                               setEditingKey(null);
                               setPrevData(null);
+                              setInitialPaymentCount(0);
                               setIsHotelFromReference(false);
                               setRoomCategories([]);
                               setRoomNumbers([]);
@@ -1845,6 +1872,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                     setIsEditing(false);
                     setEditingKey(null);
                     setPrevData(null);
+                    setInitialPaymentCount(0);
                     setIsHotelFromReference(false);
                     formik.resetForm();
                     hasHandledQueryParams.current = false;
@@ -2303,6 +2331,14 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                         </Col>
                       </Row>
                       {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map((_, index) => {
+                        const isExistingPayment = isEditing && index < initialPaymentCount;
+                        const usedMethods = (formik.values.payments || [])
+                          .map((p, i) =>
+                            i !== index && (p.paymentMethod || "").trim()
+                              ? String(p.paymentMethod).trim().toUpperCase()
+                              : null
+                          )
+                          .filter(Boolean);
                         return (
                         <Row key={index} gutter={[12, 0]} align="middle" className="mb-2">
                           <Col xs={24} sm={8} md={5}>
@@ -2324,11 +2360,12 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 style={{ width: "100%", minWidth: 90 }}
                                 optionFilterProp="label"
                                 allowClear
+                                disabled={isExistingPayment}
                               >
-                                <Select.Option value="BKASH" label="BKASH">BKASH</Select.Option>
-                                <Select.Option value="NAGAD" label="NAGAD">NAGAD</Select.Option>
-                                <Select.Option value="BANK" label="BANK">BANK</Select.Option>
-                                <Select.Option value="CASH" label="CASH">CASH</Select.Option>
+                                <Select.Option value="BKASH" label="BKASH" disabled={usedMethods.includes("BKASH")}>BKASH</Select.Option>
+                                <Select.Option value="NAGAD" label="NAGAD" disabled={usedMethods.includes("NAGAD")}>NAGAD</Select.Option>
+                                <Select.Option value="BANK" label="BANK" disabled={usedMethods.includes("BANK")}>BANK</Select.Option>
+                                <Select.Option value="CASH" label="CASH" disabled={usedMethods.includes("CASH")}>CASH</Select.Option>
                               </Select>
                             </Form.Item>
                           </Col>
@@ -2345,6 +2382,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 format="YYYY-MM-DD"
                                 style={{ width: "100%", height: "40px" }}
                                 allowClear={false}
+                                disabled={isExistingPayment}
                               />
                             </Form.Item>
                           </Col>
@@ -2365,6 +2403,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 }}
                                 placeholder="Amount"
                                 style={{ width: "100%" }}
+                                disabled={isExistingPayment}
                               />
                             </Form.Item>
                           </Col>
@@ -2380,18 +2419,35 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 }}
                                 placeholder="Trx ID (optional)"
                                 style={{ width: "100%" }}
+                                disabled={isExistingPayment}
                               />
                             </Form.Item>
                           </Col>
                           <Col xs={24} sm={2} md={2}>
-                            {formik.values.payments.length > 1 ? (
+                            {isExistingPayment ? (
+                              <Popconfirm
+                                title="Clear all existing payments?"
+                                description="Existing payment rows are locked. Clear them to add new entries."
+                                onConfirm={() => clearBookingPaymentsByBookingId(editingKey)}
+                                okText="Yes"
+                                cancelText="No"
+                              >
+                                <Button
+                                  type="text"
+                                  danger
+                                  icon={<MinusCircleOutlined />}
+                                  loading={submitLoading}
+                                  style={{ marginTop: index === 0 ? "30px" : 0 }}
+                                />
+                              </Popconfirm>
+                            ) : formik.values.payments.length > 1 ? (
                               <Button
                                 type="text"
                                 danger
                                 icon={<MinusCircleOutlined />}
                                 onClick={() => {
                                   const next = formik.values.payments.filter((_, i) => i !== index);
-                                  if (next.length === 0) next.push({ paymentMethod: "", amount: 0, transactionId: "" });
+                                  if (next.length === 0) next.push({ paymentMethod: "", amount: 0, transactionId: "", date: dayjs() });
                                   formik.setFieldValue("payments", next);
                                   syncAdvanceFromPayments(next);
                                 }}
@@ -2489,6 +2545,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           setIsEditing(false);
                           setEditingKey(null);
                           setPrevData(null);
+                          setInitialPaymentCount(0);
                           setIsHotelFromReference(false);
                           formik.resetForm();
                         }}
