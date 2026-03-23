@@ -893,10 +893,10 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                       <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20 }} />
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20, textAlign: "right" }} />
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20 }} />
+                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20, textAlign: "right" }} />
                     </td>
                     <td className="px-2 py-1.5 border border-gray-300">
                       <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
@@ -982,12 +982,14 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                           {totals.bank || 0}
                         </td>
                         <td className="px-3 py-2.5 text-right border border-gray-300">
-                          <InputNumber
+                          {/* <InputNumber
                             min={0}
                             value={totals.totalPaid}
                             disabled
                             style={{ width: "80px", backgroundColor: "#f3f4f6", color: "#000", textAlign: "right" }}
-                          />
+                            inputStyle={{ textAlign: "right" }}
+                          /> */}
+                            {totals.totalPaid || 0}
                         </td>
                         <td className="px-3 py-2.5 text-center border border-gray-300">
                           <InputNumber
@@ -1014,6 +1016,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             }}
                             disabled={totals.duePayment <= 0 || !canEdit}
                             style={{ width: "70px", color: "#000", textAlign: "right", fontSize: "10px" }}
+                            inputStyle={{ textAlign: "right" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
@@ -1117,6 +1120,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             value={totals.totalPaid}
                             disabled
                             style={{ width: "80px", backgroundColor: "#f3f4f6", color: "#000", textAlign: "right" }}
+                            inputStyle={{ textAlign: "right" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-center border border-gray-300">
@@ -1144,6 +1148,7 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                             }}
                             disabled={totals.duePayment <= 0 || !canEdit}
                             style={{ width: "70px", color: "#000", textAlign: "right", fontSize: "10px" }}
+                            inputStyle={{ textAlign: "right" }}
                           />
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
