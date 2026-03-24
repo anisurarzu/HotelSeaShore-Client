@@ -24,6 +24,25 @@ const DailySummary = forwardRef(function DailySummary(
   const [loading, setLoading] = useState(false);
   const [dailyIncomeState, setDailyIncomeState] = useState(0);
 
+  const getPreviousDateStr = (date) =>
+    dayjs(date).tz("Asia/Dhaka").subtract(1, "day").format("YYYY-MM-DD");
+
+  const getPreviousClosingBalance = async (date) => {
+    try {
+      const prevDateStr = getPreviousDateStr(date);
+      const prevRes = await coreAxios.get(`/daily-summary/${prevDateStr}`);
+      if (prevRes.status === 200 && prevRes.data) {
+        return Number(prevRes.data?.closingBalance) || 0;
+      }
+      return 0;
+    } catch (err) {
+      if (err?.response?.status !== 404) {
+        console.error("Failed to fetch previous day summary", err);
+      }
+      return 0;
+    }
+  };
+
   // Date-wise total expense from GET /expenses/sum/daily — shown here and sent on Save
   const fetchDailyExpensesByDate = async (date) => {
     if (!date) return;
@@ -66,15 +85,20 @@ const DailySummary = forwardRef(function DailySummary(
         const res = await coreAxios.get(`/daily-summary/${dateStr}`);
         if (res.status === 200 && res.data) {
           const data = res.data || {};
-          setOpeningBalance(Number(data.openingBalance) || 0);
+          const prevClosing = await getPreviousClosingBalance(selectedDate);
+          // Keep carry-forward rule deterministic: today's opening = previous day's closing.
+          setOpeningBalance(prevClosing);
+          setDailyIncomeState(Number(data.dailyIncome) || 0);
         } else {
-          setOpeningBalance(0);
+          const prevClosing = await getPreviousClosingBalance(selectedDate);
+          setOpeningBalance(prevClosing);
         }
       } catch (err) {
         if (err?.response?.status !== 404) {
           console.error("Failed to fetch daily summary", err);
         }
-        setOpeningBalance(0);
+        const prevClosing = await getPreviousClosingBalance(selectedDate);
+        setOpeningBalance(prevClosing);
       }
       setDailyIncomeState(Number(dailyIncome) || 0);
     };
@@ -85,19 +109,28 @@ const DailySummary = forwardRef(function DailySummary(
 
   const handleSave = async () => {
     try {
+      if (!selectedDate) return;
       setLoading(true);
-      // Backend createOrUpdateDailySummary resolves openingBalance from previous day's closing
+      const carryOpeningBalance = await getPreviousClosingBalance(selectedDate);
+      const recalculatedTotalBalance = carryOpeningBalance + effectiveDailyIncome;
+      const recalculatedClosingBalance = recalculatedTotalBalance - dailyExpenses;
+
+      // Send deterministic carry-forward values from frontend.
       const payload = {
         date: toBangladeshDateStr(selectedDate),
+        openingBalance: carryOpeningBalance,
         dailyIncome: effectiveDailyIncome,
-        totalBalance,
+        totalBalance: recalculatedTotalBalance,
         dailyExpenses,
-        closingBalance,
+        closingBalance: recalculatedClosingBalance,
       };
 
       const res = await coreAxios.post("/daily-summary", payload);
 
       if (res.status === 200 || res.status === 201) {
+        setOpeningBalance(carryOpeningBalance);
+        setTotalBalance(recalculatedTotalBalance);
+        setClosingBalance(recalculatedClosingBalance);
         message.success("Daily summary saved successfully");
       } else {
         throw new Error("Error saving summary");
