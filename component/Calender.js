@@ -126,123 +126,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     }).length;
   };
 
-  const getPaymentDateValue = (payment) => {
-    if (!payment) return null;
-    return payment?.createdAt || payment?.date || payment?.paymentDate || null;
-  };
-
-  const normalizeId = (value) => {
-    if (value == null) return "";
-    if (typeof value === "string" || typeof value === "number") return String(value);
-    if (typeof value === "object") {
-      if (value._id != null) return String(value._id);
-      if (value.id != null) return String(value.id);
-      if (value.$oid != null) return String(value.$oid);
-      const asText = value?.toString?.();
-      return asText && asText !== "[object Object]" ? String(asText) : "";
-    }
-    return "";
-  };
-
-  const getBookingRoomId = (booking) =>
-    normalizeId(
-      booking?.roomNumberID ??
-      booking?.roomNumberId ??
-      booking?.roomNumber?._id ??
-      booking?.room?._id
-    );
-
-  const getNormalizedPayments = (booking) => {
-    const payments = Array.isArray(booking?.payments) ? booking.payments : [];
-    return payments
-      .map((p, idx) => ({
-        amount: Number(p?.amount) || 0,
-        date: getPaymentDateValue(p) ? dayjs(getPaymentDateValue(p)).startOf("day") : null,
-        idx,
-      }))
-      .sort((a, b) => {
-        if (a.date && b.date) {
-          if (a.date.isBefore(b.date, "day")) return -1;
-          if (a.date.isAfter(b.date, "day")) return 1;
-          return a.idx - b.idx;
-        }
-        if (a.date) return -1;
-        if (b.date) return 1;
-        return a.idx - b.idx;
-      });
-  };
-
-  // Day when cumulative paid reaches total bill; null means not fully cleared yet.
-  const getDueClearedDate = (booking) => {
-    if (!booking) return null;
-    const totalBill = Number(booking.totalBill) || 0;
-    if (totalBill <= 0) return dayjs(booking.checkInDate).startOf("day");
-
-    const normalized = getNormalizedPayments(booking);
-    if (normalized.length > 0) {
-
-      let running = 0;
-      for (const p of normalized) {
-        running += p.amount;
-        if (running >= totalBill) {
-          return (p.date || dayjs(booking.checkInDate)).startOf("day");
-        }
-      }
-      return null;
-    }
-
-    // Legacy/fallback: if there are no payment rows but advance already covers total.
-    if ((Number(booking.advancePayment) || 0) >= totalBill) {
-      return dayjs(booking.checkInDate).startOf("day");
-    }
-    return null;
-  };
-
-  // True হলে checkout day থেকে unpaid list/show logic চালু হবে।
-  const hasDueOnCheckoutDay = (booking) => {
-    if (!booking?.checkOutDate) return false;
-    const totalBill = Number(booking.totalBill) || 0;
-    if (totalBill <= 0) return false;
-
-    const checkOut = dayjs(booking.checkOutDate).startOf("day");
-    const normalized = getNormalizedPayments(booking);
-    if (normalized.length > 0) {
-      const paidBeforeCheckout = normalized.reduce((sum, p) => {
-        if (p.date && p.date.isBefore(checkOut, "day")) return sum + p.amount;
-        return sum;
-      }, 0);
-      return paidBeforeCheckout < totalBill;
-    }
-
-    // Legacy fallback when payment rows are missing.
-    return (Number(booking.advancePayment) || 0) < totalBill;
-  };
-
-  // Statement visibility rule:
-  // - Always show during stay days: checkIn <= date < checkOut
-  // - If due is still pending at checkout day, show from checkout day in unpaid window until due-cleared day.
-  const shouldShowBookingOnDate = (booking, dateStr) => {
-    if (!booking?.checkInDate || !booking?.checkOutDate) return false;
-
-    const selectedDate = dayjs(dateStr).startOf("day");
-    const checkIn = dayjs(booking.checkInDate).startOf("day");
-    const checkOut = dayjs(booking.checkOutDate).startOf("day");
-
-    const inStayWindow = selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
-    if (inStayWindow) return true;
-
-    const dueClearedDate = getDueClearedDate(booking);
-    const hasDueAtCheckout = hasDueOnCheckoutDay(booking);
-
-    if (!hasDueAtCheckout) return false;
-
-    const inUnpaidWindow = selectedDate.isSameOrAfter(checkOut, "day");
-    if (!inUnpaidWindow) return false;
-
-    if (!dueClearedDate) return true;
-    return selectedDate.isSameOrBefore(dueClearedDate, "day");
-  };
-
   // Calculate day total bookings
   const calculateDayTotal = (dateStr) => {
     return roomList.filter(room => {
@@ -252,27 +135,39 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
 
   // Calculate total booking amount for a date
   const calculateDayTotalAmount = (dateStr) => {
+    const selectedDate = dayjs(dateStr);
     return allBookings
       .filter(booking => {
-        return shouldShowBookingOnDate(booking, dateStr);
+        if (!booking.checkInDate || !booking.checkOutDate) return false;
+        const checkIn = dayjs(booking.checkInDate);
+        const checkOut = dayjs(booking.checkOutDate);
+        return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
       })
       .reduce((sum, booking) => sum + (Number(booking.totalBill) || 0), 0);
   };
 
   // Calculate paid amount for a date
   const calculateDayPaidAmount = (dateStr) => {
+    const selectedDate = dayjs(dateStr);
     return allBookings
       .filter(booking => {
-        return shouldShowBookingOnDate(booking, dateStr);
+        if (!booking.checkInDate || !booking.checkOutDate) return false;
+        const checkIn = dayjs(booking.checkInDate);
+        const checkOut = dayjs(booking.checkOutDate);
+        return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
       })
       .reduce((sum, booking) => sum + (Number(booking.advancePayment) || 0), 0);
   };
 
   // Calculate due amount for a date
   const calculateDayDueAmount = (dateStr) => {
+    const selectedDate = dayjs(dateStr);
     return allBookings
       .filter(booking => {
-        return shouldShowBookingOnDate(booking, dateStr);
+        if (!booking.checkInDate || !booking.checkOutDate) return false;
+        const checkIn = dayjs(booking.checkInDate);
+        const checkOut = dayjs(booking.checkOutDate);
+        return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
       })
       .reduce((sum, booking) => sum + (Number(booking.duePayment) || 0), 0);
   };
@@ -290,7 +185,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     }
     
     // Extract roomNumberID from roomKey (format: "room-{roomNumberID}")
-    const roomNumberId = normalizeId(roomKey.replace("room-", ""));
+    const roomNumberId = roomKey.replace("room-", "");
     
     // Find the room details
     const room = roomList.find(r => r.key === roomKey);
@@ -313,7 +208,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     if (hotel.roomCategories && Array.isArray(hotel.roomCategories)) {
       for (const category of hotel.roomCategories) {
         if (category.roomNumbers && Array.isArray(category.roomNumbers)) {
-          foundRoom = category.roomNumbers.find((r) => normalizeId(r._id) === roomNumberId);
+          foundRoom = category.roomNumbers.find(r => r._id === roomNumberId);
           if (foundRoom) {
             foundCategory = category;
             break;
@@ -335,7 +230,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         const checkOut = dayjs(b.checkOutDate);
         const selectedDate = dayjs(dateStr);
         return (
-          getBookingRoomId(b) === roomNumberId &&
+          b.roomNumberID === roomNumberId &&
           (selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day"))
         );
       });
@@ -445,12 +340,20 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     setSelectedDateStr(dateStr);
     
     // Extract roomNumberID from roomKey (format: "room-{roomNumberID}")
-    const roomNumberId = normalizeId(roomKey.replace("room-", ""));
+    const roomNumberId = roomKey.replace("room-", "");
     
     // Fetch booking history for this room and date from actual bookings
-    const relevantBookings = allBookings.filter((booking) => {
-      if (getBookingRoomId(booking) !== roomNumberId) return false;
-      return shouldShowBookingOnDate(booking, dateStr);
+    const relevantBookings = allBookings.filter(booking => {
+      // Check if booking is for this room
+      if (booking.roomNumberID !== roomNumberId) return false;
+      
+      // Check if date falls within booking range
+      const checkIn = dayjs(booking.checkInDate);
+      const checkOut = dayjs(booking.checkOutDate);
+      const selectedDate = dayjs(dateStr);
+      
+      // Date is within booking range (inclusive of check-in, exclusive of check-out)
+      return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
     });
     
     setBookingHistory(relevantBookings);
@@ -893,20 +796,23 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       const mappedBookings = {};
       const dates = generateDateColumns();
       
-      bookings.forEach((booking) => {
+      bookings.forEach(booking => {
         if (!booking.checkInDate || !booking.checkOutDate) return;
-
-        const bookingRoomId = getBookingRoomId(booking);
-        if (!bookingRoomId) return;
-        const roomKey = `room-${bookingRoomId}`;
-
-        dates.forEach((d) => {
-          const dateStr = d.format("YYYY-MM-DD");
-          if (!shouldShowBookingOnDate(booking, dateStr)) return;
+        
+        const checkIn = dayjs(booking.checkInDate);
+        const checkOut = dayjs(booking.checkOutDate);
+        const roomKey = `room-${booking.roomNumberID}`;
+        
+        let currentDate = checkIn;
+        while (currentDate.isBefore(checkOut, "day")) {
+          const dateStr = currentDate.format("YYYY-MM-DD");
           const bookingKey = `${roomKey}-${dateStr}`;
+          
           const displayText = `${booking.bookingNo || "N/A"} - ${booking.fullName || "Guest"}`;
           mappedBookings[bookingKey] = displayText;
-        });
+          
+          currentDate = currentDate.add(1, "day");
+        }
       });
 
       setBookingData(mappedBookings);
