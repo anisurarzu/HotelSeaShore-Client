@@ -58,13 +58,32 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
   const [dailySumLoading, setDailySumLoading] = useState(false);
   const [dailyIncomeForSummary, setDailyIncomeForSummary] = useState(0);
 
+  /** Same date helpers as DailyStatement.js (Mongo $date + Asia/Dhaka) */
+  const unwrapDate = (value) => {
+    if (!value) return null;
+    if (dayjs.isDayjs(value)) return value.toDate();
+    if (typeof value === "object") {
+      if (value.$date) return value.$date;
+      if (value.date) return value.date;
+    }
+    return value;
+  };
+
+  const toDhakaDayjs = (value) => {
+    const raw = unwrapDate(value);
+    if (!raw) return null;
+    const d = dayjs(raw).tz("Asia/Dhaka");
+    return d.isValid() ? d : null;
+  };
+
   /** Same as DailyStatement: payments on given date (cash, bkash, nagad, bank) for one booking */
   const getPaymentsByDate = (booking, date) => {
     const payments = booking.payments || [];
-    const dateKey = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+    const dateKey = toDhakaDayjs(date)?.format("YYYY-MM-DD");
     const out = { cash: 0, bkash: 0, nagad: 0, bank: 0 };
+    if (!dateKey) return out;
     payments.forEach((p) => {
-      const d = p.createdAt ? dayjs(p.createdAt).tz("Asia/Dhaka").format("YYYY-MM-DD") : null;
+      const d = toDhakaDayjs(p.createdAt)?.format("YYYY-MM-DD");
       if (d !== dateKey) return;
       const method = (p.paymentMethod || p.method || "").toUpperCase();
       const amount = Number(p.amount) || 0;
@@ -76,16 +95,65 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
     return out;
   };
 
-  /** Total paid from payments array; for due we need it */
-  const getDuePayment = (booking) => {
-    const totalBill = Number(booking.totalBill) || 0;
-    const payments = booking.payments || [];
-    const totalPaid = payments.length > 0
-      ? payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
-      : Number(booking.advancePayment) || 0;
-    return Math.max(0, totalBill - totalPaid);
+  const getTotalPaidUpToDate = (booking, date) => {
+    if (!date) return 0;
+    const selectedDay = toDhakaDayjs(date)?.endOf("day");
+    if (!selectedDay) return 0;
+
+    if (Array.isArray(booking?.paidAmountsByDate) && booking.paidAmountsByDate.length > 0) {
+      return booking.paidAmountsByDate.reduce((sum, row) => {
+        const d = toDhakaDayjs(row?.date)?.endOf("day");
+        if (!d) return sum;
+        if (d.isAfter(selectedDay, "day")) return sum;
+        return sum + (Number(row.totalPaid) || 0);
+      }, 0);
+    }
+
+    const payments = Array.isArray(booking?.payments) ? booking.payments : [];
+    if (payments.length > 0) {
+      return payments.reduce((sum, p) => {
+        const d = toDhakaDayjs(p?.createdAt)?.endOf("day");
+        if (!d) return sum;
+        if (d.isAfter(selectedDay, "day")) return sum;
+        return sum + (Number(p.amount) || 0);
+      }, 0);
+    }
+
+    if (Number(booking?.advancePayment) > 0) {
+      const created = toDhakaDayjs(booking?.createdAt)?.endOf("day");
+      if (!created || created.isAfter(selectedDay, "day")) return 0;
+      return Number(booking.advancePayment) || 0;
+    }
+    return 0;
   };
 
+  const getDueClearedDate = (booking) => {
+    const totalBill = Number(booking.totalBill) || 0;
+    const payments = [...(booking.payments || [])];
+    payments.sort((a, b) => {
+      const ad = toDhakaDayjs(a.createdAt)?.valueOf() || 0;
+      const bd = toDhakaDayjs(b.createdAt)?.valueOf() || 0;
+      return ad - bd;
+    });
+    if (payments.length === 0) {
+      const advance = Number(booking.advancePayment) || 0;
+      if (advance > 0 && advance >= totalBill) {
+        return toDhakaDayjs(booking.createdAt)?.startOf("day") || null;
+      }
+      return null;
+    }
+    let running = 0;
+    for (const p of payments) {
+      running += Number(p.amount) || 0;
+      if (running >= totalBill) {
+        const d = toDhakaDayjs(p.createdAt)?.startOf("day");
+        return d || null;
+      }
+    }
+    return null;
+  };
+
+  /** Daily cash total for summary — same booking sets + cash sum as DailyStatement.js */
   const fetchDailyIncomeFromBookings = async (date) => {
     try {
       const response = await coreAxios.get("/bookings");
@@ -104,59 +172,56 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
         }
       } catch (_) {}
 
-      const selectedDay = dayjs(date).tz("Asia/Dhaka").startOf("day");
+      const selectedDay = toDhakaDayjs(date)?.startOf("day");
+      if (!selectedDay) {
+        setDailyIncomeForSummary(0);
+        return;
+      }
 
-      const bookingsForDate = allBookings.filter((booking) => {
+      const dueClearedCache = new Map();
+      const getDueClearedDayCached = (booking) => {
+        const id = booking?._id || booking?.id;
+        if (!id) return getDueClearedDate(booking);
+        if (dueClearedCache.has(id)) return dueClearedCache.get(id);
+        const d = getDueClearedDate(booking);
+        dueClearedCache.set(id, d);
+        return d;
+      };
+
+      const regularInvoice = allBookings.filter((booking) => {
         if (!booking.checkInDate || !booking.checkOutDate) return false;
-        const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka").startOf("day");
-        const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
-        return !selectedDay.isBefore(checkIn) && !selectedDay.isAfter(checkOut);
+        const checkIn = toDhakaDayjs(booking.checkInDate)?.startOf("day");
+        const checkOut = toDhakaDayjs(booking.checkOutDate)?.startOf("day");
+        if (!checkIn || !checkOut) return false;
+        if (selectedDay.isBefore(checkIn, "day")) return false;
+        if (!selectedDay.isBefore(checkOut, "day")) return false;
+        return true;
       });
 
       const unPaidInvoice = allBookings.filter((booking) => {
         if (!booking.checkOutDate) return false;
-        const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
-        const isOnOrAfterCheckout = !selectedDay.isBefore(checkOut, "day");
-        if (!isOnOrAfterCheckout) return false;
-        const duePayment = getDuePayment(booking);
-        return duePayment > 0;
-      });
+        const checkOut = toDhakaDayjs(booking.checkOutDate)?.startOf("day");
+        if (!checkOut) return false;
+        if (selectedDay.isBefore(checkOut, "day")) return false;
 
-      const regularInvoice = bookingsForDate.filter((booking) => {
-        if (!booking.checkOutDate) return true;
-        const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka").startOf("day");
-        const isCheckoutDay = selectedDay.isSame(checkOut, "day");
-        if (!isCheckoutDay) return true;
-        const duePayment = getDuePayment(booking);
-        return duePayment <= 0;
+        const totalBill = Number(booking.totalBill) || 0;
+        const paidUptoCheckout = getTotalPaidUpToDate(booking, checkOut);
+        if (Math.max(0, totalBill - paidUptoCheckout) <= 0) return false;
+
+        const dueClearedDay = getDueClearedDayCached(booking);
+        if (dueClearedDay && selectedDay.isAfter(dueClearedDay, "day")) return false;
+        return true;
       });
 
       const combined = [...regularInvoice, ...unPaidInvoice];
       const calculated = combined.reduce((sum, booking) => {
         const byDate = getPaymentsByDate(booking, date);
-        // Match DailyStatement: Daily Income row should show only daily CASH
         return sum + (byDate.cash || 0);
       }, 0);
       setDailyIncomeForSummary(calculated);
     } catch (error) {
       console.error("Error fetching daily income for summary:", error);
       setDailyIncomeForSummary(0);
-    }
-  };
-
-  const loadDailyIncomeFromStorage = (date) => {
-    try {
-      const dateStr = dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
-      const raw = typeof window !== "undefined"
-        ? localStorage.getItem(`dailySummary:${dateStr}`)
-        : null;
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed.dailyIncome === "number") {
-        setDailyIncomeForSummary(parsed.dailyIncome || 0);
-      }
-    } catch (error) {
-      console.error("Error loading daily income from storage:", error);
     }
   };
 
@@ -220,7 +285,7 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
   useEffect(() => {
     fetchDailySum(dailySumDate);
     fetchDailyIncomeFromBookings(dailySumDate);
-    loadDailyIncomeFromStorage(dailySumDate);
+    // No localStorage merge — match DailyStatement live calculation only. Prev/next does not POST daily-summary.
   }, [dailySumDate]);
 
   // Expenses for selected date only (Bangladesh date)
@@ -575,14 +640,15 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
 
       const totalAmount = rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
-      // Daily Summary values (match DailyStatement.js look)
-      const [sumRes, expRes] = await Promise.all([
-        coreAxios.get(`/daily-summary/${dateStr}`).catch(() => null),
+      // Daily Summary: opening = previous day's closing (same as DailySummary.js)
+      const prevDateStr = dayjs(dailySumDate).tz("Asia/Dhaka").subtract(1, "day").format("YYYY-MM-DD");
+      const [prevSumRes, expRes] = await Promise.all([
+        coreAxios.get(`/daily-summary/${prevDateStr}`).catch(() => null),
         coreAxios.get(`/expenses/sum/daily?date=${dateStr}`).catch(() => null),
       ]);
 
       const openingBalance =
-        Number(sumRes?.status === 200 ? sumRes.data?.openingBalance : 0) || 0;
+        Number(prevSumRes?.status === 200 ? prevSumRes.data?.closingBalance : 0) || 0;
       const dailyExpenses =
         Number(expRes?.status === 200 ? expRes.data?.totalAmount : 0) || 0;
       const dailyIncome = Number(dailyIncomeForSummary) || 0;
