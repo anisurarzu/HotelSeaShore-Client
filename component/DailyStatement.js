@@ -597,6 +597,9 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   const downloadDailyStatementAndSummaryPdf = async () => {
     try {
       const dateStr = toBangladeshDateStr(selectedDate);
+      const dateLabel = selectedDate
+        ? dayjs(selectedDate).tz("Asia/Dhaka").format("D MMMM, YYYY")
+        : dateStr;
 
       const allBookings = sortBookingsByRoomNo([
         ...(bookings.regularInvoice || []),
@@ -647,25 +650,25 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         ? statementRows
             .map(
               (r) => `
-                  <tr>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.sl}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.room}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:left;line-height:1.35;">${r.invoice}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:left;line-height:1.35;">${r.guest}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:left;line-height:1.35;">${r.phone}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.checkIn}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.checkOut}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:center;line-height:1.35;">${r.nights}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;line-height:1.35;">${r.totalBill.toLocaleString()}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;line-height:1.35;">${r.bkash.toLocaleString()}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;line-height:1.35;">${r.totalPaid.toLocaleString()}</td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;line-height:1.35;">${r.dailyCashFromDb.toLocaleString()}</td>
-                <td style="border:0.8px solid #000000;border-right:1px solid #000000;box-shadow: inset -1px 0 0 #000000;padding:6px 6px;font-size:9px;text-align:right;color:#b91c1c;font-weight:700;line-height:1.35;">${Number(r.due ?? 0).toLocaleString()}</td>
+                  <tr style="background:${Number(r.sl) % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.sl}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.room}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:left;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.invoice}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:left;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.guest}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:left;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.phone}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.checkIn}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.checkOut}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.nights}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.totalBill.toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.bkash.toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.totalPaid.toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.dailyCashFromDb.toLocaleString()}</td>
+                <td style="border:0.8px solid #000000;border-right:1.2px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;color:#b91c1c;font-weight:700;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${Number(r.due ?? 0).toLocaleString()}</td>
               </tr>
             `
             )
             .join("")
-          : `<tr><td colspan="13" style="border:0.8px solid #000000;padding:8px 6px;font-size:9px;text-align:center;line-height:1.35;">No records</td></tr>`;
+          : `<tr><td colspan="13" style="border:0.8px solid #000000;padding:8px 6px;font-size:11px;text-align:center;line-height:1.3;">No records</td></tr>`;
 
       const grandTotals = statementRows.reduce(
         (acc, r) => {
@@ -691,22 +694,22 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         statementRows.length > 0
           ? `
               <tr>
-                <td colSpan="8" style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
+                <td colSpan="8" style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;font-weight:800;color:#0f172a;line-height:1.3;">
                   Total:
                 </td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;font-weight:800;color:#0f172a;line-height:1.3;">
                   ${grandTotals.totalBill.toLocaleString()}
                 </td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;font-weight:800;color:#0f172a;line-height:1.3;">
                   ${grandTotals.bkash.toLocaleString()}
                 </td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;font-weight:800;color:#0f172a;line-height:1.3;">
                   ${grandTotals.totalPaid.toLocaleString()}
                 </td>
-                <td style="border:0.8px solid #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#0f172a;line-height:1.35;">
+                <td style="border:0.8px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;font-weight:800;color:#0f172a;line-height:1.3;">
                   ${grandTotals.dailyCashFromDb.toLocaleString()}
                 </td>
-                <td style="border:0.8px solid #000000;border-right:1px solid #000000;box-shadow: inset -1px 0 0 #000000;padding:6px 6px;font-size:9px;text-align:right;font-weight:800;color:#b91c1c;line-height:1.35;">
+                <td style="border:0.8px solid #000000;border-right:1.2px solid #000000;padding:4px 6px 8px 6px;font-size:11px;text-align:right;font-weight:800;color:#b91c1c;line-height:1.3;">
                   ${grandTotals.duePayment.toLocaleString()}
                 </td>
               </tr>
@@ -714,30 +717,46 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
           : "";
 
       const html = `
-        <div id="daily-pdf-root" style="font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#0f172a;">
-          <div style="padding:14px 18px;background:linear-gradient(135deg,#1f2937 0%, #111827 100%);color:#fff;text-align:center;">
+        <div id="daily-pdf-root" style="font-family: Arial, Helvetica, sans-serif; color:#0f172a;box-sizing:border-box; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+          <div style="padding:16px 18px;background:linear-gradient(135deg,#1d4ed8 0%, #0f172a 100%);color:#fff;text-align:center;">
             <div style="font-size:18px;font-weight:800;letter-spacing:0.04em;">Daily Statement & Summary - Hotel Sea Shore</div>
-            <div style="font-size:12px;opacity:0.95;margin-top:4px;">Date: ${dateStr}</div>
+            <div style="font-size:12px;opacity:0.95;margin-top:4px;">Date: ${dateLabel}</div>
           </div>
 
-          <div style="padding:14px 18px;">
+          <div style="padding:0 0 14px 0;">
             <div style="overflow:visible;">
-              <table style="width:100%;border-collapse:collapse;border-spacing:0;margin:0;padding:0;min-width:740px;border:0.8px solid #000000;">
+              <style>
+                #daily-pdf-root .daily-statement-table { width:100%; table-layout:fixed; border-collapse:collapse; border-spacing:0; }
+                #daily-pdf-root .daily-statement-table th:nth-child(1), #daily-pdf-root .daily-statement-table td:nth-child(1) { width:3%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(2), #daily-pdf-root .daily-statement-table td:nth-child(2) { width:7%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(3), #daily-pdf-root .daily-statement-table td:nth-child(3) { width:9%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(4), #daily-pdf-root .daily-statement-table td:nth-child(4) { width:17%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(5), #daily-pdf-root .daily-statement-table td:nth-child(5) { width:11%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(6), #daily-pdf-root .daily-statement-table td:nth-child(6) { width:6%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(7), #daily-pdf-root .daily-statement-table td:nth-child(7) { width:6%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(8), #daily-pdf-root .daily-statement-table td:nth-child(8) { width:4%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(9), #daily-pdf-root .daily-statement-table td:nth-child(9) { width:8%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(10), #daily-pdf-root .daily-statement-table td:nth-child(10) { width:7%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(11), #daily-pdf-root .daily-statement-table td:nth-child(11) { width:8%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(12), #daily-pdf-root .daily-statement-table td:nth-child(12) { width:8%; }
+                #daily-pdf-root .daily-statement-table th:nth-child(13), #daily-pdf-root .daily-statement-table td:nth-child(13) { width:6%; }
+              </style>
+              <table class="daily-statement-table" style="border:0.8px solid #000000;">
                 <thead>
                   <tr style="margin:0;padding:0;">
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">SL</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Room</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Invoice</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Guest</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Phone</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Check-in</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">Check-out</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;line-height:1.35;">N</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Total Bill</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Bkash</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Total Paid</th>
-                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Daily Cash</th>
-                    <th style="border:0.8px solid #000000;border-right:1px solid #000000;box-shadow: inset -1px 0 0 #000000;padding:7px 6px;font-size:9px;background:#111827;color:#ffffff;text-align:right;line-height:1.35;">Due</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">SL</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Room</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Invoice</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Guest</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Phone</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">IN</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Out</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">N</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Bill</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Bkash</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Paid</th>
+                    <th style="border:0.8px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Cash</th>
+                    <th style="border:0.8px solid #000000;border-right:1.2px solid #000000;padding:7px 6px;font-size:11px;background:#111827;color:#ffffff;text-align:right;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Due</th>
                   </tr>
                 </thead>
                 <tbody style="margin:0;padding:0;">
@@ -748,30 +767,30 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
             </div>
           </div>
 
-          <div style="padding:0 18px 18px 18px;">
-            <h3 style="margin:0 0 10px 0;font-size:14px;font-weight:800;color:#0f172a;border-bottom:0.8px solid #000000;padding-bottom:6px;width:100%;text-align:center;">Daily Summary</h3>
+          <div style="padding:0 4px 18px 4px;">
+            <h3 style="margin:0 0 10px 0;font-size:15px;font-weight:800;color:#0f172a;border-bottom:0.8px solid #000000;padding-bottom:6px;width:100%;text-align:center;letter-spacing:0.02em;">Daily Summary</h3>
             <div style="overflow:visible;display:flex;justify-content:center;">
               <table style="width:50%;border-collapse:collapse;min-width:unset;">
                 <tbody>
                   <tr>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Opening Balance</td>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(openingBalance || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:700;color:#0f172a;line-height:1.4;">Opening Balance</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:800;text-align:right;color:#0f172a;line-height:1.4;">${Number(openingBalance || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Daily Income (CASH)</td>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(dailyIncome || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:700;color:#0f172a;line-height:1.4;">Daily Income (CASH)</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:800;text-align:right;color:#0f172a;line-height:1.4;">${Number(dailyIncome || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Total Balance</td>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(totalBalance || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:700;color:#0f172a;line-height:1.4;">Total Balance</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:800;text-align:right;color:#0f172a;line-height:1.4;">${Number(totalBalance || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Daily Expenses</td>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(dailyExpenses || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:700;color:#0f172a;line-height:1.4;">Daily Expenses</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:800;text-align:right;color:#0f172a;line-height:1.4;">${Number(dailyExpenses || 0).toLocaleString()}</td>
                   </tr>
                   <tr>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:700;color:#0f172a;line-height:1.35;">Closing Balance</td>
-                    <td style="border:0.8px solid #000000;padding:7px 8px;font-size:10px;font-weight:800;text-align:right;color:#0f172a;line-height:1.35;">${Number(closingBalance || 0).toLocaleString()}</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:700;color:#0f172a;line-height:1.4;">Closing Balance</td>
+                    <td style="border:0.8px solid #000000;padding:8px 8px;font-size:11px;font-weight:800;text-align:right;color:#0f172a;line-height:1.4;">${Number(closingBalance || 0).toLocaleString()}</td>
                   </tr>
                 </tbody>
               </table>
@@ -791,10 +810,10 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
       const element = container.querySelector("#daily-pdf-root");
 
       const options = {
-        margin: [0.2, 0.2, 0.2, 0.2],
+        margin: [0.25, 0.25, 0.25, 0.25],
         filename: `Daily-Statement-Summary-${dateStr}.pdf`,
         image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true, allowTaint: true },
+        html2canvas: { scale: 2.35, useCORS: true, letterRendering: true, allowTaint: true },
         jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
         pagebreak: { mode: ["avoid-all", "css", "legacy"] },
       };
