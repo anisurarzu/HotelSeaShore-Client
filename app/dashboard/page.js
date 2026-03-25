@@ -83,6 +83,36 @@ dayjs.extend(timezone);
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
 
+/** `Number(null)` is 0 — breaks hotel lookup and forces roomsCount=0 → 0% occupancy. */
+function resolveDashboardHotelId(urlHotelID, userInfo) {
+  const fromUrl =
+    urlHotelID != null && String(urlHotelID).trim() !== ""
+      ? Number(urlHotelID)
+      : NaN;
+  if (Number.isFinite(fromUrl) && fromUrl > 0) return fromUrl;
+  const fromUser = Number(userInfo?.hotelID ?? userInfo?.hotelId);
+  if (Number.isFinite(fromUser) && fromUser > 0) return fromUser;
+  return null;
+}
+
+function getBookingRoomKey(booking) {
+  if (!booking) return null;
+  const candidates = [
+    booking.roomNumberID,
+    booking.roomNumberId,
+    booking.roomID,
+    booking.roomId,
+    booking.roomNumberName,
+    booking.roomNumber,
+  ];
+  for (const c of candidates) {
+    if (c === undefined || c === null) continue;
+    const s = String(c).trim();
+    if (s !== "") return s;
+  }
+  return null;
+}
+
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const { useToken } = theme;
@@ -207,80 +237,75 @@ const PIE_CHART_DATA = [
 ];
 
 // Standard Dashboard Card Component
-const DashboardCard = ({ title, value, icon, color, bgColor = 'white', gradient, bgGradient }) => {
+const DashboardCard = ({ title, value, icon: _icon, color, bgColor = 'white', gradient, bgGradient }) => {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-  
+
+  const pad = isMobile ? "12px 12px" : "14px 16px";
+
   return (
-    <Card 
-      className="h-full shadow-lg border-0 hover:shadow-xl transition-all duration-300 hover:scale-105"
-      style={{ 
+    <Card
+      className="h-full w-full min-h-0 shadow-lg border-0 hover:shadow-xl transition-shadow duration-300 flex flex-col"
+      style={{
         background: bgGradient || gradient || "#ffffff",
-        borderRadius: isMobile ? '10px' : '12px',
-        overflow: 'hidden',
+        borderRadius: isMobile ? "10px" : "12px",
+        overflow: "hidden",
         border: "none",
         boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
         position: "relative",
       }}
-      bodyStyle={{ padding: isMobile ? "14px" : "18px" }}
+      styles={{
+        body: {
+          padding: pad,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+        },
+      }}
     >
-      {/* Decorative overlay */}
-      <div 
+      <div
         style={{
           position: "absolute",
           top: 0,
           right: 0,
-          width: isMobile ? "80px" : "100px",
-          height: isMobile ? "80px" : "100px",
-          background: "rgba(255, 255, 255, 0.1)",
+          width: isMobile ? "56px" : "72px",
+          height: isMobile ? "56px" : "72px",
+          background: "rgba(255, 255, 255, 0.08)",
           borderRadius: "50%",
-          transform: "translate(30px, -30px)",
+          transform: "translate(24px, -24px)",
           pointerEvents: "none",
         }}
       />
-      <div className="flex items-center justify-between relative z-10">
-        <div className="flex-1 min-w-0">
-          <Text
-            className="block mb-1 sm:mb-2"
-            style={{ 
-              fontSize: isMobile ? "10px" : "11px", 
-              fontWeight: 500,
-              color: "rgba(255, 255, 255, 0.9)",
-              textShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
-              lineHeight: "1.3",
-            }}
-          >
-            {title}
-          </Text>
-          <Title
-            level={4}
-            className="m-0"
-            style={{
-              fontSize: isMobile ? "18px" : "22px",
-              fontWeight: 700,
-              color: "#ffffff",
-              lineHeight: "1.3",
-              textShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-            }}
-          >
-              {value}
-            </Title>
-          </div>
-        <div
-          className="rounded-xl flex items-center justify-center flex-shrink-0"
+      <div className="relative z-10 min-w-0 flex flex-1 min-h-0 flex-col">
+        <Text
+          className="block shrink-0"
           style={{
-            background: "rgba(255, 255, 255, 0.25)",
-            backdropFilter: "blur(10px)",
-            minWidth: isMobile ? "40px" : "48px",
-            height: isMobile ? "40px" : "48px",
-            padding: isMobile ? "8px" : "10px",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            marginLeft: "8px",
+            fontSize: isMobile ? "12px" : "13px",
+            fontWeight: 600,
+            color: "rgba(255, 255, 255, 0.92)",
+            textShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
+            lineHeight: 1.25,
           }}
         >
-          <div style={{ fontSize: isMobile ? "16px" : "20px", color: "#ffffff" }}>
-          {icon}
-          </div>
-        </div>
+          {title}
+        </Text>
+        <Title
+          level={4}
+          className="m-0 shrink-0"
+          style={{
+            fontSize: isMobile ? "22px" : "26px",
+            fontWeight: 800,
+            color: "#ffffff",
+            lineHeight: 1.2,
+            textShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+            textAlign: "right",
+            alignSelf: "stretch",
+            marginTop: "auto",
+            paddingTop: isMobile ? 12 : 16,
+          }}
+        >
+          {value}
+        </Title>
       </div>
     </Card>
   );
@@ -367,6 +392,7 @@ const DashboardContent = ({ sliders }) => {
     return 'gradient';
   });
   const [bookings, setBookings] = useState([]);
+  const [users, setUsers] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [detailModalType, setDetailModalType] = useState(null);
@@ -447,12 +473,7 @@ const DashboardContent = ({ sliders }) => {
 
       // Get booking details
       const totalBill = parseFloat(booking.totalBill) || 0;
-      const roomKey =
-        booking.roomNumberID ||
-        booking.roomNumberId ||
-        booking.roomNumberName ||
-        booking.roomNumber ||
-        "";
+      const roomKey = getBookingRoomKey(booking);
 
       // Today's Booking Amount (bookings with check-in date today)
       if (checkInDate.isSame(todayStart, "day")) {
@@ -476,7 +497,7 @@ const DashboardContent = ({ sliders }) => {
       const isActiveToday =
         checkInDate.startOf("day").isSameOrBefore(todayStart, "day") &&
         checkOutDate.startOf("day").isAfter(todayStart, "day");
-      if (isActiveToday && roomKey) todayActiveRoomsSet.add(String(roomKey));
+      if (isActiveToday && roomKey) todayActiveRoomsSet.add(roomKey);
 
       // Used for current month occupancy: count active rooms per day (exclusive checkout)
       const isActiveInMonth =
@@ -495,7 +516,7 @@ const DashboardContent = ({ sliders }) => {
         checkOutDate.startOf("day").diff(monthStart, "day") - 1
       );
       for (let i = startIndex; i <= endIndex; i++) {
-        monthActiveRoomsSets[i].add(String(roomKey));
+        monthActiveRoomsSets[i].add(roomKey);
       }
     });
 
@@ -542,26 +563,28 @@ const DashboardContent = ({ sliders }) => {
       setBookingsLoading(true);
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const userRole = userInfo?.role?.value;
-      const userHotelID = Number(hotelID);
+      const userHotelID = resolveDashboardHotelId(hotelID, userInfo);
 
-      const [response, hotelsResponse, hotelByIdResponse] = await Promise.all([
+      const [response, hotelsResponse, hotelByIdResponse, usersResponse] = await Promise.all([
         coreAxios.get("/bookings"),
         // Use the real hotel source that includes roomCategories/roomNumbers.
         // (Backend route: GET /hotel)
         coreAxios.get(`/hotel?page=1&limit=200`).catch(() => null),
         // Fallback: if the /hotel list doesn't include the current hotel in its first page.
-        userHotelID
+        userHotelID != null
           ? coreAxios.get(`/hotels/${userHotelID}`).catch(() => null)
           : Promise.resolve(null),
+        coreAxios.get("/users").catch(() => null),
       ]);
 
       if (response.status === 200) {
         let bookingsData = Array.isArray(response.data) ? response.data : [];
 
         // Filter bookings if the role is "hoteladmin"
-        if (userRole === "hoteladmin" && userHotelID) {
+        if (userRole === "hoteladmin" && userHotelID != null) {
           bookingsData = bookingsData.filter(
-            (booking) => booking && booking.hotelID === Number(userHotelID)
+            (booking) =>
+              booking && Number(booking.hotelID) === userHotelID
           );
         }
 
@@ -618,16 +641,41 @@ const DashboardContent = ({ sliders }) => {
           });
         }
 
-        const roomsCount =
-          Number(hotel?.totalRooms) ||
-          (uniqueRoomIds.size > 0 ? uniqueRoomIds.size : fallbackCount);
+        const distinctRoomsFromBookings = new Set();
+        bookingsData.forEach((b) => {
+          const rk = getBookingRoomKey(b);
+          if (rk) distinctRoomsFromBookings.add(rk);
+        });
+
+        const totalRoomsNum = Number(hotel?.totalRooms);
+        const totalRoomsSafe =
+          Number.isFinite(totalRoomsNum) && totalRoomsNum > 0 ? totalRoomsNum : 0;
+
+        const roomsCount = Math.max(
+          totalRoomsSafe,
+          uniqueRoomIds.size,
+          fallbackCount,
+          distinctRoomsFromBookings.size
+        );
 
         setBookings(bookingsData);
         calculateDashboardStats(bookingsData, roomsCount);
       }
+
+      if (usersResponse?.status === 200) {
+        const usersPayload =
+          usersResponse?.data?.users ||
+          usersResponse?.data?.data?.users ||
+          usersResponse?.data ||
+          [];
+        setUsers(Array.isArray(usersPayload) ? usersPayload : []);
+      } else {
+        setUsers([]);
+      }
     } catch (error) {
       console.error("Error fetching bookings:", error);
       setBookings([]);
+      setUsers([]);
     } finally {
       setBookingsLoading(false);
     }
@@ -1056,7 +1104,7 @@ const DashboardContent = ({ sliders }) => {
         },
       ];
 
-      // Hotel dashboard cards
+      // Hotel dashboard cards (row 1 — original blue gradient DashboardCard style)
       const hotelDashboardCards = [
         {
           title: "Today's Booking Amount",
@@ -1104,6 +1152,67 @@ const DashboardContent = ({ sliders }) => {
 
       const dashboardCards = isRestaurant ? restaurantDashboardCards : hotelDashboardCards;
 
+      const today = dayjs().tz("Asia/Dhaka").startOf("day");
+      const last7Start = today.subtract(6, "day");
+      const last30Start = today.subtract(29, "day");
+      const getCheckInDay = (b) => dayjs(b?.checkInDate).tz("Asia/Dhaka").startOf("day");
+      const getBookedById = (b) => String(b?.bookedByID || b?.bookedBy || "Unknown").trim();
+      const inToday = (b) => getCheckInDay(b).isSame(today, "day");
+      const inLast30 = (b) => {
+        const d = getCheckInDay(b);
+        return d.isSameOrAfter(last30Start, "day") && d.isSameOrBefore(today, "day");
+      };
+      const inLast7 = (b) => {
+        const d = getCheckInDay(b);
+        return d.isSameOrAfter(last7Start, "day") && d.isSameOrBefore(today, "day");
+      };
+      const sumBill = (arr) => arr.reduce((s, b) => s + (Number(b?.totalBill) || 0), 0);
+
+      const todayAll = bookings.filter(inToday);
+      const monthAll = bookings.filter(inLast30);
+      const weekAll = bookings.filter(inLast7);
+
+      // Row 2 — simpler gradient cards (same look as before)
+      const overviewCards = [
+        {
+          title: "LAST 7 DAYS ALL BOOKINGS",
+          amount: sumBill(weekAll),
+          count: weekAll.length,
+          gradient: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)",
+        },
+        {
+          title: "LAST 30 DAYS ALL BOOKINGS",
+          amount: sumBill(monthAll),
+          count: monthAll.length,
+          gradient: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        },
+      ];
+
+      const bookingUsersMap = {};
+      bookings.forEach((b) => {
+        const uid = getBookedById(b);
+        if (!bookingUsersMap[uid]) bookingUsersMap[uid] = [];
+        bookingUsersMap[uid].push(b);
+      });
+      const apiUserIds = (Array.isArray(users) ? users : []).map((u) =>
+        String(u?.loginID || u?.username || u?._id || "")
+      );
+      const mergedUserIds = Array.from(
+        new Set([...apiUserIds.filter(Boolean), ...Object.keys(bookingUsersMap)])
+      );
+      const userRows = mergedUserIds
+        .map((uid) => {
+          const rows = bookingUsersMap[uid] || [];
+          return {
+            id: uid,
+            today: sumBill(rows.filter(inToday)),
+            seven: sumBill(rows.filter(inLast7)),
+            thirty: sumBill(rows.filter(inLast30)),
+            overall: sumBill(rows),
+          };
+        })
+        .sort((a, b) => b.overall - a.overall);
+
       return (
         <div className="space-y-6">
           {/* Header */}
@@ -1121,12 +1230,12 @@ const DashboardContent = ({ sliders }) => {
             </Title>
           </div>
 
-          {/* Stats Cards Grid - Only 6 Cards */}
+          {/* Row 1: 6 main stats (lg=4 → 6 per row) */}
           <Row gutter={isMobile ? [8, 8] : [12, 12]}>
             {dashboardCards.map((card, idx) => (
-              <Col xs={24} sm={12} md={12} lg={6} key={idx}>
+              <Col xs={24} sm={12} md={12} lg={4} key={idx} className="flex" style={{ display: "flex" }}>
               {bookingsLoading ? (
-                  <Card className="h-full shadow-sm border-0" style={{ borderRadius: '8px' }}>
+                  <Card className="h-full w-full min-h-0 flex-1 shadow-sm border-0" style={{ borderRadius: '8px' }}>
                     <Skeleton active paragraph={{ rows: 1 }} />
                 </Card>
               ) : (
@@ -1142,6 +1251,92 @@ const DashboardContent = ({ sliders }) => {
             </Col>
             ))}
           </Row>
+
+          {/* Row 2: last 7 / last 30 — simple Card style */}
+          {!isRestaurant && (
+            <Row gutter={isMobile ? [8, 8] : [12, 12]} style={{ marginTop: isMobile ? 8 : 12 }}>
+              {overviewCards.map((card, idx) => (
+                <Col xs={24} sm={12} lg={12} key={`ov-${idx}`}>
+                  {bookingsLoading ? (
+                    <Card className="h-full shadow-sm border-0" style={{ borderRadius: "10px" }}>
+                      <Skeleton active paragraph={{ rows: 1 }} />
+                    </Card>
+                  ) : (
+                    <Card
+                      bordered={false}
+                      style={{
+                        borderRadius: 10,
+                        background: card.gradient,
+                        color: "#fff",
+                        boxShadow: "0 8px 18px rgba(0,0,0,0.08)",
+                      }}
+                      bodyStyle={{ padding: isMobile ? 12 : 14 }}
+                    >
+                      <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: 700 }}>{card.title}</Text>
+                      <div
+                        style={{
+                          fontSize: isMobile ? 30 : 38,
+                          fontWeight: 800,
+                          lineHeight: 1.2,
+                          marginTop: 8,
+                        }}
+                      >
+                        ৳{card.amount.toLocaleString()}
+                      </div>
+                      <Text style={{ color: "#ffffff", opacity: 0.95 }}>{card.count} bookings</Text>
+                    </Card>
+                  )}
+                </Col>
+              ))}
+            </Row>
+          )}
+
+          {!isRestaurant && (
+            <div className="mt-3 space-y-4">
+
+              <Card
+                bordered={false}
+                style={{ borderRadius: 10, boxShadow: "0 8px 18px rgba(0,0,0,0.06)" }}
+                bodyStyle={{ padding: isMobile ? 10 : 12 }}
+              >
+                <Title level={4} style={{ textAlign: "center", marginBottom: 10 }}>
+                  User-wise Booking Overview
+                </Title>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 740 }}>
+                    <thead>
+                      <tr style={{ background: "linear-gradient(90deg,#4f46e5,#6366f1)", color: "#fff" }}>
+                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>User ID</th>
+                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Today's Booking</th>
+                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Last 7 Days Booking</th>
+                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Last 30 Days Booking</th>
+                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Overall Booking</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} style={{ padding: "12px 8px", textAlign: "center", border: "1px solid #d1d5db" }}>
+                            No user booking data found
+                          </td>
+                        </tr>
+                      ) : (
+                        userRows.map((r, idx) => (
+                          <tr key={r.id} style={{ background: idx % 2 === 0 ? "#e0e7ff" : "#ede9fe" }}>
+                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "center", fontWeight: 600 }}>{r.id}</td>
+                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>৳{r.today.toLocaleString()}</td>
+                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>৳{r.seven.toLocaleString()}</td>
+                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>৳{r.thirty.toLocaleString()}</td>
+                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right", fontWeight: 700 }}>৳{r.overall.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
       );
     }

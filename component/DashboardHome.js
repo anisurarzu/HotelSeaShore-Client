@@ -18,11 +18,41 @@ dayjs.extend(timezone);
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
 
+function resolveDashboardHotelId(urlHotelID, userInfo) {
+  const fromUrl =
+    urlHotelID != null && String(urlHotelID).trim() !== ""
+      ? Number(urlHotelID)
+      : NaN;
+  if (Number.isFinite(fromUrl) && fromUrl > 0) return fromUrl;
+  const fromUser = Number(userInfo?.hotelID ?? userInfo?.hotelId);
+  if (Number.isFinite(fromUser) && fromUser > 0) return fromUser;
+  return null;
+}
+
+function getBookingRoomKey(booking) {
+  if (!booking) return null;
+  const candidates = [
+    booking.roomNumberID,
+    booking.roomNumberId,
+    booking.roomID,
+    booking.roomId,
+    booking.roomNumberName,
+    booking.roomNumber,
+  ];
+  for (const c of candidates) {
+    if (c === undefined || c === null) continue;
+    const s = String(c).trim();
+    if (s !== "") return s;
+  }
+  return null;
+}
+
 const { Title, Text } = Typography;
 
 const DashboardHome = ({ hotelID = 1 }) => {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
+  const [users, setUsers] = useState([]);
   const [totalRooms, setTotalRooms] = useState(0);
 
   // Fetch bookings data
@@ -31,26 +61,29 @@ const DashboardHome = ({ hotelID = 1 }) => {
       setLoading(true);
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const userRole = userInfo?.role?.value;
-      const userHotelID = Number(hotelID);
+      const userHotelID = resolveDashboardHotelId(hotelID, userInfo);
 
-      const [response, hotelsResponse, hotelByIdResponse] = await Promise.all([
+      const [response, hotelsResponse, hotelByIdResponse, usersResponse] = await Promise.all([
         coreAxios.get("/bookings"),
         // Use the real hotel source that includes roomCategories/roomNumbers.
         // (Backend route: GET /hotel)
         coreAxios.get(`/hotel?page=1&limit=200`).catch(() => null),
         // Fallback: in case the /hotel list doesn't include the current hotel in its first page.
-        userHotelID
+        userHotelID != null
           ? coreAxios.get(`/hotels/${userHotelID}`).catch(() => null)
           : Promise.resolve(null),
+        coreAxios.get("/users").catch(() => null),
       ]);
 
+      let bookingsData = [];
       if (response.status === 200) {
-        let bookingsData = Array.isArray(response.data) ? response.data : [];
+        bookingsData = Array.isArray(response.data) ? response.data : [];
 
         // Filter bookings if the role is "hoteladmin"
-        if (userRole === "hoteladmin" && userHotelID) {
+        if (userRole === "hoteladmin" && userHotelID != null) {
           bookingsData = bookingsData.filter(
-            (booking) => booking && booking.hotelID === Number(userHotelID)
+            (booking) =>
+              booking && Number(booking.hotelID) === userHotelID
           );
         }
 
@@ -58,6 +91,17 @@ const DashboardHome = ({ hotelID = 1 }) => {
         bookingsData = bookingsData.filter((booking) => booking.statusID !== 255);
 
         setBookings(bookingsData);
+      }
+
+      if (usersResponse?.status === 200) {
+        const usersPayload =
+          usersResponse?.data?.users ||
+          usersResponse?.data?.data?.users ||
+          usersResponse?.data ||
+          [];
+        setUsers(Array.isArray(usersPayload) ? usersPayload : []);
+      } else {
+        setUsers([]);
       }
 
       // Compute room capacity from the real hotel data (used for occupancy rate)
@@ -112,14 +156,29 @@ const DashboardHome = ({ hotelID = 1 }) => {
         });
       }
 
-      const finalRoomsCount =
-        totalRoomsFromHotel ||
-        (uniqueRoomIds.size > 0 ? uniqueRoomIds.size : fallbackCount);
+      const distinctRoomsFromBookings = new Set();
+      bookingsData.forEach((b) => {
+        const rk = getBookingRoomKey(b);
+        if (rk) distinctRoomsFromBookings.add(rk);
+      });
+
+      const totalRoomsSafe =
+        Number.isFinite(totalRoomsFromHotel) && totalRoomsFromHotel > 0
+          ? totalRoomsFromHotel
+          : 0;
+
+      const finalRoomsCount = Math.max(
+        totalRoomsSafe,
+        uniqueRoomIds.size,
+        fallbackCount,
+        distinctRoomsFromBookings.size
+      );
 
       setTotalRooms(finalRoomsCount);
     } catch (error) {
       console.error("Error fetching bookings:", error);
       setBookings([]);
+      setUsers([]);
       setTotalRooms(0);
     } finally {
       setLoading(false);
@@ -177,12 +236,7 @@ const DashboardHome = ({ hotelID = 1 }) => {
       const checkOutDate = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
       if (!checkInDate.isValid() || !checkOutDate.isValid()) return;
       const totalBill = parseFloat(booking.totalBill) || 0;
-      const roomKey =
-        booking.roomNumberID ||
-        booking.roomNumberId ||
-        booking.roomNumberName ||
-        booking.roomNumber ||
-        "";
+      const roomKey = getBookingRoomKey(booking) || "";
       const roomNameKey = booking.roomNumberName || booking.roomNumber || "";
 
       // Today's Booking Amount (bookings with check-in date today)
@@ -208,7 +262,7 @@ const DashboardHome = ({ hotelID = 1 }) => {
         checkInDate.startOf("day").isSameOrBefore(todayStart, "day") &&
         checkOutDate.startOf("day").isAfter(todayStart, "day");
       if (isActiveToday && roomKey) {
-        todayActiveRoomsSet.add(String(roomKey));
+        todayActiveRoomsSet.add(roomKey);
         if (roomNameKey) todayActiveRoomNamesSet.add(String(roomNameKey));
       }
 
@@ -224,7 +278,7 @@ const DashboardHome = ({ hotelID = 1 }) => {
         checkInDate.startOf("day").isSameOrBefore(tomorrowStart, "day") &&
         checkOutDate.startOf("day").isAfter(tomorrowStart, "day");
       if (isActiveTomorrow) {
-        tomorrowActiveRoomsSet.add(String(roomKey));
+        tomorrowActiveRoomsSet.add(roomKey);
         if (roomNameKey) tomorrowActiveRoomNamesSet.add(String(roomNameKey));
       }
 
@@ -238,7 +292,7 @@ const DashboardHome = ({ hotelID = 1 }) => {
         checkOutDate.startOf("day").diff(monthStart, "day") - 1
       );
       for (let i = startIndex; i <= endIndex; i++) {
-        monthActiveRoomsSets[i].add(String(roomKey));
+        monthActiveRoomsSets[i].add(roomKey);
       }
     });
 
@@ -295,6 +349,94 @@ const DashboardHome = ({ hotelID = 1 }) => {
 
   const statsData = calculateStats();
   const currentMonthName = dayjs().format("MMMM");
+
+  const bdNow = dayjs().tz("Asia/Dhaka");
+  const bdTodayStart = bdNow.startOf("day");
+  const bd7DaysStart = bdTodayStart.subtract(6, "day");
+  const bd30DaysStart = bdTodayStart.subtract(29, "day");
+
+  const getBookedById = (booking) =>
+    String(booking?.bookedByID || booking?.bookedBy || "UNKNOWN").trim();
+
+  const isFtbUser = (booking) => /FTB/i.test(getBookedById(booking));
+
+  const getCheckInDay = (booking) =>
+    dayjs(booking?.checkInDate).tz("Asia/Dhaka").startOf("day");
+
+  const inToday = (booking) => getCheckInDay(booking).isSame(bdTodayStart, "day");
+  const inLast7Days = (booking) => {
+    const d = getCheckInDay(booking);
+    return d.isSameOrAfter(bd7DaysStart, "day") && d.isSameOrBefore(bdTodayStart, "day");
+  };
+  const inLast30Days = (booking) => {
+    const d = getCheckInDay(booking);
+    return d.isSameOrAfter(bd30DaysStart, "day") && d.isSameOrBefore(bdTodayStart, "day");
+  };
+
+  const sumTotalBill = (list) =>
+    list.reduce((sum, b) => sum + (Number(b?.totalBill) || 0), 0);
+
+  const todayAllBookings = bookings.filter(inToday);
+  const todayFtbBookings = todayAllBookings.filter(isFtbUser);
+  const last30AllBookings = bookings.filter(inLast30Days);
+  const last30FtbBookings = last30AllBookings.filter(isFtbUser);
+
+  const summaryCards = [
+    {
+      title: "TODAY'S FTB BOOKINGS",
+      amount: sumTotalBill(todayFtbBookings),
+      count: todayFtbBookings.length,
+      gradient: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)",
+    },
+    {
+      title: "TODAY'S ALL BOOKINGS",
+      amount: sumTotalBill(todayAllBookings),
+      count: todayAllBookings.length,
+      gradient: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+    },
+    {
+      title: "30 DAYS FTB BOOKINGS",
+      amount: sumTotalBill(last30FtbBookings),
+      count: last30FtbBookings.length,
+      gradient: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+    },
+    {
+      title: "30 DAYS ALL BOOKINGS",
+      amount: sumTotalBill(last30AllBookings),
+      count: last30AllBookings.length,
+      gradient: "linear-gradient(135deg, #ef4444 0%, #f87171 100%)",
+    },
+  ];
+
+  const bookingUsersMap = {};
+  bookings.forEach((booking) => {
+    const userId = getBookedById(booking);
+    if (!bookingUsersMap[userId]) bookingUsersMap[userId] = [];
+    bookingUsersMap[userId].push(booking);
+  });
+
+  const usersFromApi = Array.isArray(users) ? users : [];
+  const baseUsers = usersFromApi.map((u) => String(u?.loginID || u?.username || u?._id || ""));
+  const mergedUserIds = Array.from(
+    new Set([...baseUsers.filter(Boolean), ...Object.keys(bookingUsersMap)])
+  );
+
+  const userBookingRows = mergedUserIds
+    .map((userId) => {
+      const userBookings = bookingUsersMap[userId] || [];
+      const today = userBookings.filter(inToday);
+      const seven = userBookings.filter(inLast7Days);
+      const thirty = userBookings.filter(inLast30Days);
+      const overall = userBookings;
+      return {
+        userId,
+        todayAmount: sumTotalBill(today),
+        sevenAmount: sumTotalBill(seven),
+        thirtyAmount: sumTotalBill(thirty),
+        overallAmount: sumTotalBill(overall),
+      };
+    })
+    .sort((a, b) => b.overallAmount - a.overallAmount);
 
   const stats = [
     {
@@ -404,7 +546,7 @@ const DashboardHome = ({ hotelID = 1 }) => {
             level={3}
             className="m-0"
             style={{
-              fontSize: "28px",
+              fontSize: "32px",
               fontWeight: 700,
               background: gradient,
               WebkitBackgroundClip: "text",
@@ -479,6 +621,99 @@ const DashboardHome = ({ hotelID = 1 }) => {
               ))}
             </Row>
           )}
+        </div>
+
+        {/* Screenshot-style booking overview section */}
+        <div className="mt-8">
+          <Row gutter={[16, 16]}>
+            {summaryCards.map((item, idx) => (
+              <Col xs={24} sm={12} lg={6} key={`summary-${idx}`}>
+                <Card
+                  bordered={false}
+                  style={{
+                    borderRadius: 12,
+                    background: item.gradient,
+                    color: "#fff",
+                    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
+                  }}
+                  bodyStyle={{ padding: 16 }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 700, opacity: 0.95 }}>{item.title}</div>
+                  <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1.2, marginTop: 8 }}>
+                    ৳{item.amount.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.95, marginTop: 6 }}>
+                    {item.count} bookings
+                  </div>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+
+          <Card
+            className="mt-6"
+            bordered={false}
+            style={{
+              borderRadius: 12,
+              background: "#f8fafc",
+              boxShadow: "0 8px 20px rgba(0,0,0,0.06)",
+            }}
+            bodyStyle={{ padding: 16 }}
+          >
+            <Title level={3} style={{ textAlign: "center", marginBottom: 14 }}>
+              User-wise Booking Overview
+            </Title>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+                <thead>
+                  <tr style={{ background: "linear-gradient(90deg,#4f46e5,#6366f1)", color: "#fff" }}>
+                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>User ID</th>
+                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>Today's Booking</th>
+                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>Last 7 Days Booking</th>
+                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>Last 30 Days Booking</th>
+                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>Overall Booking</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userBookingRows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        style={{
+                          padding: "14px 8px",
+                          border: "1px solid #d1d5db",
+                          textAlign: "center",
+                          background: "#fff",
+                        }}
+                      >
+                        No user booking data found
+                      </td>
+                    </tr>
+                  ) : (
+                    userBookingRows.map((row, idx) => (
+                      <tr key={row.userId} style={{ background: idx % 2 === 0 ? "#e0e7ff" : "#ede9fe" }}>
+                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center", fontWeight: 600 }}>
+                          {row.userId}
+                        </td>
+                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>
+                          ৳{row.todayAmount.toLocaleString()}
+                        </td>
+                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>
+                          ৳{row.sevenAmount.toLocaleString()}
+                        </td>
+                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>
+                          ৳{row.thirtyAmount.toLocaleString()}
+                        </td>
+                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center", fontWeight: 700 }}>
+                          ৳{row.overallAmount.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
       </div>
 
