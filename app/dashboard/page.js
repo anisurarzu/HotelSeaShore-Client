@@ -1307,7 +1307,7 @@ const DashboardContent = ({ sliders }) => {
                     <thead>
                       <tr style={{ background: "linear-gradient(90deg,#4f46e5,#6366f1)", color: "#fff" }}>
                         <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>User ID</th>
-                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Today's Booking</th>
+                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Today&apos;s Booking</th>
                         <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Last 7 Days Booking</th>
                         <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Last 30 Days Booking</th>
                         <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Overall Booking</th>
