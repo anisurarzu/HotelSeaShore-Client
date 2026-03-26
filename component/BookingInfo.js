@@ -62,19 +62,35 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
   const fromStorage = permission?.find(
     (perm) => perm.pageName === "Booking Info" || perm.pageName === "Booking"
   );
-  const bookingPermissions = contentPermissionsFromProps
+  const bookingPermissionsFromStorage = fromStorage
     ? {
-        viewAccess: contentPermissionsFromProps.viewAccess ?? contentPermissionsFromProps.view,
-        insertAccess: contentPermissionsFromProps.insertAccess ?? contentPermissionsFromProps.insert,
-        editAccess: contentPermissionsFromProps.editAccess ?? contentPermissionsFromProps.edit,
-        deleteAccess: contentPermissionsFromProps.deleteAccess ?? contentPermissionsFromProps.delete,
+        viewAccess: fromStorage.viewAccess ?? false,
+        insertAccess: fromStorage.insertAccess ?? false,
+        editAccess: fromStorage.editAccess ?? false,
+        deleteAccess: fromStorage.deleteAccess ?? false,
       }
-    : (fromStorage || {
-        viewAccess: !permission?.length,
-        insertAccess: !permission?.length,
-        editAccess: !permission?.length,
-        deleteAccess: !permission?.length,
-      });
+    : null;
+
+  const bookingPermissionsFromProps = contentPermissionsFromProps
+    ? {
+        viewAccess: contentPermissionsFromProps.viewAccess ?? contentPermissionsFromProps.view ?? false,
+        insertAccess:
+          contentPermissionsFromProps.insertAccess ?? contentPermissionsFromProps.insert ?? false,
+        editAccess: contentPermissionsFromProps.editAccess ?? contentPermissionsFromProps.edit ?? false,
+        deleteAccess:
+          contentPermissionsFromProps.deleteAccess ?? contentPermissionsFromProps.delete ?? false,
+      }
+    : null;
+
+  // Prefer localStorage permission (source of truth for this page)
+  const bookingPermissions =
+    bookingPermissionsFromStorage ||
+    bookingPermissionsFromProps || {
+      viewAccess: false,
+      insertAccess: false,
+      editAccess: false,
+      deleteAccess: false,
+    };
 
   const [visible, setVisible] = useState(false);
   const [selectedHotelId, setSelectedHotelId] = useState(null);
@@ -1626,14 +1642,16 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
                               <div className="flex gap-1.5 justify-center items-center">
-                                <Button
-                                  type="link"
-                                  size="small"
-                                  onClick={() => handleViewDetails(booking)}
-                                  style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
-                                >
-                                  View
-                                </Button>
+                                {bookingPermissions?.viewAccess && (
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    onClick={() => handleViewDetails(booking)}
+                                    style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
+                                  >
+                                    View
+                                  </Button>
+                                )}
                                 {booking?.statusID === 1 && (
                                   <>
                                     {bookingPermissions?.editAccess && (
