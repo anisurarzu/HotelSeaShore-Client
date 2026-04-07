@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Button,
   Modal,
@@ -48,7 +48,19 @@ const toDhIsoSafeForUtcDate = (dateLike) => {
 };
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
-import { CopyOutlined, ReloadOutlined, PlusOutlined, SearchOutlined, MinusCircleOutlined } from "@ant-design/icons";
+import {
+  ApartmentOutlined,
+  CalendarOutlined,
+  CheckCircleOutlined,
+  CopyOutlined,
+  DollarCircleOutlined,
+  EyeOutlined,
+  MinusCircleOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  TeamOutlined,
+} from "@ant-design/icons";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
@@ -1318,6 +1330,114 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     setDetailsModalVisible(true);
   };
 
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat("en-BD", {
+      maximumFractionDigits: 0,
+    }).format(Number(value) || 0);
+
+  const getPaidAmount = (booking) => {
+    const totalFromPayments = (booking?.payments || []).reduce(
+      (sum, payment) => sum + (Number(payment.amount) || 0),
+      0
+    );
+
+    return totalFromPayments > 0
+      ? totalFromPayments
+      : Number(booking?.advancePayment) || 0;
+  };
+
+  const getDueAmount = (booking) => {
+    const totalBill = Number(booking?.totalBill) || 0;
+    const totalFromPayments = (booking?.payments || []).reduce(
+      (sum, payment) => sum + (Number(payment.amount) || 0),
+      0
+    );
+
+    if (totalFromPayments > 0) {
+      return Math.max(0, totalBill - totalFromPayments);
+    }
+
+    return booking?.duePayment != null
+      ? Math.max(0, Number(booking.duePayment) || 0)
+      : Math.max(0, totalBill - (Number(booking?.advancePayment) || 0));
+  };
+
+  const bookingStats = useMemo(() => {
+    const today = dayjs().startOf("day");
+    const confirmed = filteredBookings.filter((booking) => booking?.statusID !== 255);
+    const activeStays = confirmed.filter((booking) => {
+      const checkIn = dayjs(booking?.checkInDate).startOf("day");
+      const checkOut = dayjs(booking?.checkOutDate).startOf("day");
+
+      return (
+        checkIn.isValid() &&
+        checkOut.isValid() &&
+        (today.isSame(checkIn) || today.isAfter(checkIn)) &&
+        today.isBefore(checkOut)
+      );
+    }).length;
+
+    const totalRevenue = confirmed.reduce(
+      (sum, booking) => sum + (Number(booking?.totalBill) || 0),
+      0
+    );
+
+    const totalDue = confirmed.reduce(
+      (sum, booking) => sum + getDueAmount(booking),
+      0
+    );
+
+    return [
+      {
+        key: "active",
+        label: "Active Stays",
+        value: activeStays,
+        subtitle: "Guests currently checked in",
+        icon: <CalendarOutlined />,
+      },
+      {
+        key: "confirmed",
+        label: "Confirmed Bookings",
+        value: confirmed.length,
+        subtitle: "Operational pipeline",
+        icon: <CheckCircleOutlined />,
+      },
+      {
+        key: "revenue",
+        label: "Booked Revenue",
+        value: `BDT ${formatCurrency(totalRevenue)}`,
+        subtitle: "Confirmed booking value",
+        icon: <DollarCircleOutlined />,
+      },
+      {
+        key: "due",
+        label: "Outstanding Due",
+        value: `BDT ${formatCurrency(totalDue)}`,
+        subtitle: "Pending collection",
+        icon: <ApartmentOutlined />,
+      },
+    ];
+  }, [filteredBookings]);
+
+  const openCreateBookingModal = () => {
+    formik.resetForm();
+    setVisible(true);
+    setIsEditing(false);
+    setEditingKey(null);
+    setPrevData(null);
+    setInitialPaymentCount(0);
+    setIsHotelFromReference(false);
+    setRoomCategories([]);
+    setRoomNumbers([]);
+    hasHandledQueryParams.current = false;
+
+    if (searchParams.get("room") || searchParams.get("date")) {
+      router.replace("/dashboard?menu=6");
+    }
+
+    fetchHotelInfo();
+  };
+
   return (
     <div>
       {bookingPermissions.viewAccess ? (
@@ -1432,9 +1552,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                             Room Type
                           </th>
                           <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Booking Date
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Check In
                           </th>
                           <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
@@ -1458,8 +1575,11 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Status
                           </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-green-100 border border-gray-300">
                             Booked By
+                          </th>
+                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-yellow-100 border border-gray-300">
+                            Updated By
                           </th>
                           <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
                             Actions
@@ -1492,9 +1612,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               <td className="px-2 py-1.5 border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
                               </td>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
-                              </td>
                               <td className="px-3 py-2.5 text-center border border-gray-300">
                                 <div style={{ display: "flex", justifyContent: "center" }}>
                                   <Skeleton.Input active size="small" style={{ width: 40, height: 16 }} />
@@ -1520,6 +1637,9 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 <div style={{ display: "flex", justifyContent: "center" }}>
                                   <Skeleton.Button active size="small" style={{ width: 70, height: 24 }} />
                                 </div>
+                              </td>
+                              <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
+                                <Skeleton.Input active size="small" style={{ width: 110, height: 16 }} />
                               </td>
                               <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
                                 <Skeleton.Input active size="small" style={{ width: 110, height: 16 }} />
@@ -1571,9 +1691,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {booking.roomNumberName || "—"}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                              {(booking.createdAt || booking.createTime || booking.createdDate) ? moment(booking.createdAt || booking.createTime || booking.createdDate).format("D MMM YY") : "—"}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
                               {moment(booking.checkInDate).format("D MMM YY")}
@@ -1637,8 +1754,35 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 {booking.statusID === 255 ? "Canceled" : "Confirmed"}
                               </span>
                             </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
-                              {booking.bookedBy || booking.bookedByID || "—"}
+                            <td className="px-2 py-1.5 text-[10px] text-gray-900 font-medium border border-gray-300 align-top bg-green-50">
+                              <div className="leading-tight">
+                                <div className="font-semibold underline underline-offset-2">
+                                  {booking.bookedByID || booking.bookedBy || "—"}
+                                </div>
+                                <div className="text-[10px] text-gray-900">
+                                  {(booking.createdAt || booking.createTime || booking.createdDate)
+                                    ? moment(booking.createdAt || booking.createTime || booking.createdDate).format("D MMM YYYY, h:mm A")
+                                    : "—"}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-2 py-1.5 text-[10px] text-gray-900 font-medium border border-gray-300 align-top bg-yellow-50">
+                              <div className="leading-tight">
+                                {booking.updatedByID && booking.updatedByID !== "Not Updated" ? (
+                                  <>
+                                    <div className="font-semibold underline underline-offset-2">
+                                      {booking.updatedByID}
+                                    </div>
+                                    <div className="text-[10px] text-gray-900">
+                                      {(booking.updatedAt || booking.updateTime || booking.updatedDate)
+                                        ? moment(booking.updatedAt || booking.updateTime || booking.updatedDate).format("D MMM YYYY, h:mm A")
+                                        : ""}
+                                    </div>
+                                  </>
+                                ) : (
+                                  ""
+                                )}
+                              </div>
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
                               <div className="flex gap-1.5 justify-center items-center">
