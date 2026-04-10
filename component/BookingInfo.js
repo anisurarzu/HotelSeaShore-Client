@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Button,
   Modal,
@@ -48,19 +48,7 @@ const toDhIsoSafeForUtcDate = (dateLike) => {
 };
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
-import {
-  ApartmentOutlined,
-  CalendarOutlined,
-  CheckCircleOutlined,
-  CopyOutlined,
-  DollarCircleOutlined,
-  EyeOutlined,
-  MinusCircleOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-  SearchOutlined,
-  TeamOutlined,
-} from "@ant-design/icons";
+import { CopyOutlined, ReloadOutlined, PlusOutlined, SearchOutlined, MinusCircleOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
@@ -1330,114 +1318,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     setDetailsModalVisible(true);
   };
 
-  const formatCurrency = (value) =>
-    new Intl.NumberFormat("en-BD", {
-      maximumFractionDigits: 0,
-    }).format(Number(value) || 0);
-
-  const getPaidAmount = (booking) => {
-    const totalFromPayments = (booking?.payments || []).reduce(
-      (sum, payment) => sum + (Number(payment.amount) || 0),
-      0
-    );
-
-    return totalFromPayments > 0
-      ? totalFromPayments
-      : Number(booking?.advancePayment) || 0;
-  };
-
-  const getDueAmount = (booking) => {
-    const totalBill = Number(booking?.totalBill) || 0;
-    const totalFromPayments = (booking?.payments || []).reduce(
-      (sum, payment) => sum + (Number(payment.amount) || 0),
-      0
-    );
-
-    if (totalFromPayments > 0) {
-      return Math.max(0, totalBill - totalFromPayments);
-    }
-
-    return booking?.duePayment != null
-      ? Math.max(0, Number(booking.duePayment) || 0)
-      : Math.max(0, totalBill - (Number(booking?.advancePayment) || 0));
-  };
-
-  const bookingStats = useMemo(() => {
-    const today = dayjs().startOf("day");
-    const confirmed = filteredBookings.filter((booking) => booking?.statusID !== 255);
-    const activeStays = confirmed.filter((booking) => {
-      const checkIn = dayjs(booking?.checkInDate).startOf("day");
-      const checkOut = dayjs(booking?.checkOutDate).startOf("day");
-
-      return (
-        checkIn.isValid() &&
-        checkOut.isValid() &&
-        (today.isSame(checkIn) || today.isAfter(checkIn)) &&
-        today.isBefore(checkOut)
-      );
-    }).length;
-
-    const totalRevenue = confirmed.reduce(
-      (sum, booking) => sum + (Number(booking?.totalBill) || 0),
-      0
-    );
-
-    const totalDue = confirmed.reduce(
-      (sum, booking) => sum + getDueAmount(booking),
-      0
-    );
-
-    return [
-      {
-        key: "active",
-        label: "Active Stays",
-        value: activeStays,
-        subtitle: "Guests currently checked in",
-        icon: <CalendarOutlined />,
-      },
-      {
-        key: "confirmed",
-        label: "Confirmed Bookings",
-        value: confirmed.length,
-        subtitle: "Operational pipeline",
-        icon: <CheckCircleOutlined />,
-      },
-      {
-        key: "revenue",
-        label: "Booked Revenue",
-        value: `BDT ${formatCurrency(totalRevenue)}`,
-        subtitle: "Confirmed booking value",
-        icon: <DollarCircleOutlined />,
-      },
-      {
-        key: "due",
-        label: "Outstanding Due",
-        value: `BDT ${formatCurrency(totalDue)}`,
-        subtitle: "Pending collection",
-        icon: <ApartmentOutlined />,
-      },
-    ];
-  }, [filteredBookings]);
-
-  const openCreateBookingModal = () => {
-    formik.resetForm();
-    setVisible(true);
-    setIsEditing(false);
-    setEditingKey(null);
-    setPrevData(null);
-    setInitialPaymentCount(0);
-    setIsHotelFromReference(false);
-    setRoomCategories([]);
-    setRoomNumbers([]);
-    hasHandledQueryParams.current = false;
-
-    if (searchParams.get("room") || searchParams.get("date")) {
-      router.replace("/dashboard?menu=6");
-    }
-
-    fetchHotelInfo();
-  };
-
   return (
     <div>
       {bookingPermissions.viewAccess ? (
@@ -1796,53 +1676,51 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                     View
                                   </Button>
                                 )}
-                                {booking?.statusID === 1 && (
-                                  <>
-                                    {bookingPermissions?.editAccess && (
-                                      <Button 
-                                        onClick={() => handleEdit(booking)}
-                                        size="small"
-                                        style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
+                                <>
+                                  {bookingPermissions?.editAccess && (
+                                    <Button 
+                                      onClick={() => handleEdit(booking)}
+                                      size="small"
+                                      style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
+                                    >
+                                      Edit
+                                    </Button>
+                                  )}
+                                  <Popconfirm
+                                    title="Cancel booking? Enter reason in the next step."
+                                    onConfirm={() => handleDelete(booking)}
+                                    okText="Yes"
+                                    cancelText="No"
+                                  >
+                                    <Button
+                                      type="link"
+                                      danger
+                                      size="small"
+                                      style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </Popconfirm>
+                                  {bookingPermissions?.deleteAccess && (
+                                    <>
+                                      <Popconfirm
+                                        title="Are you sure to delete this booking?"
+                                        onConfirm={() => handleHardDelete(booking)}
+                                        okText="Yes"
+                                        cancelText="No"
                                       >
-                                        Edit
-                                      </Button>
-                                    )}
-                                    {bookingPermissions?.deleteAccess && (
-                                      <>
-                                        <Popconfirm
-                                          title="Cancel booking? Enter reason in the next step."
-                                          onConfirm={() => handleDelete(booking)}
-                                          okText="Yes"
-                                          cancelText="No"
+                                        <Button
+                                          type="link"
+                                          danger
+                                          size="small"
+                                          style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
                                         >
-                                          <Button
-                                            type="link"
-                                            danger
-                                            size="small"
-                                            style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
-                                          >
-                                            Cancel
-                                          </Button>
-                                        </Popconfirm>
-                                        <Popconfirm
-                                          title="Are you sure to delete this booking?"
-                                          onConfirm={() => handleHardDelete(booking)}
-                                          okText="Yes"
-                                          cancelText="No"
-                                        >
-                                          <Button
-                                            type="link"
-                                            danger
-                                            size="small"
-                                            style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
-                                          >
-                                            Delete
-                                          </Button>
-                                        </Popconfirm>
-                                      </>
-                                    )}
-                                  </>
-                                )}
+                                          Delete
+                                        </Button>
+                                      </Popconfirm>
+                                    </>
+                                  )}
+                                </>
                               </div>
                             </td>
                           </tr>
