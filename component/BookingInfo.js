@@ -433,9 +433,18 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       };
 
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      bookingData.bookedBy = userInfo?.username || userInfo?.loginID || "admin";
-      bookingData.bookedByID = userInfo?.loginID || userInfo?.id || userInfo?._id || "";
-      bookingData.updatedByID = isEditing ? (userInfo?.loginID || userInfo?.id || "") : "Not Updated";
+      if (isEditing) {
+        bookingData.bookedBy =
+          values.bookedBy || prevData?.bookedBy || "";
+        bookingData.bookedByID =
+          values.bookedByID || prevData?.bookedByID || "";
+        bookingData.updatedByID =
+          userInfo?.loginID || userInfo?.id || userInfo?._id || "";
+      } else {
+        bookingData.bookedBy = userInfo?.username || userInfo?.loginID || "admin";
+        bookingData.bookedByID = userInfo?.loginID || userInfo?.id || userInfo?._id || "";
+        bookingData.updatedByID = "Not Updated";
+      }
 
       // Check for booking conflicts
       const excludeBookingId = isEditing ? editingKey : null;
@@ -891,9 +900,12 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       transactionId: transactionId,
       payments,
       note: data.note || "",
-      bookedBy: data.bookedBy || userInfo?.username || "",
-      bookedByID: data.bookedByID || userInfo?.loginID || "",
-      updatedByID: userInfo?.loginID || "",
+      bookedBy: data.bookedBy || "",
+      bookedByID: data.bookedByID || "",
+      updatedByID:
+        data.updatedByID !== undefined && data.updatedByID !== null
+          ? data.updatedByID
+          : "Not Updated",
       reference: data.reference || "",
     };
 
