@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Image } from "antd";
-import { Building2, UtensilsCrossed } from "lucide-react";
+import { Building2 } from "lucide-react"; // UtensilsCrossed removed
 
 const PortalSelection = () => {
   const router = useRouter();
@@ -91,15 +91,11 @@ const PortalSelection = () => {
             </div>
           </div>
 
-          {/* Portal Cards */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Hotel Portal */}
+          {/* Single Portal Card - Hotel */}
+          <div className="flex justify-center">
             <div 
-              onClick={() => {
-                localStorage.setItem('isRestaurant', 'false');
-                router.push('/login');
-              }}
-              className="group bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-blue-200 hover:border-blue-500 overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300"
+              onClick={() => router.push('/login')}
+              className="group bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-blue-200 hover:border-blue-500 overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300 w-full max-w-md"
             >
               <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-700 p-8 text-white">
                 <div className="flex items-center justify-center mb-4">
@@ -125,39 +121,6 @@ const PortalSelection = () => {
                 </div>
               </div>
             </div>
-
-            {/* Restaurant Portal */}
-            <div 
-              onClick={() => {
-                localStorage.setItem('isRestaurant', 'true');
-                router.push('/restaurant-login');
-              }}
-              className="group bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-emerald-200 hover:border-emerald-500 overflow-hidden cursor-pointer transform hover:scale-[1.02] transition-all duration-300"
-            >
-              <div className="bg-gradient-to-br from-emerald-500 via-teal-500 to-green-600 p-8 text-white">
-                <div className="flex items-center justify-center mb-4">
-                  <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4">
-                    <UtensilsCrossed className="w-12 h-12" />
-                  </div>
-                </div>
-                <h2 className="text-2xl font-bold text-center mb-2">
-                  Sea Shore Restaurant
-                </h2>
-                <p className="text-center text-emerald-50 text-sm">
-                  Restaurant Management Portal
-                </p>
-              </div>
-              <div className="p-6">
-                <p className="text-gray-600 text-sm text-center">
-                  Access restaurant orders, menu management, and dining services
-                </p>
-                <div className="mt-4 flex items-center justify-center">
-                  <span className="text-emerald-600 font-semibold text-sm group-hover:translate-x-1 transition-transform">
-                    Enter Portal →
-                  </span>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Footer */}
@@ -174,8 +137,7 @@ const PortalSelection = () => {
                 Developed by <span className="font-semibold text-gray-700">Cox Web Solutions</span>
               </p>
               <p className="text-xs text-gray-600">
-                Contact support: <span className="font-semibold text-blue-600">
-+8801840452081</span>
+                Contact support: <span className="font-semibold text-blue-600">+8801840452081</span>
               </p>
             </div>
           </div>
