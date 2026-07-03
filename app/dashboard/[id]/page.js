@@ -367,8 +367,9 @@ const Invoice = ({ params }) => {
                 <p className="font-semibold text-sm">
                   #{data?.[0]?.bookingNo || "N/A"}
                 </p>
+                {/* Replace creation date with current date */}
                 <p className="font-normal text-sm">
-                  {moment(data?.[0]?.createTime).format("D MMMM, YYYY") || "N/A"}
+                  {moment().format("D MMMM, YYYY")}
                 </p>
               </div>
             </div>
