@@ -71,6 +71,10 @@ import RestaurantMenu from "@/component/restaurant/Menu";
 import Tables from "@/component/restaurant/Tables";
 import coreAxios from "@/utils/axiosInstance";
 import { filterVisibleUsers } from "@/utils/systemUsers";
+import {
+  resolveDashboardHotelId,
+  unwrapHotels,
+} from "@/utils/hotelId";
 import { PermissionProvider, useResolvedPermission } from "@/context/PermissionContext";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -85,18 +89,6 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
-
-/** `Number(null)` is 0 — breaks hotel lookup and forces roomsCount=0 → 0% occupancy. */
-function resolveDashboardHotelId(urlHotelID, userInfo) {
-  const fromUrl =
-    urlHotelID != null && String(urlHotelID).trim() !== ""
-      ? Number(urlHotelID)
-      : NaN;
-  if (Number.isFinite(fromUrl) && fromUrl > 0) return fromUrl;
-  const fromUser = Number(userInfo?.hotelID ?? userInfo?.hotelId);
-  if (Number.isFinite(fromUser) && fromUser > 0) return fromUser;
-  return null;
-}
 
 function getBookingRoomKey(booking) {
   if (!booking) return null;
@@ -391,26 +383,84 @@ const DashboardContent = ({ sliders }) => {
     try {
       setBookingsLoading(true);
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      const userHotelID = resolveDashboardHotelId(hotelID, userInfo);
+      let userHotelID = resolveDashboardHotelId(hotelID, userInfo);
+
+      // If user/URL hotel is missing or stale (e.g. hotelID=1), fall back to first hotel
+      if (userHotelID == null) {
+        try {
+          const hotelsRes = await coreAxios.get(`/hotel?page=1&limit=50`);
+          const hotels = unwrapHotels(hotelsRes?.data);
+          const first = hotels.find((h) => Number(h?.hotelID) > 0);
+          if (first) userHotelID = Number(first.hotelID);
+        } catch (_) {}
+      }
 
       const params = new URLSearchParams();
       if (userHotelID != null) params.set("hotelID", String(userHotelID));
 
-      const [summaryResponse, usersResponse] = await Promise.all([
+      let [summaryResponse, usersResponse] = await Promise.all([
         coreAxios.get(`/bookings/dashboard?${params.toString()}`),
         coreAxios.get("/users").catch(() => null),
       ]);
 
+      // Wrong hotelID (empty KPIs + 0 rooms) → retry with first hotel from /hotel
+      const firstSummary = summaryResponse?.data;
+      const emptyHotelScoped =
+        userHotelID != null &&
+        firstSummary &&
+        Number(firstSummary.totalRooms || 0) === 0 &&
+        Number(firstSummary?.kpis?.todayOccupiedRoomsCount || 0) === 0 &&
+        Number(firstSummary?.kpis?.todayBookingAmount || 0) === 0;
+
+      if (emptyHotelScoped) {
+        try {
+          const hotelsRes = await coreAxios.get(`/hotel?page=1&limit=50`);
+          const hotels = unwrapHotels(hotelsRes?.data);
+          const fallback = hotels.find(
+            (h) => Number(h?.hotelID) > 0 && Number(h.hotelID) !== userHotelID
+          ) || hotels.find((h) => Number(h?.hotelID) > 0);
+          if (fallback?.hotelID != null) {
+            const retryParams = new URLSearchParams();
+            retryParams.set("hotelID", String(fallback.hotelID));
+            summaryResponse = await coreAxios.get(
+              `/bookings/dashboard?${retryParams.toString()}`
+            );
+          }
+        } catch (_) {}
+      }
+
       if (summaryResponse.status === 200 && summaryResponse.data) {
         const summary = summaryResponse.data;
-        setDashboardSummary(summary);
+        const kpis = summary.kpis || {};
+        const totalRooms = Number(summary.totalRooms) || 0;
+        const todayCount = Number(kpis.todayOccupiedRoomsCount) || 0;
+        const tomorrowCount = Number(kpis.tomorrowOccupiedRoomsCount) || 0;
+
+        // Backend sometimes returns occupied counts with rate=0 when totalRooms missing
+        const todayRate =
+          Number(kpis.todayOccupancyRate) ||
+          (totalRooms > 0 ? Math.round((todayCount / totalRooms) * 100) : 0);
+        const monthRate = Number(kpis.currentMonthOccupancyRate) || 0;
+        const tomorrowRate =
+          Number(kpis.tomorrowOccupancyRate) ||
+          (totalRooms > 0 ? Math.round((tomorrowCount / totalRooms) * 100) : 0);
+
+        setDashboardSummary({
+          ...summary,
+          kpis: {
+            ...kpis,
+            todayOccupancyRate: todayRate,
+            currentMonthOccupancyRate: monthRate,
+            tomorrowOccupancyRate: tomorrowRate,
+          },
+        });
         setDashboardStats({
-          todayBookingAmount: summary.kpis?.todayBookingAmount || 0,
-          currentMonthBookingAmount: summary.kpis?.currentMonthBookingAmount || 0,
-          todayCheckIns: summary.kpis?.todayCheckIns || 0,
-          todayCheckOuts: summary.kpis?.todayCheckOuts || 0,
-          todayOccupancyRate: summary.kpis?.todayOccupancyRate || 0,
-          currentMonthOccupancyRate: summary.kpis?.currentMonthOccupancyRate || 0,
+          todayBookingAmount: kpis.todayBookingAmount || 0,
+          currentMonthBookingAmount: kpis.currentMonthBookingAmount || 0,
+          todayCheckIns: kpis.todayCheckIns || 0,
+          todayCheckOuts: kpis.todayCheckOuts || 0,
+          todayOccupancyRate: todayRate,
+          currentMonthOccupancyRate: monthRate,
         });
         setBookings([]);
       }
