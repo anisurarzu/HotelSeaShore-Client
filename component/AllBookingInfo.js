@@ -9,6 +9,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import coreAxios from "@/utils/axiosInstance";
+import { filterVisibleUsers } from "@/utils/systemUsers";
 import "./AdminOps.css";
 
 dayjs.extend(isBetween);
@@ -107,7 +108,7 @@ const AllBookingInfo = ({ hotelID }) => {
       const response = await coreAxios.get("auth/users");
       if (response?.status === 200) {
         const u = response.data?.users;
-        setUsers(Array.isArray(u) ? u : []);
+        setUsers(filterVisibleUsers(Array.isArray(u) ? u : []));
       }
     } catch (error) {
       console.error("Failed to fetch users", error);

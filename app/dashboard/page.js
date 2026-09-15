@@ -70,6 +70,7 @@ import Orders from "@/component/restaurant/Orders";
 import RestaurantMenu from "@/component/restaurant/Menu";
 import Tables from "@/component/restaurant/Tables";
 import coreAxios from "@/utils/axiosInstance";
+import { filterVisibleUsers } from "@/utils/systemUsers";
 import { PermissionProvider, useResolvedPermission } from "@/context/PermissionContext";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -608,7 +609,7 @@ const DashboardContent = ({ sliders }) => {
           usersResponse?.data?.data?.users ||
           usersResponse?.data ||
           [];
-        setUsers(Array.isArray(usersPayload) ? usersPayload : []);
+        setUsers(filterVisibleUsers(Array.isArray(usersPayload) ? usersPayload : []));
       } else {
         setUsers([]);
       }

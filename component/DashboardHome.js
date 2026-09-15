@@ -7,6 +7,7 @@ import {
   HomeOutlined,
 } from "@ant-design/icons";
 import coreAxios from "@/utils/axiosInstance";
+import { filterVisibleUsers } from "@/utils/systemUsers";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -98,7 +99,7 @@ const DashboardHome = ({ hotelID = 1 }) => {
           usersResponse?.data?.data?.users ||
           usersResponse?.data ||
           [];
-        setUsers(Array.isArray(usersPayload) ? usersPayload : []);
+        setUsers(filterVisibleUsers(Array.isArray(usersPayload) ? usersPayload : []));
       } else {
         setUsers([]);
       }

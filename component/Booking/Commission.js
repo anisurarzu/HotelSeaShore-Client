@@ -15,6 +15,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import coreAxios from "@/utils/axiosInstance";
+import { filterVisibleUsers } from "@/utils/systemUsers";
 import Link from "next/link";
 import CopyToClipboard from "react-copy-to-clipboard";
 
@@ -70,7 +71,7 @@ const CommissionPage = ({ hotelID }) => {
     try {
       const response = await coreAxios.get("auth/users");
       if (response.status === 200) {
-        setUsers(response.data?.users);
+        setUsers(filterVisibleUsers(response.data?.users || []));
       }
     } catch (error) {
       console.error("Failed to fetch users", error);

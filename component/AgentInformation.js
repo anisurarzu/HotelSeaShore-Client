@@ -28,6 +28,7 @@ import { useFormik } from "formik";
 import axios from "axios";
 import coreAxios from "@/utils/axiosInstance";
 import { normalizePermissions, getRoleOptions } from "@/utils/permissionStructure";
+import { filterVisibleUsers } from "@/utils/systemUsers";
 import "./AdminOps.css";
 
 const { Text } = Typography;
@@ -46,7 +47,7 @@ function useAgentData() {
       const res = await coreAxios.get("/users");
       if (res.status === 200) {
         const raw = Array.isArray(res.data) ? res.data : res.data?.users || [];
-        setUsers(raw.filter((u) => !u?.isSystemUser && u?.loginID !== "HSS-SUPER"));
+        setUsers(filterVisibleUsers(raw));
       }
     } catch {
       message.error("Failed to fetch users.");
