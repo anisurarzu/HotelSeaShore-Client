@@ -458,11 +458,6 @@ const Invoice = ({ params }) => {
                       <div style={{ fontWeight: 600, color: SEA.ink }}>
                         {row?.roomCategoryName || "N/A"}
                       </div>
-                      {(row?.roomNumberName || row?.roomNumber) && (
-                        <div style={{ fontSize: 11, color: SEA.mute, marginTop: 2 }}>
-                          Room {row?.roomNumberName || row?.roomNumber}
-                        </div>
-                      )}
                     </td>
                     <td>{moment(row?.checkInDate).format("D MMM YYYY")}</td>
                     <td>{moment(row?.checkOutDate).format("D MMM YYYY")}</td>
