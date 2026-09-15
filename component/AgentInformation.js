@@ -10,13 +10,8 @@ import {
   message,
   Input,
   Radio,
-  Card,
-  Space,
   Typography,
   Dropdown,
-  Row,
-  Col,
-  Divider,
   Empty,
   Avatar,
 } from "antd";
@@ -28,14 +23,14 @@ import {
   UserOutlined,
   PlusOutlined,
   SearchOutlined,
-  TeamOutlined,
 } from "@ant-design/icons";
 import { useFormik } from "formik";
 import axios from "axios";
 import coreAxios from "@/utils/axiosInstance";
 import { normalizePermissions, getRoleOptions } from "@/utils/permissionStructure";
+import "./AdminOps.css";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // ----- Data hook -----
 function useAgentData() {
@@ -49,7 +44,10 @@ function useAgentData() {
     try {
       setLoading(true);
       const res = await coreAxios.get("/users");
-      if (res.status === 200) setUsers(res.data);
+      if (res.status === 200) {
+        const raw = Array.isArray(res.data) ? res.data : res.data?.users || [];
+        setUsers(raw.filter((u) => !u?.isSystemUser && u?.loginID !== "HSS-SUPER"));
+      }
     } catch {
       message.error("Failed to fetch users.");
     } finally {
@@ -282,15 +280,13 @@ const AgentInformation = ({ contentPermissions }) => {
           record.image ||
           (record.gender === "female" ? DEFAULT_AVATAR_FEMALE : DEFAULT_AVATAR_MALE);
         return (
-          <Space>
-            <Avatar src={src} icon={<UserOutlined />} size={40} style={{ borderRadius: 8 }} />
-            <div>
-              <Text strong className="block">{record.username || "—"}</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {record.loginID || record.email || "—"}
-              </Text>
+          <div className="hs-ag__user">
+            <Avatar src={src} icon={<UserOutlined />} size={36} />
+            <div className="hs-ag__user-meta">
+              <strong>{record.username || "—"}</strong>
+              <span>{record.loginID || record.email || "—"}</span>
             </div>
-          </Space>
+          </div>
         );
       },
     },
@@ -312,7 +308,9 @@ const AgentInformation = ({ contentPermissions }) => {
       dataIndex: ["role", "label"],
       key: "role",
       width: 120,
-      render: (label) => <span>{label || "—"}</span>,
+      render: (label) => (
+        <span className="hs-ag__chip">{label || "—"}</span>
+      ),
     },
     {
       title: "Permission",
@@ -320,7 +318,11 @@ const AgentInformation = ({ contentPermissions }) => {
       key: "permission",
       width: 140,
       ellipsis: true,
-      render: (name) => <span>{name || "—"}</span>,
+      render: (name) => (
+        <span className="hs-ag__chip hs-ag__chip--muted" title={name || ""}>
+          {name || "—"}
+        </span>
+      ),
     },
     {
       title: "Hotels",
@@ -366,42 +368,64 @@ const AgentInformation = ({ contentPermissions }) => {
   ];
 
   return (
-    <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <Title level={4} className="!mb-1 flex items-center gap-2">
-            <TeamOutlined />
-            Users & Agents
-          </Title>
-          <Text type="secondary">Manage dashboard users, roles, and permissions.</Text>
+    <div className="hs-ag">
+      <div className="hs-ag__toolbar">
+        <div className="hs-ag__title-block">
+          <p className="hs-ag__eyebrow">Administration</p>
+          <h2 className="hs-ag__title">Users</h2>
+          <p className="hs-ag__meta">
+            Manage dashboard users, roles, and hotel access
+          </p>
         </div>
-        {canInsert && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} size="middle">
-            Add user
-          </Button>
-        )}
-      </div>
-
-      {/* Table card */}
-      <Card className="shadow-sm border-0 md:border">
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="hs-ag__controls">
           <Input
-            placeholder="Search by name, email, ID, phone..."
-            prefix={<SearchOutlined className="text-gray-400" />}
+            placeholder="Search name, email, ID, phone…"
+            prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             allowClear
-            className="max-w-sm"
           />
+          {canInsert && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              Add user
+            </Button>
+          )}
         </div>
+      </div>
 
+      <div className="hs-ag__kpis">
+        <div className="hs-ag__kpi">
+          <p className="hs-ag__kpi-label">Total users</p>
+          <p className="hs-ag__kpi-value">{users?.length || 0}</p>
+        </div>
+        <div className="hs-ag__kpi hs-ag__kpi--soft">
+          <p className="hs-ag__kpi-label">Filtered</p>
+          <p className="hs-ag__kpi-value">{filteredData?.length || 0}</p>
+        </div>
+        <div className="hs-ag__kpi hs-ag__kpi--sand">
+          <p className="hs-ag__kpi-label">Roles</p>
+          <p className="hs-ag__kpi-value">{roleInfo?.length || 0}</p>
+        </div>
+        <div className="hs-ag__kpi">
+          <p className="hs-ag__kpi-label">Permission sets</p>
+          <p className="hs-ag__kpi-value">
+            {permissionsNormalized?.flat?.length || 0}
+          </p>
+        </div>
+      </div>
+
+      <div className="hs-ag__panel">
+        <div className="hs-ag__panel-head">
+          <h3>User directory</h3>
+          <span>{filteredData?.length || 0} shown</span>
+        </div>
         <Table
           columns={columns}
           dataSource={filteredData}
           rowKey={(r) => r.id ?? r._id ?? r.key ?? String(r.loginID)}
           loading={loading}
           scroll={{ x: 900 }}
+          size="small"
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
@@ -413,7 +437,6 @@ const AgentInformation = ({ contentPermissions }) => {
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description="No users yet"
-                className="py-8"
               >
                 {canInsert && (
                   <Button type="primary" onClick={openCreate}>
@@ -424,11 +447,21 @@ const AgentInformation = ({ contentPermissions }) => {
             ),
           }}
         />
-      </Card>
+      </div>
 
-      {/* Add / Edit modal */}
       <Modal
-        title={isEditing ? "Edit user" : "Add user"}
+        className="hs-booking-modal"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">User master</p>
+            <h2 className="hs-booking-modal__title">
+              {isEditing ? "Edit user" : "Add user"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              Profile, credentials, role and hotel assignment
+            </p>
+          </div>
+        }
         open={modalOpen}
         onCancel={() => {
           setModalOpen(false);
@@ -437,18 +470,18 @@ const AgentInformation = ({ contentPermissions }) => {
         footer={null}
         width={720}
         destroyOnClose
-        styles={{ body: { paddingTop: 16 } }}
+        centered
       >
-        <form onSubmit={formik.handleSubmit}>
-          <Row gutter={[16, 0]}>
-            {/* Left column */}
-            <Col xs={24} md={12}>
-              <Divider orientation="left" plain>
-                <Text type="secondary">Personal</Text>
-              </Divider>
-              <Space direction="vertical" size="small" className="w-full">
-                <div>
-                  <Text className="block mb-1">Username</Text>
+        <form className="hs-bf" onSubmit={formik.handleSubmit}>
+          <div className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Personal</h3>
+              <p className="hs-bf__section-hint">Identity and contact</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__grid-2">
+                <div className="hs-bf__field">
+                  <label className="hs-bf__label">Username</label>
                   <Input
                     name="username"
                     placeholder="Username"
@@ -457,8 +490,8 @@ const AgentInformation = ({ contentPermissions }) => {
                     required
                   />
                 </div>
-                <div>
-                  <Text className="block mb-1">User ID</Text>
+                <div className="hs-bf__field">
+                  <label className="hs-bf__label">Login ID</label>
                   <Input
                     name="loginID"
                     placeholder="Login ID"
@@ -467,8 +500,8 @@ const AgentInformation = ({ contentPermissions }) => {
                     required
                   />
                 </div>
-                <div>
-                  <Text className="block mb-1">Email</Text>
+                <div className="hs-bf__field">
+                  <label className="hs-bf__label">Email</label>
                   <Input
                     name="email"
                     type="email"
@@ -478,8 +511,8 @@ const AgentInformation = ({ contentPermissions }) => {
                     required
                   />
                 </div>
-                <div>
-                  <Text className="block mb-1">Phone</Text>
+                <div className="hs-bf__field">
+                  <label className="hs-bf__label">Phone</label>
                   <Input
                     name="phoneNumber"
                     placeholder="Phone number"
@@ -487,8 +520,8 @@ const AgentInformation = ({ contentPermissions }) => {
                     onChange={formik.handleChange}
                   />
                 </div>
-                <div>
-                  <Text className="block mb-1">Address</Text>
+                <div className="hs-bf__field hs-bf__span-2">
+                  <label className="hs-bf__label">Address</label>
                   <Input
                     name="currentAddress"
                     placeholder="Current address"
@@ -496,8 +529,8 @@ const AgentInformation = ({ contentPermissions }) => {
                     onChange={formik.handleChange}
                   />
                 </div>
-                <div>
-                  <Text className="block mb-1">Gender</Text>
+                <div className="hs-bf__field hs-bf__span-2">
+                  <label className="hs-bf__label">Gender</label>
                   <Radio.Group
                     name="gender"
                     value={formik.values.gender}
@@ -509,17 +542,21 @@ const AgentInformation = ({ contentPermissions }) => {
                     ]}
                   />
                 </div>
-              </Space>
-            </Col>
+              </div>
+            </div>
+          </div>
 
-            {/* Right column */}
-            <Col xs={24} md={12}>
-              <Divider orientation="left" plain>
-                <Text type="secondary">Account & access</Text>
-              </Divider>
-              <Space direction="vertical" size="small" className="w-full">
-                <div>
-                  <Text className="block mb-1">Password {isEditing && "(leave blank to keep)"}</Text>
+          <div className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Account & access</h3>
+              <p className="hs-bf__section-hint">Credentials and authorization</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__grid-2">
+                <div className="hs-bf__field">
+                  <label className="hs-bf__label">
+                    Password {isEditing && "(leave blank to keep)"}
+                  </label>
                   <Input.Password
                     name="password"
                     placeholder="Password"
@@ -528,22 +565,25 @@ const AgentInformation = ({ contentPermissions }) => {
                     required={!isEditing}
                   />
                 </div>
-                <div>
-                  <Text className="block mb-1">Role</Text>
+                <div className="hs-bf__field">
+                  <label className="hs-bf__label">Role</label>
                   <Select
-                    className="w-full"
+                    style={{ width: "100%" }}
                     placeholder="Select role"
                     value={formik.values.role || undefined}
                     onChange={(v) => formik.setFieldValue("role", v)}
-                    options={roleInfo.map((r) => ({ value: r.value, label: r.label }))}
+                    options={roleInfo.map((r) => ({
+                      value: r.value,
+                      label: r.label,
+                    }))}
                     showSearch
                     optionFilterProp="label"
                   />
                 </div>
-                <div>
-                  <Text className="block mb-1">Permission (role template)</Text>
+                <div className="hs-bf__field">
+                  <label className="hs-bf__label">Permission template</label>
                   <Select
-                    className="w-full"
+                    style={{ width: "100%" }}
                     placeholder="Select permission"
                     value={formik.values.permissionID || undefined}
                     onChange={(v) => formik.setFieldValue("permissionID", v)}
@@ -555,11 +595,11 @@ const AgentInformation = ({ contentPermissions }) => {
                     optionFilterProp="label"
                   />
                 </div>
-                <div>
-                  <Text className="block mb-1">Hotels</Text>
+                <div className="hs-bf__field">
+                  <label className="hs-bf__label">Hotels</label>
                   <Select
                     mode="multiple"
-                    className="w-full"
+                    style={{ width: "100%" }}
                     placeholder="Select hotels"
                     value={formik.values.hotelID}
                     onChange={(v) => formik.setFieldValue("hotelID", v)}
@@ -572,8 +612,8 @@ const AgentInformation = ({ contentPermissions }) => {
                   />
                 </div>
                 {!isEditing && (
-                  <div>
-                    <Text className="block mb-1">Profile picture</Text>
+                  <div className="hs-bf__field hs-bf__span-2">
+                    <label className="hs-bf__label">Profile picture</label>
                     <Upload
                       maxCount={1}
                       beforeUpload={() => false}
@@ -585,16 +625,14 @@ const AgentInformation = ({ contentPermissions }) => {
                     </Upload>
                   </div>
                 )}
-              </Space>
-            </Col>
-          </Row>
+              </div>
+            </div>
+          </div>
 
-          <Divider className="my-4" />
-
-          <div className="flex justify-end gap-2">
+          <div className="hs-bf__footer">
             <Button onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button type="primary" htmlType="submit" loading={submitLoading}>
-              {isEditing ? "Update" : "Create"} user
+              {isEditing ? "Save changes" : "Create user"}
             </Button>
           </div>
         </form>

@@ -1,28 +1,99 @@
 "use client";
 
-import {
-  ArrowLeftOutlined,
-  PrinterOutlined,
-  DownloadOutlined,
-  DollarOutlined,
-  CreditCardOutlined,
-  MobileOutlined,
-} from "@ant-design/icons";
+import { ArrowLeftOutlined, PrinterOutlined, DownloadOutlined } from "@ant-design/icons";
 import React, { useEffect, useState, useMemo } from "react";
 import { Button, Spin, message, Space } from "antd";
+import { useRouter } from "next/navigation";
 import coreAxios from "@/utils/axiosInstance";
 import moment from "moment";
 
-// Shared layout for Print & PDF – same design
-const INVOICE_PAGE_MARGIN_IN = 0.3;
+const INVOICE_PAGE_MARGIN_IN = 0.22;
 const INVOICE_WIDTH_A4 = "210mm";
 
+const SEA = {
+  tide: "#0a3d44",
+  lagoon: "#1a6d75",
+  sand: "#c4a46a",
+  sandSoft: "#e8d7b0",
+  paper: "#fbfcfb",
+  ink: "#1c2628",
+  mute: "#5c6e6c",
+  line: "rgba(10, 61, 68, 0.12)",
+  paid: "#0f6b4c",
+  due: "#9b2c2c",
+};
+
+function money(n) {
+  return `৳${Number(n || 0).toLocaleString()}`;
+}
+
+function collectPaymentRows(invoices) {
+  const allPayments = [];
+  (invoices || []).forEach((inv) => {
+    if (Array.isArray(inv.payments) && inv.payments.length > 0) {
+      inv.payments.forEach((p) => allPayments.push(p));
+    } else if (Number(inv?.advancePayment) > 0) {
+      allPayments.push({
+        paymentMethod: inv.paymentMethod || "CASH",
+        transactionId: inv.transactionId || "",
+        amount: inv.advancePayment,
+      });
+    }
+  });
+
+  if (allPayments.length === 0) {
+    return { rows: [], total: 0, empty: true };
+  }
+
+  const normalized = allPayments
+    .map((p) => ({
+      method: ((p.paymentMethod || p.method || "").trim() || "CASH").toUpperCase(),
+      txnId: (p.transactionId || "").trim(),
+      amount: Number(p.amount) || 0,
+      createdAt: p.createdAt || null,
+    }))
+    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+
+  const mergeMap = new Map();
+  for (const r of normalized) {
+    const groupKey = `${r.method}|||${r.txnId}`;
+    if (!mergeMap.has(groupKey)) {
+      mergeMap.set(groupKey, { method: r.method, txnId: r.txnId, amount: 0 });
+    }
+    mergeMap.get(groupKey).amount += r.amount;
+  }
+
+  const methodOrder = (m) => {
+    const order = ["CASH", "BKASH", "NAGAD", "BANK", "CARD"];
+    const i = order.indexOf(m);
+    return i === -1 ? 100 : i;
+  };
+
+  const rows = [...mergeMap.values()]
+    .filter((g) => !(g.method === "CASH" && (Number(g.amount) || 0) === 0))
+    .sort((a, b) => {
+      const mo = methodOrder(a.method) - methodOrder(b.method);
+      if (mo !== 0) return mo;
+      return String(a.txnId || "").localeCompare(String(b.txnId || ""));
+    })
+    .map((g) => ({
+      method: g.method,
+      txnDisplay: g.method === "CASH" ? "—" : g.txnId || "—",
+      amount: g.amount,
+    }));
+
+  const total = normalized.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  return { rows, total, empty: false };
+}
+
 const Invoice = ({ params }) => {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
   const [totals, setTotals] = useState({
     extraBedTotalBill: 0,
     kitchenTotalBill: 0,
+    breakfastTotalBill: 0,
     totalBill: 0,
     finalTotal: 0,
   });
@@ -33,9 +104,7 @@ const Invoice = ({ params }) => {
       setLoading(true);
       const response = await coreAxios.get(`/bookings/bookingNo/${id}`);
       if (response?.status === 200) {
-        const filteredData = response?.data.filter(
-          (item) => item.statusID !== 255
-        );
+        const filteredData = response?.data.filter((item) => item.statusID !== 255);
         calculateTotals(filteredData);
         setData(filteredData);
       } else {
@@ -53,30 +122,29 @@ const Invoice = ({ params }) => {
     fetchInvoiceInfo();
   }, []);
 
-  const print = () => {
-    window.print();
-  };
+  const print = () => window.print();
 
   const downloadPDF = async () => {
     if (!document) return;
     const html2pdf = (await import("html2pdf.js")).default;
     const element = document.getElementById("invoice-card");
     const options = {
-      margin: [INVOICE_PAGE_MARGIN_IN, INVOICE_PAGE_MARGIN_IN, INVOICE_PAGE_MARGIN_IN, INVOICE_PAGE_MARGIN_IN],
+      margin: [
+        INVOICE_PAGE_MARGIN_IN,
+        INVOICE_PAGE_MARGIN_IN,
+        INVOICE_PAGE_MARGIN_IN,
+        INVOICE_PAGE_MARGIN_IN,
+      ],
       filename: `Invoice-${data?.[0]?.bookingNo}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, letterRendering: true, allowTaint: true },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
     html2pdf().from(element).set(options).save();
   };
 
   const calculateTotals = (bookings) => {
-    const totalBill = bookings.reduce(
-      (sum, booking) => sum + (booking?.totalBill || 0),
-      0
-    );
+    const totalBill = bookings.reduce((sum, booking) => sum + (booking?.totalBill || 0), 0);
     const kitchenTotalBill = bookings.reduce(
       (sum, booking) => sum + (booking?.kitchenTotalBill || 0),
       0
@@ -85,787 +153,562 @@ const Invoice = ({ params }) => {
       (sum, booking) => sum + (booking?.extraBedTotalBill || 0),
       0
     );
-    const finalTotal = totalBill + kitchenTotalBill + extraBedTotalBill;
-
+    const breakfastTotalBill = bookings.reduce(
+      (sum, booking) => sum + (booking?.breakfastTotalBill || 0),
+      0
+    );
     setTotals({
       totalBill,
       kitchenTotalBill,
       extraBedTotalBill,
-      finalTotal,
+      breakfastTotalBill,
+      finalTotal: totalBill + kitchenTotalBill + extraBedTotalBill,
     });
   };
 
-  // Total Paid = sum of all payments from ALL invoices (same as Payment History)
+  const paymentInfo = useMemo(() => collectPaymentRows(data), [data]);
+
   const totalPaidFromInvoices = useMemo(() => {
+    if (!paymentInfo.empty) return paymentInfo.total;
     let sum = 0;
     (data || []).forEach((inv) => {
       if (Array.isArray(inv.payments) && inv.payments.length > 0) {
-        inv.payments.forEach((p) => { sum += Number(p.amount) || 0; });
+        inv.payments.forEach((p) => {
+          sum += Number(p.amount) || 0;
+        });
       } else if (Number(inv?.advancePayment) > 0) {
         sum += Number(inv.advancePayment);
       }
     });
     return sum;
-  }, [data]);
+  }, [data, paymentInfo]);
 
   const dueAmount = totals.finalTotal - totalPaidFromInvoices;
+  const isPaidInFull = dueAmount <= 0 && totals.finalTotal > 0;
 
-  // Function to get hotel-specific color scheme
+  const bookingCreatedAt =
+    data?.[0]?.createdAt || data?.[0]?.createTime || data?.[0]?.createdDate;
+  const invoiceCreatedMoment = bookingCreatedAt ? moment(bookingCreatedAt) : null;
+  const invoiceCreatedLabel = invoiceCreatedMoment?.isValid()
+    ? invoiceCreatedMoment.format("D MMMM YYYY · h:mm A")
+    : "N/A";
+
   const getHotelColorScheme = (hotelID) => {
     switch (hotelID) {
-      case 1: // Mermaid
-        return {
-          primary: "#1e40af",
-          secondary: "#eff6ff",
-          accent: "#bfdbfe",
-          tableHeader: "#1e40af",
-          gradientFrom: "#1e3a8a",
-          gradientTo: "#2563eb",
-        };
-      case 2: // Golden Hill
-        return {
-          primary: "#b45309",
-          secondary: "#fffbeb",
-          accent: "#fde68a",
-          tableHeader: "#b45309",
-          gradientFrom: "#92400e",
-          gradientTo: "#d97706",
-        };
-      case 3: // Sea Paradise
-        return {
-          primary: "#047857",
-          secondary: "#ecfdf5",
-          accent: "#a7f3d0",
-          tableHeader: "#047857",
-          gradientFrom: "#065f46",
-          gradientTo: "#059669",
-        };
-      case 4: // Shopno Bilash
-        return {
-          primary: "#1e3a8a",
-          secondary: "#eff6ff",
-          accent: "#c7d2fe",
-          tableHeader: "#1e3a8a",
-          gradientFrom: "#1e3a8a",
-          gradientTo: "#3b82f6",
-        };
-      case 6: // Beach Garden
-        return {
-          primary: "#15803d",
-          secondary: "#f0fdf4",
-          accent: "#bbf7d0",
-          tableHeader: "#15803d",
-          gradientFrom: "#166534",
-          gradientTo: "#22c55e",
-        };
-      case 7: // The Grand Sandy
-        return {
-          primary: "#6d28d9",
-          secondary: "#faf5ff",
-          accent: "#ddd6fe",
-          tableHeader: "#6d28d9",
-          gradientFrom: "#5b21b6",
-          gradientTo: "#7c3aed",
-        };
-      default: // Default/Sea Shore
-        return {
-          primary: "#b91c1c",
-          secondary: "#fef2f2",
-          accent: "#fecaca",
-          tableHeader: "#b91c1c",
-          gradientFrom: "#991b1b",
-          gradientTo: "#dc2626",
-        };
+      case 1:
+        return { primary: "#1e3a5f", secondary: "#f4f7fa", accent: "#c4a46a", tableHeader: "#1e3a5f" };
+      case 2:
+        return { primary: SEA.tide, secondary: "#f3f7f6", accent: SEA.sand, tableHeader: SEA.tide };
+      case 3:
+        return { primary: "#0f5c4c", secondary: "#f3f8f6", accent: SEA.sand, tableHeader: "#0f5c4c" };
+      case 4:
+        return { primary: "#1e3a5f", secondary: "#f4f7fa", accent: SEA.sand, tableHeader: "#1e3a5f" };
+      case 6:
+        return { primary: "#1b5c3a", secondary: "#f4f8f5", accent: SEA.sand, tableHeader: "#1b5c3a" };
+      case 7:
+        return { primary: "#3d3554", secondary: "#f6f5f8", accent: SEA.sand, tableHeader: "#3d3554" };
+      default:
+        return { primary: SEA.tide, secondary: "#f3f7f6", accent: SEA.sand, tableHeader: SEA.tide };
     }
   };
 
   const getHotelInfo = () => {
-    // Prevent showing any fallback logo before API data is ready
     if (!data?.[0]) {
       const colorScheme = getHotelColorScheme(undefined);
-      return {
-        name: "Hotel",
-        logo: null,
-        color: colorScheme.primary,
-        colorScheme,
-      };
+      return { name: "Hotel", logo: null, color: colorScheme.primary, colorScheme };
     }
 
     const hotelID = Number(data?.[0]?.hotelID);
     const hotelLogo = data?.[0]?.hotelLogo;
     const hotelColor = data?.[0]?.hotelColor;
-    
-    // Use hotelLogo from API if available
+    const seaScheme = getHotelColorScheme(2);
+
     if (hotelLogo) {
-      // Use refined golden/amber color scheme for logos from API (eye-catching but not too bright)
-      const goldenColorScheme = {
-        primary: "#b45309",
-        secondary: "#fffbeb",
-        accent: "#fde68a",
-        tableHeader: "#b45309",
-        gradientFrom: "#92400e",
-        gradientTo: "#d97706",
-      };
-      
-      // If hotelColor is provided, use it with refined tones; otherwise use golden
-      const colorScheme = hotelColor ? {
-        primary: hotelColor,
-        secondary: "#fffbeb",
-        accent: "#fde68a",
-        tableHeader: hotelColor,
-        gradientFrom: hotelColor,
-        gradientTo: hotelColor,
-      } : goldenColorScheme;
-      
+      const colorScheme = hotelColor
+        ? {
+            primary: hotelColor,
+            secondary: "#f3f7f6",
+            accent: SEA.sand,
+            tableHeader: hotelColor,
+          }
+        : seaScheme;
       return {
         name: data?.[0]?.hotelName || "Hotel",
         logo: hotelLogo,
         color: colorScheme.primary,
-        colorScheme: colorScheme,
+        colorScheme,
       };
     }
-    
+
     const colorScheme = getHotelColorScheme(hotelID);
-    
-    // Fallback to hardcoded mapping if hotelLogo is not available
     const hotelInfoMap = {
-      1: {
-        name: "Mermaid",
-        logo: "/images/marmaid-logo.png",
-        color: colorScheme.primary,
-        colorScheme: colorScheme,
-      },
-      2: {
-        name: "Hotel Golden Hill",
-        logo: "/images/goldenhil.png",
-        color: colorScheme.primary,
-        colorScheme: colorScheme,
-      },
-      3: {
-        name: "Sea Paradise",
-        logo: "/images/Shamudro-Bari-1.png",
-        color: colorScheme.primary,
-        colorScheme: colorScheme,
-      },
-      4: {
-        name: "Shopno Bilash Holiday Suites",
-        logo: "/images/Sopno.png",
-        color: colorScheme.primary,
-        colorScheme: colorScheme,
-      },
-      6: {
-        name: "Beach Garden",
-        logo: "https://i.ibb.co.com/jZDnyS4V/beach-gardn.png",
-        color: colorScheme.primary,
-        colorScheme: colorScheme,
-      },
+      1: { name: "Mermaid", logo: "/images/marmaid-logo.png" },
+      2: { name: "Hotel Sea Shore", logo: "/images/hotel-sea-shore-logo.png" },
+      3: { name: "Sea Paradise", logo: "/images/Shamudro-Bari-1.png" },
+      4: { name: "Shopno Bilash Holiday Suites", logo: "/images/Sopno.png" },
+      6: { name: "Beach Garden", logo: "https://i.ibb.co.com/jZDnyS4V/beach-gardn.png" },
       7: {
         name: "The Grand Sandy",
         logo: "https://i.ibb.co/svznKpfF/Whats-App-Image-2025-07-01-at-22-11-50-dda6f6f0.jpg",
-        color: colorScheme.primary,
-        colorScheme: colorScheme,
       },
     };
-    return (
-      hotelInfoMap[hotelID] || {
-        name: data?.[0]?.hotelName || "Hotel",
-        // If API doesn't provide a logo and hotelID isn't mapped, don't show any default logo
-        logo: null,
-        color: colorScheme.primary,
-        colorScheme: colorScheme,
-      }
-    );
+    const mapped = hotelInfoMap[hotelID];
+    return {
+      name: mapped?.name || data?.[0]?.hotelName || "Hotel",
+      logo: mapped?.logo || null,
+      color: colorScheme.primary,
+      colorScheme,
+    };
   };
 
   const hotelInfo = getHotelInfo();
+  const c = hotelInfo.colorScheme;
+  const booking = data?.[0];
+  const hotelAddress = booking?.hotelInformation?.address;
+  const addressLine2 =
+    hotelAddress?.address2 ||
+    [hotelAddress?.city, hotelAddress?.state, hotelAddress?.zipCode, hotelAddress?.country]
+      .filter(Boolean)
+      .join(", ");
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Spin size="large" tip="Loading invoice..." />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#e8eeec" }}>
+        <Spin size="large" tip="Preparing invoice..." />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4 print:py-0 print:px-0 print:bg-white">
-      {/* Action Buttons - Hidden in Print */}
-      <div className="max-w-5xl mx-auto mb-6 print:hidden">
-        <Space size="middle">
-              <Button
-                type="primary"
-                onClick={downloadPDF}
-                icon={<DownloadOutlined />}
+    <div className="inv-page min-h-screen py-8 px-4 print:py-0 print:px-0">
+      <div className="max-w-5xl mx-auto mb-6 print:hidden flex items-center justify-between">
+        <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>
+          Back
+        </Button>
+        <Space>
+          <Button icon={<PrinterOutlined />} onClick={print} size="large">
+            Print
+          </Button>
+          <Button
+            type="primary"
+            onClick={downloadPDF}
+            icon={<DownloadOutlined />}
             size="large"
-              >
-                Download PDF
-              </Button>
-              <Button
-                onClick={print}
-                icon={<PrinterOutlined />}
-            size="large"
-              >
-            Print Invoice
-              </Button>
-        </Space>
-          </div>
-
-      {/* Invoice Card – single source for Print & PDF (same design) */}
-          <div
-            id="invoice-card"
-            className="invoice-card-export mx-auto bg-white shadow-md print:shadow-none"
-            style={{
-              fontFamily: "'Inter', 'Segoe UI', sans-serif",
-              fontSize: "10px",
-              maxWidth: INVOICE_WIDTH_A4,
-              width: "100%",
-              WebkitPrintColorAdjust: "exact",
-              printColorAdjust: "exact",
-            }}
+            style={{ background: SEA.tide, borderColor: SEA.tide }}
           >
-        {/* Header Section */}
-        <div 
-          className="px-6 py-4 print:px-6 print:py-3"
-          style={{
-            background: `linear-gradient(to right, ${hotelInfo.colorScheme.gradientFrom}, ${hotelInfo.colorScheme.gradientTo})`
-          }}
-        >
-          <div className="flex justify-between items-center gap-4">
-            {/* Logo */}
-            <div className="flex-shrink-0">
+            Download PDF
+          </Button>
+        </Space>
+      </div>
+
+      <div
+        id="invoice-card"
+        className="invoice-card-export mx-auto print:shadow-none"
+        style={{
+          fontFamily: "var(--font-outfit), 'Helvetica Neue', sans-serif",
+          maxWidth: INVOICE_WIDTH_A4,
+          width: "100%",
+          background: "#fff",
+          color: SEA.ink,
+          WebkitPrintColorAdjust: "exact",
+          printColorAdjust: "exact",
+        }}
+      >
+        <div style={{ height: 4, background: c.accent }} />
+        <div style={{ height: 2, background: c.primary }} />
+
+        <div style={{ padding: "14px 22px 12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
               {hotelInfo.logo && (
-                <div className="bg-white p-3 rounded shadow-sm">
-                  <img
-                    src={hotelInfo.logo}
-                    alt={hotelInfo.name}
-                    className="h-16 object-contain"
-                  />
+                <img
+                  src={hotelInfo.logo}
+                  alt={hotelInfo.name}
+                  style={{ height: 52, width: "auto", maxWidth: 72, objectFit: "contain" }}
+                />
+              )}
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-fraunces), Georgia, serif",
+                    fontSize: 21,
+                    fontStyle: "italic",
+                    lineHeight: 1.05,
+                    color: c.primary,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {hotelInfo.name}
+                </div>
+                <div
+                  style={{
+                    marginTop: 2,
+                    fontSize: 10,
+                  }}
+                >
+                  Cox&apos;s Bazar
+                </div>
+              </div>
+            </div>
+
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div
+                style={{
+                  fontFamily: "var(--font-fraunces), Georgia, serif",
+                  fontSize: 12,
+                }}
+              >
+                Invoice
+              </div>
+              <div style={{ marginTop: 2, fontSize: 16, fontWeight: 650, color: c.primary }}>
+                #{booking?.bookingNo || "N/A"}
+              </div>
+              <div style={{ marginTop: 1, fontSize: 11, color: SEA.mute }}>{invoiceCreatedLabel}</div>
+              {isPaidInFull && (
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 10,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: SEA.paid,
+                  }}
+                >
+                  Paid in full
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Hotel Name – dynamic title between logo and invoice */}
-            <div className="flex-1 text-center">
-              <h2
-                className="text-white font-bold tracking-wide m-0"
-                style={{
-                  fontSize: "clamp(1.25rem, 4vw, 1.75rem)",
-                  letterSpacing: "0.08em",
-                  textShadow: "0 1px 2px rgba(0,0,0,0.2)",
-                }}
-              >
-                {hotelInfo.name}
-              </h2>
-            </div>
+          <div
+            style={{
+              marginTop: 12,
+              height: 1,
+              background: `linear-gradient(to right, ${c.accent}, transparent)`,
+            }}
+          />
 
-            {/* Invoice Info */}
-            <div className="flex-shrink-0 text-right text-white">
-              <h1 className="text-2xl font-bold tracking-tight mb-1 uppercase" style={{ letterSpacing: "0.05em" }}>
-                Invoice
-              </h1>
-              <div className="space-y-0.5 opacity-90">
-                <p className="font-semibold text-sm">
-                  #{data?.[0]?.bookingNo || "N/A"}
-                </p>
-                {/* Replace creation date with current date */}
-                <p className="font-normal text-sm">
-                  {moment().format("D MMMM, YYYY")}
-                </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 12 }}>
+            <div>
+              <div className="inv-kicker" style={{ color: c.accent }}>
+                Guest
               </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: SEA.ink, marginTop: 3 }}>
+                {booking?.fullName || "N/A"}
+              </div>
+              <div className="inv-meta">{booking?.phone || "N/A"}</div>
+              {booking?.email && <div className="inv-meta">{booking.email}</div>}
+              {(booking?.nidPassport || booking?.nid) && (
+                <div className="inv-meta">NID · {booking?.nidPassport || booking?.nid}</div>
+              )}
+              {booking?.address && <div className="inv-meta">{booking.address}</div>}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="inv-kicker" style={{ color: c.accent }}>
+                Property
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: SEA.ink, marginTop: 3 }}>
+                {booking?.hotelInformation?.hotelName || booking?.hotelName || hotelInfo.name}
+              </div>
+              {(hotelAddress?.address1 || hotelAddress?.street) && (
+                <div className="inv-meta">{hotelAddress?.address1 || hotelAddress?.street}</div>
+              )}
+              {addressLine2 && <div className="inv-meta">{addressLine2}</div>}
+              {(booking?.hotelInformation?.reservationNo ?? booking?.hotelInformation?.contact?.email) && (
+                <div className="inv-meta">
+                  Reservation · {booking?.hotelInformation?.reservationNo ?? booking?.hotelInformation?.contact?.email}
+                </div>
+              )}
+              {(booking?.hotelInformation?.frontdeskNo ?? booking?.hotelInformation?.contact?.phone) && (
+                <div className="inv-meta">
+                  Front desk · {booking?.hotelInformation?.frontdeskNo ?? booking?.hotelInformation?.contact?.phone}
+                </div>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Content Section */}
-        <div className="px-6 py-4 print:px-6 print:py-3" style={{ fontSize: '10px' }}>
-          {/* Guest & Hotel Information */}
-          <div className="grid grid-cols-2 gap-8 mb-4">
-            <div>
-              <h2 
-                className="text-xs font-bold uppercase tracking-wider mb-2 pb-1 border-b"
-                style={{
-                  color: hotelInfo.colorScheme.tableHeader,
-                  borderColor: hotelInfo.colorScheme.accent
-                }}
-              >
-                Billed To
-              </h2>
-              <div className="space-y-1">
-                <p className="font-bold text-slate-900 text-xs">
-                  {data?.[0]?.fullName || "N/A"}
-                    </p>
-                <p className="text-slate-600 text-xs">{data?.[0]?.phone || "N/A"}</p>
-                {data?.[0]?.email && (
-                  <p className="text-slate-600 text-xs">{data?.[0]?.email}</p>
-                )}
-                {(data?.[0]?.nidPassport || data?.[0]?.nid) && (
-                  <p className="text-slate-600 text-xs">
-                    NID: {data?.[0]?.nidPassport || data?.[0]?.nid}
-                  </p>
-                )}
-                {data?.[0]?.address && (
-                  <p className="text-slate-600 text-xs">{data?.[0]?.address}</p>
-                )}
+          <div className="inv-kicker" style={{ color: c.accent, marginTop: 14 }}>
+            Stay
+          </div>
+          <table className="inv-table" style={{ marginTop: 4 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 36, textAlign: "center" }}>#</th>
+                <th style={{ textAlign: "left" }}>Room</th>
+                <th style={{ textAlign: "left" }}>Check-in</th>
+                <th style={{ textAlign: "left" }}>Check-out</th>
+                <th style={{ textAlign: "center" }}>Nights</th>
+                <th style={{ textAlign: "center" }}>Guests</th>
+                <th style={{ textAlign: "right" }}>Rate</th>
+                <th style={{ textAlign: "right" }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data?.map((row, index) => {
+                const guests = [
+                  row?.adults ? `${row.adults} adult${row.adults > 1 ? "s" : ""}` : null,
+                  row?.children ? `${row.children} child${row.children > 1 ? "ren" : ""}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ");
+                return (
+                  <tr key={index}>
+                    <td style={{ textAlign: "center", color: SEA.mute }}>{index + 1}</td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: SEA.ink }}>
+                        {row?.roomCategoryName || "N/A"}
+                      </div>
+                      {(row?.roomNumberName || row?.roomNumber) && (
+                        <div style={{ fontSize: 11, color: SEA.mute, marginTop: 2 }}>
+                          Room {row?.roomNumberName || row?.roomNumber}
+                        </div>
+                      )}
+                    </td>
+                    <td>{moment(row?.checkInDate).format("D MMM YYYY")}</td>
+                    <td>{moment(row?.checkOutDate).format("D MMM YYYY")}</td>
+                    <td style={{ textAlign: "center" }}>{row?.nights || 0}</td>
+                    <td style={{ textAlign: "center" }}>{guests || "—"}</td>
+                    <td style={{ textAlign: "right" }}>{money(row?.roomPrice)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 650 }}>{money(row?.totalBill)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {(totals.kitchenTotalBill > 0 ||
+            totals.extraBedTotalBill > 0 ||
+            totals.breakfastTotalBill > 0) && (
+            <div style={{ marginTop: 10 }}>
+              <div className="inv-kicker" style={{ color: c.accent }}>
+                Additional
               </div>
+              <table className="inv-table" style={{ marginTop: 4 }}>
+                <tbody>
+                  {totals.breakfastTotalBill > 0 && (
+                    <tr>
+                      <td>Breakfast</td>
+                      <td style={{ textAlign: "right", fontWeight: 650 }}>{money(totals.breakfastTotalBill)}</td>
+                    </tr>
+                  )}
+                  {totals.kitchenTotalBill > 0 && (
+                    <tr>
+                      <td>Kitchen</td>
+                      <td style={{ textAlign: "right", fontWeight: 650 }}>{money(totals.kitchenTotalBill)}</td>
+                    </tr>
+                  )}
+                  {totals.extraBedTotalBill > 0 && (
+                    <tr>
+                      <td>Extra bed</td>
+                      <td style={{ textAlign: "right", fontWeight: 650 }}>{money(totals.extraBedTotalBill)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
+          )}
 
-            <div className="text-right">
-              <h2 
-                className="text-xs font-bold uppercase tracking-wider mb-2 pb-1 border-b text-right"
-                style={{
-                  color: hotelInfo.colorScheme.tableHeader,
-                  borderColor: hotelInfo.colorScheme.accent
-                }}
-              >
-                Hotel Information
-              </h2>
-              <div className="space-y-1 text-right">
-                <p className="font-bold text-slate-900 text-xs">
-                  {data?.[0]?.hotelInformation?.hotelName || data?.[0]?.hotelName || hotelInfo.name}
-                </p>
-                {(data?.[0]?.hotelInformation?.address?.address1 || data?.[0]?.hotelInformation?.address?.street) && (
-                  <p className="text-slate-600 text-xs">
-                    {data?.[0]?.hotelInformation?.address?.address1 || data?.[0]?.hotelInformation?.address?.street}
-                  </p>
-                )}
-                {(() => {
-                  const addr = data?.[0]?.hotelInformation?.address;
-                  const line2 = addr?.address2 || [addr?.city, addr?.state, addr?.zipCode, addr?.country].filter(Boolean).join(", ");
-                  if (!line2) return null;
-                  return <p className="text-slate-600 text-xs">{line2}</p>;
-                })()}
-                {(data?.[0]?.hotelInformation?.reservationNo ?? data?.[0]?.hotelInformation?.contact?.email) && (
-                  <p className="text-slate-600 text-xs">
-                    Reservation No: {data?.[0]?.hotelInformation?.reservationNo ?? data?.[0]?.hotelInformation?.contact?.email}
-                  </p>
-                )}
-                {(data?.[0]?.hotelInformation?.frontdeskNo ?? data?.[0]?.hotelInformation?.contact?.phone) && (
-                  <p className="text-slate-600 text-xs">
-                    Frontdesk No: {data?.[0]?.hotelInformation?.frontdeskNo ?? data?.[0]?.hotelInformation?.contact?.phone}
-                  </p>
-                )}
-              </div>
-            </div>
-              </div>
-
-          {/* Booking Details Table */}
-          <div className="mb-3">
-            <h2 
-              className="text-xs font-bold uppercase tracking-wider mb-2"
-              style={{ color: hotelInfo.colorScheme.tableHeader }}
+          {booking?.note && (
+            <div
+              style={{
+                marginTop: 10,
+                padding: "8px 10px",
+                background: "#f7f4ea",
+                borderLeft: `3px solid ${c.accent}`,
+              }}
             >
-              Booking Details
-            </h2>
-            <div className="overflow-x-auto border border-slate-200 rounded">
-              <table className="w-full" style={{ fontSize: '9px' }}>
+              <div className="inv-kicker" style={{ color: c.primary, marginBottom: 4 }}>
+                Note
+              </div>
+              <div style={{ fontSize: 13, color: SEA.ink, lineHeight: 1.5 }}>{booking.note}</div>
+            </div>
+          )}
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 20,
+              marginTop: 12,
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="inv-kicker" style={{ color: c.accent }}>
+                Payments
+              </div>
+              {paymentInfo.empty ? (
+                <div style={{ marginTop: 10, fontSize: 13, color: SEA.mute }}>
+                  {booking?.paymentMethod || "—"}
+                  {booking?.transactionId ? ` · ${booking.transactionId}` : ""}
+                </div>
+              ) : (
+                <table className="inv-table" style={{ marginTop: 8 }}>
                   <thead>
-                  <tr 
-                    className="border-b"
-                    style={{
-                      backgroundColor: hotelInfo.colorScheme.secondary,
-                      borderColor: hotelInfo.colorScheme.accent
-                    }}
-                  >
-                    <th
-                      className="px-2 py-1.5 text-center text-xs font-bold uppercase"
-                      style={{ color: hotelInfo.colorScheme.tableHeader, width: 40 }}
-                    >
-                      SL
-                    </th>
-                    <th 
-                      className="px-2 py-1.5 text-left text-xs font-bold uppercase"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                        Room
-                      </th>
-                    <th 
-                      className="px-2 py-1.5 text-left text-xs font-bold uppercase"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                      Check-In
-                      </th>
-                    <th 
-                      className="px-2 py-1.5 text-left text-xs font-bold uppercase"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                      Check-Out
-                      </th>
-                    <th 
-                      className="px-2 py-1.5 text-center text-xs font-bold uppercase"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                        Nights
-                      </th>
-                    <th 
-                      className="px-2 py-1.5 text-center text-xs font-bold uppercase"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                      Guests
-                      </th>
-                    <th 
-                      className="px-2 py-1.5 text-right text-xs font-bold uppercase"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                      Rate
-                      </th>
-                    <th 
-                      className="px-2 py-1.5 text-right text-xs font-bold uppercase"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                      Amount
-                      </th>
+                    <tr>
+                      <th style={{ textAlign: "left" }}>Method</th>
+                      <th style={{ textAlign: "left" }}>Reference</th>
+                      <th style={{ textAlign: "right" }}>Amount</th>
                     </tr>
                   </thead>
-                <tbody className="divide-y divide-slate-100">
-                    {data?.map((booking, index) => (
-                      <tr key={index}>
-                      <td className="px-2 py-1.5 text-xs text-center text-slate-600">
-                        {index + 1}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <div className="font-semibold text-slate-900 text-xs">
-                          {booking?.roomCategoryName || "N/A"}
-                        </div>
-                        </td>
-                      <td className="px-2 py-1.5 text-xs text-slate-600">
-                        {moment(booking?.checkInDate).format("MMM DD, YY")}
-                        </td>
-                      <td className="px-2 py-1.5 text-xs text-slate-600">
-                        {moment(booking?.checkOutDate).format("MMM DD, YY")}
-                        </td>
-                      <td className="px-2 py-1.5 text-xs text-center font-semibold text-slate-700">
-                        {booking?.nights || 0}
-                        </td>
-                      <td className="px-2 py-1.5 text-xs text-center text-slate-600">
-                        {booking?.adults || 0}A{booking?.children > 0 ? `/${booking.children}C` : ''}
-                        </td>
-                      <td className="px-2 py-1.5 text-xs text-right text-slate-600">
-                        ৳{Number(booking?.roomPrice || 0).toLocaleString()}
-                        </td>
-                      <td className="px-2 py-1.5 text-xs text-right font-bold text-slate-900">
-                        ৳{Number(booking?.totalBill || 0).toLocaleString()}
-                        </td>
+                  <tbody>
+                    {paymentInfo.rows.map((r, idx) => (
+                      <tr key={`${r.method}-${r.txnDisplay}-${idx}`}>
+                        <td style={{ fontWeight: 600 }}>{r.method}</td>
+                        <td style={{ color: SEA.mute }}>{r.txnDisplay}</td>
+                        <td style={{ textAlign: "right", fontWeight: 650 }}>{money(r.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              )}
             </div>
+
+            <div style={{ width: 200, flexShrink: 0, paddingTop: 8 }}>
+              <div className="inv-total-row">
+                <span>Subtotal</span>
+                <span>{money(totals.finalTotal)}</span>
               </div>
-
-          {/* Additional Services */}
-          {(totals.kitchenTotalBill > 0 || totals.extraBedTotalBill > 0) && (
-            <div className="mb-3">
-              <h2 
-                className="text-xs font-bold uppercase tracking-wider mb-2"
-                style={{ color: hotelInfo.colorScheme.tableHeader }}
-              >
-                Additional Services
-              </h2>
-              <div 
-                className="border rounded overflow-hidden"
-                style={{ 
-                  borderColor: hotelInfo.colorScheme.accent 
-                }}
-              >
-                {totals.kitchenTotalBill > 0 && (
-                  <div 
-                    className="flex justify-between items-center px-3 py-1.5 border-b"
-                    style={{
-                      backgroundColor: hotelInfo.colorScheme.secondary,
-                      borderColor: hotelInfo.colorScheme.accent
-                    }}
-                  >
-                    <span 
-                      className="text-xs font-semibold"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                      Kitchen
-                    </span>
-                    <span className="text-xs font-bold text-slate-900">
-                      ৳{totals.kitchenTotalBill.toLocaleString()}
-                    </span>
-                  </div>
-                          )}
-                {totals.extraBedTotalBill > 0 && (
-                  <div 
-                    className="flex justify-between items-center px-3 py-1.5"
-                    style={{
-                      backgroundColor: hotelInfo.colorScheme.secondary
-                    }}
-                  >
-                    <span 
-                      className="text-xs font-semibold"
-                      style={{ color: hotelInfo.colorScheme.tableHeader }}
-                    >
-                      Extra Bed
-                    </span>
-                    <span className="text-xs font-bold text-slate-900">
-                      ৳{totals.extraBedTotalBill.toLocaleString()}
-                    </span>
-                  </div>
-                )}
+              <div className="inv-total-row">
+                <span>Paid</span>
+                <span style={{ color: SEA.paid }}>{money(totalPaidFromInvoices)}</span>
               </div>
-            </div>
-          )}
-
-          {/* Note */}
-          {data?.[0]?.note && (
-            <div className="mb-3 p-2 bg-amber-50 border-l-2 border-amber-400 rounded-r">
-              <p className="text-xs font-bold text-amber-900 uppercase mb-1">
-                Note
-              </p>
-              <p className="text-xs text-amber-900">{data[0].note}</p>
-            </div>
-          )}
-
-          {/* Payment History + Totals (same row) */}
-          <div className="mt-4 flex justify-between items-start gap-4">
-            {/* Payment Information / Payment History */}
-            <div className="flex-1 min-w-0">
               <div
-                className="pt-3 border-t"
+                className="inv-total-row inv-due"
                 style={{
-                  borderColor: hotelInfo.colorScheme.accent
+                  borderTop: `1px solid ${SEA.line}`,
+                  marginTop: 8,
+                  paddingTop: 10,
+                  color: isPaidInFull ? SEA.paid : SEA.due,
                 }}
               >
-                <p
-                  className="text-xs font-semibold mb-2 uppercase"
-                  style={{ color: hotelInfo.colorScheme.tableHeader }}
-                >
-                  Payment History
-                </p>
-                {(() => {
-              // Collect payments from ALL invoices (data array)
-              const allPayments = [];
-              (data || []).forEach((inv) => {
-                if (Array.isArray(inv.payments) && inv.payments.length > 0) {
-                  inv.payments.forEach((p) => allPayments.push(p));
-                } else if (Number(inv?.advancePayment) > 0) {
-                  allPayments.push({
-                    paymentMethod: inv.paymentMethod || "CASH",
-                    transactionId: inv.transactionId || "",
-                    amount: inv.advancePayment,
-                  });
-                }
-              });
-              if (allPayments.length === 0) {
-                return (
-                  <div className="flex justify-between items-stretch gap-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-2 rounded">
-                        <p className="text-xs font-semibold mb-0.5 uppercase" style={{ color: hotelInfo.colorScheme.tableHeader }}>Payment Method</p>
-                        <p className="font-bold text-slate-900 text-xs">{data?.[0]?.paymentMethod || "N/A"}</p>
-                      </div>
-                      <div className="p-2 rounded">
-                        <p className="text-xs font-semibold mb-0.5 uppercase" style={{ color: hotelInfo.colorScheme.tableHeader }}>Transaction</p>
-                        <p className="font-bold text-slate-900 text-xs">
-                          {data?.[0]?.paymentMethod?.toUpperCase() === "CASH" && !data?.[0]?.transactionId ? "Cash" : (data?.[0]?.transactionId || "—")}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-              // Normalize then merge by method + TnxId (same txn sums; different TnxId = separate rows). Hide CASH when total is 0.
-              const normalized = [...allPayments]
-                .map((p) => ({
-                  method: ((p.paymentMethod || p.method || "").trim() || "CASH").toUpperCase(),
-                  txnId: (p.transactionId || "").trim(),
-                  amount: Number(p.amount) || 0,
-                  createdAt: p.createdAt || null,
-                }))
-                .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
-
-              const mergeMap = new Map();
-              for (const r of normalized) {
-                // Same method + same TnxId (empty string groups "no id" payments together per method)
-                const groupKey = `${r.method}|||${r.txnId}`;
-                if (!mergeMap.has(groupKey)) {
-                  mergeMap.set(groupKey, { method: r.method, txnId: r.txnId, amount: 0 });
-                }
-                const g = mergeMap.get(groupKey);
-                g.amount += r.amount;
-              }
-
-              const methodOrder = (m) => {
-                const order = ["CASH", "BKASH", "NAGAD", "BANK", "CARD"];
-                const i = order.indexOf(m);
-                return i === -1 ? 100 + m.charCodeAt(0) : i;
-              };
-
-              const mergedRows = [...mergeMap.values()]
-                .filter((g) => !(g.method === "CASH" && (Number(g.amount) || 0) === 0))
-                .sort((a, b) => {
-                  const mo = methodOrder(a.method) - methodOrder(b.method);
-                  if (mo !== 0) return mo;
-                  return String(a.txnId || "").localeCompare(String(b.txnId || ""));
-                })
-                .map((g) => ({
-                  method: g.method,
-                  txnDisplay:
-                    g.method === "CASH" ? "—" : g.txnId ? g.txnId : "—",
-                  amount: g.amount,
-                }));
-
-              const fullPaidTotal = normalized.reduce((s, r) => s + (Number(r.amount) || 0), 0);
-
-              return (
-                <div className="w-full">
-                  <div className="overflow-x-auto border border-slate-200 rounded">
-                    <table className="w-full" style={{ fontSize: "9px" }}>
-                      <thead>
-                        <tr
-                          className="border-b"
-                          style={{
-                            backgroundColor: hotelInfo.colorScheme.secondary,
-                            borderColor: hotelInfo.colorScheme.accent,
-                          }}
-                        >
-                          <th
-                            className="px-2 py-1.5 text-center text-xs font-bold uppercase"
-                            style={{ color: hotelInfo.colorScheme.tableHeader, width: 40 }}
-                          >
-                            SL
-                          </th>
-                          <th
-                            className="px-2 py-1.5 text-left text-xs font-bold uppercase"
-                            style={{ color: hotelInfo.colorScheme.tableHeader }}
-                          >
-                            Method
-                          </th>
-                          <th
-                            className="px-2 py-1.5 text-left text-xs font-bold uppercase"
-                            style={{ color: hotelInfo.colorScheme.tableHeader }}
-                          >
-                            TnxId
-                          </th>
-                          <th
-                            className="px-2 py-1.5 text-right text-xs font-bold uppercase"
-                            style={{ color: hotelInfo.colorScheme.tableHeader }}
-                          >
-                            Amount
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {mergedRows.length === 0 ? (
-                          <tr>
-                            <td className="px-2 py-1.5 text-xs text-center text-slate-500" colSpan={4}>
-                              No payment rows to show (zero cash entries are hidden).
-                            </td>
-                          </tr>
-                        ) : (
-                          mergedRows.map((r, idx) => (
-                            <tr key={`${r.method}-${r.txnDisplay}-${idx}`}>
-                              <td className="px-2 py-1.5 text-xs text-center text-slate-600">{idx + 1}</td>
-                              <td className="px-2 py-1.5 text-xs font-semibold text-slate-900">{r.method}</td>
-                              <td className="px-2 py-1.5 text-xs text-slate-600 break-all">{r.txnDisplay}</td>
-                              <td className="px-2 py-1.5 text-xs text-right font-bold text-slate-900 tabular-nums">
-                                ৳{Number(r.amount).toLocaleString()}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                        <tr
-                          className="border-t"
-                          style={{
-                            borderColor: hotelInfo.colorScheme.accent,
-                            backgroundColor: hotelInfo.colorScheme.secondary,
-                          }}
-                        >
-                          <td className="px-2 py-1.5 text-xs" colSpan={3}>
-                            <span className="font-bold text-slate-900">Total Paid</span>
-                          </td>
-                          <td className="px-2 py-1.5 text-xs text-right font-bold text-slate-900 tabular-nums">
-                            ৳{fullPaidTotal.toLocaleString()}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
-              </div>
-            </div>
-
-            {/* Totals Section: Subtotal → VAT/Tax → Total → Total Paid → Due */}
-            <div className="w-full max-w-xs shrink-0">
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs py-0.5">
-                  <span className="text-slate-600 font-semibold">Subtotal</span>
-                  <span className="text-slate-900 font-bold tabular-nums">৳{totals.finalTotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-xs py-0.5">
-                  {/* <span className="text-slate-600 font-semibold">VAT / Tax</span> */}
-                  {/* <span className="text-slate-900 font-bold tabular-nums">৳0</span> */}
-                </div>
-                {/* Total hidden (same as Subtotal) */}
-                <div className="flex justify-between text-xs py-0.5 border-t border-slate-200 pt-2">
-                  <span className="text-slate-600 font-semibold">Total Paid</span>
-                  <span className="text-green-700 font-bold tabular-nums">৳{totalPaidFromInvoices.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs py-2 px-2.5 mt-1 rounded-md border border-red-200 bg-red-50">
-                  <span className="font-bold text-red-900">Due</span>
-                  <span className="font-bold text-red-800 tabular-nums">৳{Math.max(0, dueAmount).toLocaleString()}</span>
-                </div>
+                <span>{isPaidInFull ? "Balance" : "Due"}</span>
+                <span>{money(Math.max(0, dueAmount))}</span>
               </div>
             </div>
           </div>
 
-          {(data?.[0]?.bookedBy || data?.[0]?.bookedByID) && (
-            <div className="mt-12">
-              <p className="text-slate-600 text-xs">
-                Booked By: {data?.[0]?.bookedBy || data?.[0]?.bookedByID}
-              </p>
+          <div
+            style={{
+              marginTop: 14,
+              textAlign: "center",
+              fontFamily: "var(--font-fraunces), Georgia, serif",
+              fontStyle: "italic",
+              fontSize: 14,
+            }}
+          >
+            Thank you for staying with {booking?.hotelName || hotelInfo.name}.
+          </div>
+
+          {(booking?.bookedBy || booking?.bookedByID) && (
+            <div style={{ marginTop: 8, fontSize: 11, color: SEA.mute }}>
+              Prepared by {booking?.bookedBy || booking?.bookedByID}
             </div>
           )}
 
-          {/* Terms & Conditions (bottom) */}
-          {Array.isArray(data?.[0]?.hotelInformation?.termsAndConditions) &&
-            data?.[0]?.hotelInformation?.termsAndConditions?.length > 0 && (
-              <div className="mt-4 pt-3 border-t border-slate-200">
-                <p
-                  className="text-xs font-semibold mb-2 uppercase"
-                  style={{ color: hotelInfo.colorScheme.tableHeader }}
-                >
-                  Terms & Conditions
-                </p>
-                <ol className="list-decimal pl-5 space-y-1">
-                  {data[0].hotelInformation.termsAndConditions.map((t, idx) => (
-                    <li key={idx} className="text-[11px] text-slate-700 leading-snug">
-                      {/check-?\s*in\s*time|check-?\s*out\s*time/i.test(String(t)) ? (
-                        <span className="font-bold text-slate-900">{t}</span>
-                      ) : (
-                        t
-                      )}
+          {Array.isArray(booking?.hotelInformation?.termsAndConditions) &&
+            booking.hotelInformation.termsAndConditions.length > 0 && (
+              <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${SEA.line}` }}>
+                <div className="inv-kicker" style={{ color: c.accent, marginBottom: 4 }}>
+                  Terms
+                </div>
+                <ol style={{ margin: 0, paddingLeft: 16 }}>
+                  {booking.hotelInformation.termsAndConditions.map((t, idx) => (
+                    <li
+                      key={idx}
+                      style={{
+                        fontSize: 9,
+                        marginBottom: 2,
+                        fontWeight: /check-?\s*in\s*time|check-?\s*out\s*time/i.test(String(t))
+                          ? 700
+                          : 400,
+                      }}
+                    >
+                      {t}
                     </li>
                   ))}
                 </ol>
               </div>
             )}
 
-          {/* Footer */}
-          <div className="mt-4 pt-3 border-t border-slate-200 text-center">
-            <p className="text-xs text-slate-600 font-semibold mb-1">
-              Thank you for choosing {data?.[0]?.hotelName || hotelInfo.name}. We hope you enjoyed your stay.
-            </p>
-            <p className="text-[11px] text-slate-500">
-              This is a system-generated report and does not require a signature. Technical support provided by Cox&apos;s Web Solutions.
-            </p>
+          <div
+            style={{
+              marginTop: 8,
+              paddingTop: 8,
+              borderTop: `1px solid ${SEA.line}`,
+              textAlign: "center",
+              fontSize: 9,
+            }}
+          >
+            System generated · Cox Web Solutions
           </div>
         </div>
       </div>
 
-      {/* Print & PDF – same layout (A4, 0.3in margin, same invoice width) */}
       <style jsx global>{`
+        .inv-page {
+          background: #e8eeec;
+        }
         .invoice-card-export {
           box-sizing: border-box;
+          box-shadow: 0 18px 50px rgba(10, 61, 68, 0.12);
+        }
+        .inv-kicker {
+          font-size: 10px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          font-weight: 600;
+        }
+        .inv-meta {
+          margin-top: 1px;
+          font-size: 12px;
+          color: ${SEA.mute};
+          line-height: 1.35;
+        }
+        .inv-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 11px;
+        }
+        .inv-table th {
+          font-size: 9px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          font-weight: 650;
+          color: ${SEA.mute};
+          border-bottom: 1px solid ${SEA.line};
+          padding: 5px 4px;
+        }
+        .inv-table td {
+          padding: 6px 4px;
+          border-bottom: 1px solid ${SEA.line};
+          color: ${SEA.ink};
+          vertical-align: top;
+        }
+        .inv-total-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 12px;
+          padding: 2px 0;
+          color: ${SEA.mute};
+        }
+        .inv-total-row span:last-child {
+          font-weight: 650;
+          color: ${SEA.ink};
+          font-variant-numeric: tabular-nums;
+        }
+        .inv-due span,
+        .inv-due span:last-child {
+          font-size: 13px;
+          font-weight: 700;
         }
         @media print {
           @page {
             size: A4;
             margin: ${INVOICE_PAGE_MARGIN_IN}in;
+          }
+          .inv-page {
+            background: white !important;
           }
           body {
             background: white !important;
@@ -896,20 +739,6 @@ const Invoice = ({ params }) => {
           }
           .print\\:hidden {
             display: none !important;
-          }
-          .print\\:px-6 {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-          }
-          .print\\:py-3 {
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
-          }
-          .print\\:shadow-none {
-            box-shadow: none !important;
-          }
-          .print\\:bg-white {
-            background: white !important;
           }
         }
       `}</style>

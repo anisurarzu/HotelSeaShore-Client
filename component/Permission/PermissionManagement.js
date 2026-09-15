@@ -12,11 +12,10 @@ import {
   Checkbox,
   message,
   Input,
-  Spin,
+  Skeleton,
   Tag,
   Dropdown,
   Tabs,
-  Card,
   Space,
   Typography,
   Empty,
@@ -27,7 +26,6 @@ import {
   DownOutlined,
   PlusOutlined,
   SafetyOutlined,
-  AppstoreOutlined,
 } from "@ant-design/icons";
 import { useFormik } from "formik";
 import coreAxios from "@/utils/axiosInstance";
@@ -35,6 +33,7 @@ import {
   HOTEL_PAGES,
   RESTAURANT_PAGES,
 } from "@/config/dashboardPages";
+import "../AdminOps.css";
 
 const { Text } = Typography;
 
@@ -181,8 +180,8 @@ const PermissionManagement = () => {
       dataIndex: "permissionName",
       key: "permissionName",
       render: (text) => (
-        <Space>
-          <SafetyOutlined className="text-blue-500" />
+        <Space size={8}>
+          <SafetyOutlined style={{ color: "#0b5c66" }} />
           <Text strong>{text}</Text>
         </Space>
       ),
@@ -191,16 +190,17 @@ const PermissionManagement = () => {
       title: "Page access",
       dataIndex: "permissions",
       key: "pages",
-      render: (permissions) => (
-        <Space wrap size={[4, 4]}>
-          {permissions?.filter((p) => p.viewAccess).slice(0, 5).map((p, i) => (
-            <Tag key={i} color="blue">{p.pageName || p.pageKey}</Tag>
-          ))}
-          {permissions?.filter((p) => p.viewAccess).length > 5 && (
-            <Tag>+{permissions.filter((p) => p.viewAccess).length - 5} more</Tag>
-          )}
-        </Space>
-      ),
+      render: (permissions) => {
+        const visible = permissions?.filter((p) => p.viewAccess) || [];
+        return (
+          <div className="hs-pm__tags">
+            {visible.slice(0, 5).map((p, i) => (
+              <Tag key={i}>{p.pageName || p.pageKey}</Tag>
+            ))}
+            {visible.length > 5 && <Tag>+{visible.length - 5} more</Tag>}
+          </div>
+        );
+      },
     },
     {
       title: "Actions",
@@ -237,33 +237,68 @@ const PermissionManagement = () => {
     },
   ];
 
+  const viewCount = roles.reduce((sum, r) => {
+    const n = (r.permissions || []).filter((p) => p.viewAccess).length;
+    return sum + n;
+  }, 0);
+
   return (
-    <div className="p-4 md:p-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <AppstoreOutlined />
-            Role & Permission Management
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Create roles and assign page access + content permissions (view, add, edit, delete) per page.
+    <div className="hs-pm">
+      <div className="hs-pm__toolbar">
+        <div className="hs-pm__title-block">
+          <p className="hs-pm__eyebrow">Security</p>
+          <h2 className="hs-pm__title">Settings</h2>
+          <p className="hs-pm__meta">
+            Role templates and page-level access (view, add, edit, delete)
           </p>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-          Add Role
-        </Button>
+        <div className="hs-pm__controls">
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+            Add role
+          </Button>
+        </div>
       </div>
 
-      {initialLoad ? (
-        <Card><Spin tip="Loading roles..." /></Card>
-      ) : (
-        <Card title="Roles" className="shadow-sm">
+      <div className="hs-pm__kpis">
+        <div className="hs-pm__kpi">
+          <p className="hs-pm__kpi-label">Roles</p>
+          <p className="hs-pm__kpi-value">{roles.length}</p>
+        </div>
+        <div className="hs-pm__kpi hs-pm__kpi--soft">
+          <p className="hs-pm__kpi-label">Hotel pages</p>
+          <p className="hs-pm__kpi-value">{HOTEL_PAGES.length}</p>
+        </div>
+        <div className="hs-pm__kpi hs-pm__kpi--sand">
+          <p className="hs-pm__kpi-label">Restaurant pages</p>
+          <p className="hs-pm__kpi-value">{RESTAURANT_PAGES.length}</p>
+        </div>
+        <div className="hs-pm__kpi">
+          <p className="hs-pm__kpi-label">Granted views</p>
+          <p className="hs-pm__kpi-value">{viewCount}</p>
+        </div>
+      </div>
+
+      <div className="hs-pm__panel">
+        <div className="hs-pm__panel-head">
+          <h3>Role catalog</h3>
+          <span>{roles.length} role{roles.length === 1 ? "" : "s"}</span>
+        </div>
+        {initialLoad ? (
+          <div style={{ padding: 16 }}>
+            <Skeleton active paragraph={{ rows: 6 }} />
+          </div>
+        ) : (
           <Table
             columns={columns}
             dataSource={roles}
             rowKey="_id"
             loading={loading}
-            pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `Total ${t} roles` }}
+            size="small"
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (t) => `Total ${t} roles`,
+            }}
             locale={{
               emptyText: (
                 <Empty
@@ -277,91 +312,147 @@ const PermissionManagement = () => {
               ),
             }}
           />
-        </Card>
-      )}
+        )}
+      </div>
 
       <Modal
-        title={isEditing ? "Edit Role" : "Create Role"}
+        className="hs-booking-modal"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">Access control</p>
+            <h2 className="hs-booking-modal__title">
+              {isEditing ? "Edit role" : "Create role"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              Name the role and set page permissions
+            </p>
+          </div>
+        }
         open={visible}
         onCancel={() => setVisible(false)}
         footer={null}
-        width={720}
+        width={760}
         destroyOnClose
+        centered
       >
-        <form onSubmit={formik.handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-gray-700 font-medium mb-2">Role name</label>
-            <Input
-              placeholder="e.g. Hotel Manager, Reception"
-              value={formik.values.permissionName}
-              onChange={(e) => formik.setFieldValue("permissionName", e.target.value)}
-              required
-            />
+        <form className="hs-bf" onSubmit={formik.handleSubmit}>
+          <div className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Role</h3>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__field">
+                <label className="hs-bf__label">Role name</label>
+                <Input
+                  placeholder="e.g. Hotel Manager, Reception"
+                  value={formik.values.permissionName}
+                  onChange={(e) =>
+                    formik.setFieldValue("permissionName", e.target.value)
+                  }
+                  required
+                />
+              </div>
+            </div>
           </div>
 
-          <Tabs
-            activeKey={activeTab}
-            onChange={setActiveTab}
-            items={[
-              { key: "hotel", label: "Hotel pages" },
-              { key: "restaurant", label: "Restaurant pages" },
-            ]}
-          />
-
-          <div className="max-h-[60vh] overflow-y-auto border rounded-lg p-2 mt-2">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="text-left p-2 font-semibold">Page</th>
-                  <th className="text-center p-2 w-20">View</th>
-                  <th className="text-center p-2 w-20">Add</th>
-                  <th className="text-center p-2 w-20">Edit</th>
-                  <th className="text-center p-2 w-20">Delete</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentPages.map((page) => {
-                  const perm = formik.values.permissions.find(
-                    (p) => (p.pageKey || getPageKey(p)) === page.key
-                  ) || defaultPagePermission(page);
-                  return (
-                    <tr key={page.key} className="border-b hover:bg-gray-50/50">
-                      <td className="p-2 font-medium">{page.label}</td>
-                      <td className="p-2 text-center">
-                        <Checkbox
-                          checked={!!perm.viewAccess}
-                          onChange={(e) => setPagePermission(page.key, "viewAccess", e.target.checked)}
-                        />
-                      </td>
-                      <td className="p-2 text-center">
-                        <Checkbox
-                          checked={!!perm.insertAccess}
-                          onChange={(e) => setPagePermission(page.key, "insertAccess", e.target.checked)}
-                        />
-                      </td>
-                      <td className="p-2 text-center">
-                        <Checkbox
-                          checked={!!perm.editAccess}
-                          onChange={(e) => setPagePermission(page.key, "editAccess", e.target.checked)}
-                        />
-                      </td>
-                      <td className="p-2 text-center">
-                        <Checkbox
-                          checked={!!perm.deleteAccess}
-                          onChange={(e) => setPagePermission(page.key, "deleteAccess", e.target.checked)}
-                        />
-                      </td>
+          <div className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Page matrix</h3>
+              <p className="hs-bf__section-hint">Toggle access per page</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                size="small"
+                items={[
+                  { key: "hotel", label: "Hotel pages" },
+                  { key: "restaurant", label: "Restaurant pages" },
+                ]}
+              />
+              <div className="hs-pm__matrix-wrap">
+                <table className="hs-pm__matrix">
+                  <thead>
+                    <tr>
+                      <th>Page</th>
+                      <th className="is-center">View</th>
+                      <th className="is-center">Add</th>
+                      <th className="is-center">Edit</th>
+                      <th className="is-center">Delete</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {currentPages.map((page) => {
+                      const perm =
+                        formik.values.permissions.find(
+                          (p) => (p.pageKey || getPageKey(p)) === page.key
+                        ) || defaultPagePermission(page);
+                      return (
+                        <tr key={page.key}>
+                          <td>
+                            <span className="hs-pm__page-name">{page.label}</span>
+                          </td>
+                          <td className="is-center">
+                            <Checkbox
+                              checked={!!perm.viewAccess}
+                              onChange={(e) =>
+                                setPagePermission(
+                                  page.key,
+                                  "viewAccess",
+                                  e.target.checked
+                                )
+                              }
+                            />
+                          </td>
+                          <td className="is-center">
+                            <Checkbox
+                              checked={!!perm.insertAccess}
+                              onChange={(e) =>
+                                setPagePermission(
+                                  page.key,
+                                  "insertAccess",
+                                  e.target.checked
+                                )
+                              }
+                            />
+                          </td>
+                          <td className="is-center">
+                            <Checkbox
+                              checked={!!perm.editAccess}
+                              onChange={(e) =>
+                                setPagePermission(
+                                  page.key,
+                                  "editAccess",
+                                  e.target.checked
+                                )
+                              }
+                            />
+                          </td>
+                          <td className="is-center">
+                            <Checkbox
+                              checked={!!perm.deleteAccess}
+                              onChange={(e) =>
+                                setPagePermission(
+                                  page.key,
+                                  "deleteAccess",
+                                  e.target.checked
+                                )
+                              }
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="hs-bf__footer">
             <Button onClick={() => setVisible(false)}>Cancel</Button>
             <Button type="primary" htmlType="submit" loading={loading}>
-              {isEditing ? "Update Role" : "Create Role"}
+              {isEditing ? "Save changes" : "Create role"}
             </Button>
           </div>
         </form>

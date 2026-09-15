@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Card, Col, Row, Typography, Skeleton } from "antd";
+import { Card, Col, Row, Skeleton } from "antd";
 import {
   CalendarOutlined,
   DollarOutlined,
@@ -12,6 +12,7 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import "./DashboardHome.css";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -46,8 +47,6 @@ function getBookingRoomKey(booking) {
   }
   return null;
 }
-
-const { Title, Text } = Typography;
 
 const DashboardHome = ({ hotelID = 1 }) => {
   const [loading, setLoading] = useState(true);
@@ -383,28 +382,28 @@ const DashboardHome = ({ hotelID = 1 }) => {
 
   const summaryCards = [
     {
-      title: "TODAY'S FTB BOOKINGS",
+      title: "Today's FTB Bookings",
       amount: sumTotalBill(todayFtbBookings),
       count: todayFtbBookings.length,
-      gradient: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)",
+      accent: "lagoon",
     },
     {
-      title: "TODAY'S ALL BOOKINGS",
+      title: "Today's All Bookings",
       amount: sumTotalBill(todayAllBookings),
       count: todayAllBookings.length,
-      gradient: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+      accent: "green",
     },
     {
-      title: "30 DAYS FTB BOOKINGS",
+      title: "30 Days FTB Bookings",
       amount: sumTotalBill(last30FtbBookings),
       count: last30FtbBookings.length,
-      gradient: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+      accent: "sand",
     },
     {
-      title: "30 DAYS ALL BOOKINGS",
+      title: "30 Days All Bookings",
       amount: sumTotalBill(last30AllBookings),
       count: last30AllBookings.length,
-      gradient: "linear-gradient(135deg, #ef4444 0%, #f87171 100%)",
+      accent: "ocean",
     },
   ];
 
@@ -444,46 +443,36 @@ const DashboardHome = ({ hotelID = 1 }) => {
       value: statsData.todayBookingAmount,
       isCurrency: true,
       icon: DollarOutlined,
-      color: "#b45309",
-      bgColor: "#fffbeb",
-      gradient: "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
+      accent: "ocean",
     },
     {
-      label: `Current Month (${currentMonthName}) Booking Amount`,
+      label: `Month (${currentMonthName}) Booking Amount`,
       value: statsData.currentMonthBookingAmount,
       isCurrency: true,
       icon: DollarOutlined,
-      color: "#92400e",
-      bgColor: "#fef3c7",
-      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      accent: "lagoon",
     },
     {
       label: "Today's Check-ins",
       value: statsData.todayCheckIns,
       isCurrency: false,
       icon: UserOutlined,
-      color: "#b45309",
-      bgColor: "#fffbeb",
-      gradient: "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
+      accent: "soft",
     },
     {
       label: "Today's Check-outs",
       value: statsData.todayCheckOuts,
       isCurrency: false,
       icon: CalendarOutlined,
-      color: "#92400e",
-      bgColor: "#fef3c7",
-      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      accent: "sand",
     },
     {
-      label: `Today's Occupancy Rate (${statsData.todayOccupiedRoomsCount}/${totalRooms} rooms)`,
+      label: `Today's Occupancy (${statsData.todayOccupiedRoomsCount}/${totalRooms})`,
       value: statsData.todayOccupancyRate,
       isCurrency: false,
       isPercentage: true,
       icon: HomeOutlined,
-      color: "#b45309",
-      bgColor: "#fffbeb",
-      gradient: "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
+      accent: "green",
       footnote:
         statsData.todayOccupiedRoomNames?.length
           ? `Rooms: ${statsData.todayOccupiedRoomNames
@@ -492,24 +481,20 @@ const DashboardHome = ({ hotelID = 1 }) => {
           : "No rooms occupied today",
     },
     {
-      label: "Current Month Occupancy Rate",
+      label: "Month Occupancy Rate",
       value: statsData.currentMonthOccupancyRate,
       isCurrency: false,
       isPercentage: true,
       icon: HomeOutlined,
-      color: "#92400e",
-      bgColor: "#fef3c7",
-      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      accent: "deep",
     },
     {
-      label: `Tomorrow Occupancy Rate (${statsData.tomorrowOccupiedRoomsCount}/${totalRooms} rooms)`,
+      label: `Tomorrow Occupancy (${statsData.tomorrowOccupiedRoomsCount}/${totalRooms})`,
       value: statsData.tomorrowOccupancyRate,
       isCurrency: false,
       isPercentage: true,
       icon: HomeOutlined,
-      color: "#92400e",
-      bgColor: "#fef3c7",
-      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      accent: "ocean",
       footnote:
         statsData.tomorrowOccupiedRoomNames?.length
           ? `Rooms: ${statsData.tomorrowOccupiedRoomNames
@@ -519,210 +504,118 @@ const DashboardHome = ({ hotelID = 1 }) => {
     },
   ];
 
-  const StatCard = ({ label, value, isCurrency, isPercentage, icon: Icon, color, bgColor, gradient, footnote }) => (
-    <Card
-      hoverable
-      bordered={false}
-      className="stat-card"
-      style={{
-        borderRadius: "16px",
-        background: "#ffffff",
-        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-        border: "1px solid #F3F4F6",
-        overflow: "hidden",
-        transition: "all 0.3s ease",
-      }}
-      bodyStyle={{ padding: "20px" }}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <Text
-            className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-3"
-            style={{ letterSpacing: "0.05em" }}
-          >
-            {label}
-          </Text>
-          <Title
-            level={3}
-            className="m-0"
-            style={{
-              fontSize: "32px",
-              fontWeight: 700,
-              background: gradient,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-              lineHeight: "1.2",
-            }}
-          >
-            {isCurrency ? `৳${value.toLocaleString()}` : isPercentage ? `${value}%` : value.toLocaleString()}
-          </Title>
-          {footnote ? (
-            <Text className="text-[11px] text-gray-500 mt-1 block">
-              {footnote}
-            </Text>
-          ) : null}
-        </div>
-        <div
-          className="p-3 rounded-xl"
-          style={{
-            background: gradient,
-            boxShadow: `0 4px 14px 0 ${color}40`,
-          }}
-        >
-          <Icon style={{ fontSize: "24px", color: "#ffffff" }} />
-        </div>
-      </div>
-    </Card>
-  );
-
+  const formatValue = (stat) => {
+    if (stat.isCurrency) return `৳${stat.value.toLocaleString()}`;
+    if (stat.isPercentage) return `${stat.value}%`;
+    return stat.value.toLocaleString();
+  };
 
   return (
-    <div className="min-h-screen" style={{ background: "linear-gradient(to bottom, #F9FAFB, #FFFFFF)", padding: "16px" }}>
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <Title
-            level={1}
-            className="m-0 mb-2"
-            style={{
-              fontSize: "32px",
-              fontWeight: 800,
-              background: "linear-gradient(135deg, #b45309 0%, #92400e 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            Hotel Dashboard
-          </Title>
-          <Text className="text-gray-500 text-base">
-            Monitor your hotel's performance and bookings in real-time
-          </Text>
+    <div>
+      <div className="hs-dash-intro">
+        <h2>Operational Overview</h2>
+        <p>Monitor hotel performance and bookings in real time</p>
+      </div>
+
+      {loading ? (
+        <Row gutter={[10, 10]}>
+          {[1, 2, 3, 4, 5, 6].map((item) => (
+            <Col xs={24} sm={12} lg={8} key={item}>
+              <Card size="small">
+                <Skeleton active paragraph={{ rows: 1 }} title={false} />
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      ) : (
+        <div className="hs-kpi-grid">
+          {stats.map((stat, idx) => {
+            const Icon = stat.icon;
+            return (
+              <div key={idx} className={`hs-kpi hs-kpi--${stat.accent}`}>
+                <div className="hs-kpi__top">
+                  <p className="hs-kpi__label">{stat.label}</p>
+                  <span className="hs-kpi__icon">
+                    <Icon />
+                  </span>
+                </div>
+                <div>
+                  <p className="hs-kpi__value">{formatValue(stat)}</p>
+                  {stat.footnote ? (
+                    <p className="hs-kpi__meta">{stat.footnote}</p>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
         </div>
+      )}
 
-        {/* Stats Grid */}
-        <div>
-          {loading ? (
-            <Row gutter={[16, 16]}>
-              {[1, 2, 3, 4, 5, 6].map((item) => (
-                <Col xs={24} sm={12} lg={8} key={item}>
-                  <Card style={{ borderRadius: "16px" }}>
-                    <Skeleton active paragraph={{ rows: 2 }} />
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          ) : (
-            <Row gutter={[16, 16]}>
-              {stats.map((stat, idx) => (
-                <Col xs={24} sm={12} lg={8} key={idx}>
-                  <StatCard {...stat} />
-                </Col>
-              ))}
-            </Row>
-          )}
+      <div className="hs-section">
+        <div className="hs-section__head">
+          <h3>Booking Period Summary</h3>
+          <p>FTB vs all bookings</p>
         </div>
-
-        {/* Screenshot-style booking overview section */}
-        <div className="mt-8">
-          <Row gutter={[16, 16]}>
-            {summaryCards.map((item, idx) => (
-              <Col xs={24} sm={12} lg={6} key={`summary-${idx}`}>
-                <Card
-                  bordered={false}
-                  style={{
-                    borderRadius: 12,
-                    background: item.gradient,
-                    color: "#fff",
-                    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-                  }}
-                  bodyStyle={{ padding: 16 }}
-                >
-                  <div style={{ fontSize: 14, fontWeight: 700, opacity: 0.95 }}>{item.title}</div>
-                  <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1.2, marginTop: 8 }}>
-                    ৳{item.amount.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: 13, opacity: 0.95, marginTop: 6 }}>
-                    {item.count} bookings
-                  </div>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-
-          <Card
-            className="mt-6"
-            bordered={false}
-            style={{
-              borderRadius: 12,
-              background: "#f8fafc",
-              boxShadow: "0 8px 20px rgba(0,0,0,0.06)",
-            }}
-            bodyStyle={{ padding: 16 }}
-          >
-            <Title level={3} style={{ textAlign: "center", marginBottom: 14 }}>
-              User-wise Booking Overview
-            </Title>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
-                <thead>
-                  <tr style={{ background: "linear-gradient(90deg,#4f46e5,#6366f1)", color: "#fff" }}>
-                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>User ID</th>
-                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>Today's Booking</th>
-                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>Last 7 Days Booking</th>
-                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>Last 30 Days Booking</th>
-                    <th style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>Overall Booking</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userBookingRows.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        style={{
-                          padding: "14px 8px",
-                          border: "1px solid #d1d5db",
-                          textAlign: "center",
-                          background: "#fff",
-                        }}
-                      >
-                        No user booking data found
-                      </td>
-                    </tr>
-                  ) : (
-                    userBookingRows.map((row, idx) => (
-                      <tr key={row.userId} style={{ background: idx % 2 === 0 ? "#e0e7ff" : "#ede9fe" }}>
-                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center", fontWeight: 600 }}>
-                          {row.userId}
-                        </td>
-                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>
-                          ৳{row.todayAmount.toLocaleString()}
-                        </td>
-                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>
-                          ৳{row.sevenAmount.toLocaleString()}
-                        </td>
-                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>
-                          ৳{row.thirtyAmount.toLocaleString()}
-                        </td>
-                        <td style={{ padding: "10px 8px", border: "1px solid #d1d5db", textAlign: "center", fontWeight: 700 }}>
-                          ৳{row.overallAmount.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+        <div
+          className="hs-kpi-grid"
+          style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+        >
+          {summaryCards.map((item, idx) => (
+            <div key={`summary-${idx}`} className={`hs-kpi hs-kpi--${item.accent}`}>
+              <div className="hs-kpi__top">
+                <p className="hs-kpi__label">{item.title}</p>
+              </div>
+              <div>
+                <p className="hs-kpi__value">৳{item.amount.toLocaleString()}</p>
+                <p className="hs-kpi__meta">{item.count} bookings</p>
+              </div>
             </div>
-          </Card>
+          ))}
         </div>
       </div>
 
-      <style>{`
-        .stat-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
-        }
-      `}</style>
+      <div className="hs-section">
+        <div className="hs-section__head">
+          <h3>User-wise Booking Overview</h3>
+          <p>Performance by booking operator</p>
+        </div>
+        <div className="hs-panel">
+          <div className="hs-table-wrap">
+            <table className="hs-table">
+              <thead>
+                <tr>
+                  <th>User ID</th>
+                  <th className="num">Today</th>
+                  <th className="num">Last 7 Days</th>
+                  <th className="num">Last 30 Days</th>
+                  <th className="num">Overall</th>
+                </tr>
+              </thead>
+              <tbody>
+                {userBookingRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="empty">
+                      No user booking data found
+                    </td>
+                  </tr>
+                ) : (
+                  userBookingRows.map((row) => (
+                    <tr key={row.userId}>
+                      <td className="id-cell">{row.userId}</td>
+                      <td className="num">৳{row.todayAmount.toLocaleString()}</td>
+                      <td className="num">৳{row.sevenAmount.toLocaleString()}</td>
+                      <td className="num">৳{row.thirtyAmount.toLocaleString()}</td>
+                      <td className="num total-cell">
+                        ৳{row.overallAmount.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

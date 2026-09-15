@@ -8,15 +8,19 @@ import {
   Input,
   InputNumber,
   Popconfirm,
-  Space,
   Pagination,
   DatePicker,
   Select,
-  Row,
-  Col,
   Skeleton,
 } from "antd";
-import { EditOutlined, DeleteOutlined, PlusOutlined, LeftOutlined, RightOutlined, DownloadOutlined } from "@ant-design/icons";
+import {
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  LeftOutlined,
+  RightOutlined,
+  DownloadOutlined,
+} from "@ant-design/icons";
 import { useFormik } from "formik";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -29,6 +33,13 @@ import { toast } from "react-toastify";
 import NoPermissionBanner from "../Permission/NoPermissionBanner";
 import DailySummary from "../DailySummary";
 import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
+import "../DailyOps.css";
+
+const fmtMoney = (n) =>
+  `৳${Number(n || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 
 const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
   const contentPermissions = contentPermissionsFromProps
@@ -515,107 +526,103 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
     }
   };
 
-  const headerCellStyle = {
-    backgroundColor: "#2563eb",
-    color: "#ffffff",
-    fontWeight: 600,
-    fontSize: "11px",
-    textAlign: "center",
-  };
-
   const expenseColumns = [
     {
-      title: "SL No.",
+      title: "Sl",
       dataIndex: "sl",
       key: "sl",
-      width: 70,
+      width: 56,
       align: "center",
       render: (_value, _record, index) =>
         (pagination.current - 1) * pagination.pageSize + index + 1,
-      onHeaderCell: () => ({ style: headerCellStyle }),
     },
     {
-      title: "Expense Category",
+      title: "Category",
       dataIndex: "expenseCategory",
       key: "expenseCategory",
-      render: (category) => category || "N/A",
-      onHeaderCell: () => ({ style: headerCellStyle }),
+      width: 150,
+      render: (category) => (
+        <span className="hs-de__cat-chip" title={category || "N/A"}>
+          {category || "N/A"}
+        </span>
+      ),
     },
     {
-      title: "Expense Details",
+      title: "Details",
       dataIndex: "expenseReason",
       key: "expenseReason",
-      onHeaderCell: () => ({ style: headerCellStyle }),
+      ellipsis: true,
     },
     {
-      title: "Amount (BDT)",
+      title: "Amount",
       dataIndex: "expenseAmount",
       key: "expenseAmount",
       align: "right",
-      render: (amount) => `৳${amount?.toFixed(2) || 0}`,
+      width: 120,
+      render: (amount) => (
+        <span className="hs-de__amount">{fmtMoney(amount)}</span>
+      ),
       sorter: (a, b) => (a.expenseAmount || 0) - (b.expenseAmount || 0),
-      onHeaderCell: () => ({ style: headerCellStyle }),
     },
     {
       title: "Actions",
       key: "actions",
       align: "center",
-      onHeaderCell: () => ({ style: headerCellStyle }),
+      width: 100,
       render: (_, record) => (
-        <Space size="middle">
+        <div className="hs-de__actions">
           {canEdit && (
             <Button
               type="primary"
+              size="small"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
-              style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
             />
           )}
           {canDelete && (
             <Popconfirm
-              title="Are you sure to delete this expense?"
+              title="Delete this expense?"
               onConfirm={() => handleDelete(record)}
               okText="Yes"
               cancelText="No"
             >
-              <Button danger icon={<DeleteOutlined />} />
+              <Button danger size="small" icon={<DeleteOutlined />} />
             </Popconfirm>
           )}
-        </Space>
+        </div>
       ),
     },
   ];
 
   const categoryColumns = [
     {
-      title: "Category Name",
+      title: "Category",
       dataIndex: "name",
       key: "name",
+      ellipsis: true,
     },
     {
-      title: "Actions",
+      title: "",
       key: "actions",
+      width: 88,
+      align: "center",
       render: (_, record) => (
-        <Space size="small">
+        <div className="hs-de__actions">
           <Button
             type="primary"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEditCategory(record)}
-            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
           />
           <Popconfirm
-            title="Are you sure to delete this category?"
+            title="Delete this category?"
             onConfirm={() => handleDeleteCategory(record)}
             okText="Yes"
-            cancelText="No">
-            <Button
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            />
+            cancelText="No"
+          >
+            <Button danger size="small" icon={<DeleteOutlined />} />
           </Popconfirm>
-        </Space>
+        </div>
       ),
     },
   ];
@@ -786,71 +793,66 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
-        <div className="flex-shrink-0">
+    <div className="hs-de">
+      <div className="hs-de__toolbar">
+        <div className="hs-de__title-block">
+          <p className="hs-de__eyebrow">Operations</p>
+          <h2 className="hs-de__title">Daily Expense</h2>
+          <p className="hs-de__meta">
+            {dayjs(dailySumDate).tz("Asia/Dhaka").format("dddd, D MMMM YYYY")}
+          </p>
+        </div>
+        <div className="hs-de__controls">
           {canInsert && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setIsEditing(false);
+                formik.resetForm({
+                  values: {
+                    expenseItems: [defaultExpenseRow()],
+                    expenseDate: dayjs(dailySumDate),
+                    createdAt: dayjs(),
+                    expenseCategory: "",
+                    expenseReason: "",
+                    expenseAmount: 0,
+                  },
+                });
+                setVisible(true);
+              }}
+            >
+              Add expense
+            </Button>
+          )}
+          <div className="hs-de__date-nav">
+            <Button
+              type="default"
+              icon={<LeftOutlined />}
+              onClick={() => setDailySumDate(dailySumDate.subtract(1, "day"))}
+              aria-label="Previous day"
+            />
+            <DatePicker
+              value={dailySumDate}
+              onChange={(date) =>
+                setDailySumDate(
+                  date
+                    ? dayjs(date).tz("Asia/Dhaka").startOf("day")
+                    : dayjs().tz("Asia/Dhaka").startOf("day")
+                )
+              }
+              allowClear={false}
+              format="DD MMM YYYY"
+            />
+            <Button
+              type="default"
+              icon={<RightOutlined />}
+              onClick={() => setDailySumDate(dailySumDate.add(1, "day"))}
+              aria-label="Next day"
+            />
+          </div>
           <Button
             type="primary"
-            onClick={() => {
-              setIsEditing(false);
-              formik.resetForm({
-                values: {
-                  expenseItems: [defaultExpenseRow()],
-                  expenseDate: dayjs(dailySumDate),
-                  createdAt: dayjs(),
-                  expenseCategory: "",
-                  expenseReason: "",
-                  expenseAmount: 0,
-                },
-              });
-              setVisible(true);
-            }}
-            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
-            icon={<PlusOutlined />}>
-            Add New Expense
-          </Button>
-          )}
-        </div>
-
-        <div className="flex-1 flex justify-center min-w-0">
-          {dailySumLoading ? (
-            <div className="text-center">
-              <Skeleton.Input active size="small" className="mb-1 block mx-auto" />
-              <Skeleton.Input active size="small" className="block mx-auto" style={{ width: 120 }} />
-            </div>
-          ) : (
-            <div className="text-center">
-              <span className="text-sm text-gray-600 block">Daily total</span>
-              <span className="font-semibold text-lg text-gray-800">
-                {dailySum != null ? `৳${Number(dailySum.totalAmount || 0).toFixed(2)} (${dailySum.expenseCount || 0} items)` : "—"}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <Button
-            type="default"
-            icon={<LeftOutlined />}
-            onClick={() => setDailySumDate(dailySumDate.subtract(1, "day"))}
-            aria-label="Previous day"
-          />
-          <DatePicker
-            value={dailySumDate}
-            onChange={(date) => setDailySumDate(date ? dayjs(date).tz("Asia/Dhaka").startOf("day") : dayjs().tz("Asia/Dhaka").startOf("day"))}
-            allowClear={false}
-            format="DD MMM YYYY"
-          />
-          <Button
-            type="default"
-            icon={<RightOutlined />}
-            onClick={() => setDailySumDate(dailySumDate.add(1, "day"))}
-            aria-label="Next day"
-          />
-          <Button
-            type="primary"
-            size="small"
             icon={<DownloadOutlined />}
             onClick={downloadDailyExpensePdf}
             disabled={loading || dailySumLoading}
@@ -860,60 +862,49 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
         </div>
       </div>
 
-      <Row gutter={16}>
-        {/* Expense Info Table - 2/3 width */}
-        <Col xs={24} lg={16}>
-          {loading || dailySumLoading ? (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-200 text-sm">
-                  <thead>
-                    <tr style={{ backgroundColor: "#2563eb", color: "#ffffff" }}>
-                      <th className="border border-gray-200 px-3 py-2 text-center font-semibold text-xs w-[70px]">
-                        SL No.
-                      </th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-xs w-[140px]">
-                        Expense Category
-                      </th>
-                      <th className="border border-gray-200 px-3 py-2 text-left font-semibold text-xs min-w-[160px]">
-                        Expense Details
-                      </th>
-                      <th className="border border-gray-200 px-3 py-2 text-right font-semibold text-xs w-[110px]">
-                        Amount (BDT)
-                      </th>
-                      <th className="border border-gray-200 px-3 py-2 text-center font-semibold text-xs w-[110px]">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...Array(10)].map((_, i) => (
-                      <tr key={i}>
-                        <td className="border border-gray-200 px-3 py-2 align-middle">
-                          <Skeleton.Input active size="small" className="w-full" block />
-                        </td>
-                        <td className="border border-gray-200 px-3 py-2 align-middle">
-                          <Skeleton.Input active size="small" className="w-full" block />
-                        </td>
-                        <td className="border border-gray-200 px-3 py-2 align-middle">
-                          <Skeleton.Input active size="small" className="w-full" block />
-                        </td>
-                        <td className="border border-gray-200 px-3 py-2 align-middle">
-                          <Skeleton.Input active size="small" className="w-full" block />
-                        </td>
-                        <td className="border border-gray-200 px-3 py-2 align-middle">
-                          <Skeleton.Input active size="small" className="w-full" block />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+      <div className="hs-de__kpis">
+        <div className="hs-de__kpi">
+          <p className="hs-de__kpi-label">Daily total</p>
+          <p className="hs-de__kpi-value">
+            {dailySumLoading
+              ? "…"
+              : fmtMoney(dailySum?.totalAmount ?? totalExpensesAmountForDate)}
+          </p>
+        </div>
+        <div className="hs-de__kpi hs-de__kpi--soft">
+          <p className="hs-de__kpi-label">Line items</p>
+          <p className="hs-de__kpi-value">
+            {dailySumLoading
+              ? "…"
+              : dailySum?.expenseCount ?? expenseCountForDate}
+          </p>
+        </div>
+        <div className="hs-de__kpi hs-de__kpi--sand">
+          <p className="hs-de__kpi-label">Daily income</p>
+          <p className="hs-de__kpi-value">{fmtMoney(dailyIncomeForSummary)}</p>
+        </div>
+        <div className="hs-de__kpi hs-de__kpi--due">
+          <p className="hs-de__kpi-label">Categories</p>
+          <p className="hs-de__kpi-value">{categories.length}</p>
+        </div>
+      </div>
+
+      <div className="hs-de__layout">
+        <div className="hs-de__main">
+          <div className="hs-de__panel">
+            <div className="hs-de__panel-head">
+              <h3>Expense register</h3>
+              <span>
+                {expenseCountForDate} item{expenseCountForDate === 1 ? "" : "s"}
+              </span>
             </div>
-          ) : (
-            <>
-              <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
+            {loading || dailySumLoading ? (
+              <div className="hs-de__scroll" style={{ padding: 12 }}>
+                <Skeleton active paragraph={{ rows: 8 }} />
+              </div>
+            ) : (
+              <>
+                <div className="hs-de__scroll">
                   <Table
                     columns={expenseColumns}
                     dataSource={expensesForDate.slice(
@@ -928,95 +919,105 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
                           Total ({expenseCountForDate})
                         </Table.Summary.Cell>
                         <Table.Summary.Cell index={3} align="right">
-                          {`৳${totalExpensesAmountForDate.toFixed(2)}`}
+                          {fmtMoney(totalExpensesAmountForDate)}
                         </Table.Summary.Cell>
                         <Table.Summary.Cell index={4} />
                       </Table.Summary.Row>
                     )}
                     rowClassName={(record) => {
-                      const color = categoryColorMap[(record?.expenseCategory || "").trim()] || "default";
+                      const color =
+                        categoryColorMap[(record?.expenseCategory || "").trim()] ||
+                        "default";
                       return `expense-row expense-cat-${color}`;
                     }}
                     onChange={handleTableChange}
-                    scroll={{ x: true }}
-                    bordered
+                    scroll={{ x: 640 }}
+                    size="small"
+                    locale={{ emptyText: "No expenses for this date" }}
+                  />
+                </div>
+                <div className="hs-de__pager">
+                  <Pagination
+                    current={pagination.current}
+                    pageSize={pagination.pageSize}
+                    total={expensesForDate?.length || 0}
+                    showSizeChanger
+                    showTotal={(total, range) =>
+                      `${range[0]}-${range[1]} of ${total}`
+                    }
+                    onChange={(page, pageSize) =>
+                      setPagination((p) => ({
+                        ...p,
+                        current: page,
+                        pageSize: pageSize || p.pageSize,
+                      }))
+                    }
                     size="small"
                   />
                 </div>
-              </div>
-
-              <Pagination
-                current={pagination.current}
-                pageSize={pagination.pageSize}
-                total={expensesForDate?.length || 0}
-                showSizeChanger
-                showTotal={(total, range) => `${range[0]}-${range[1]} of ${total}`}
-                onChange={(page, pageSize) =>
-                  setPagination((p) => ({
-                    ...p,
-                    current: page,
-                    pageSize: pageSize || p.pageSize,
-                  }))
-                }
-                className="mt-4"
-              />
-
-              <div className="mt-6">
-                <DailySummary
-                  selectedDate={dailySumDate}
-                  dailyIncome={dailyIncomeForSummary}
-                  hideSave
-                />
-              </div>
-            </>
-          )}
-        </Col>
-
-        {/* Expense Category Table - 1/3 width */}
-        <Col xs={24} lg={8}>
-          <div className="mb-2">
-            <Button
-              type="primary"
-              size="small"
-              onClick={() => {
-                setIsEditingCategory(false);
-                categoryFormik.resetForm({
-                  values: {
-                    name: "",
-                  },
-                });
-                setCategoryModalVisible(true);
-              }}
-              style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
-              icon={<PlusOutlined />}>
-              Add Category
-            </Button>
+              </>
+            )}
           </div>
-          {categoryLoading ? (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden p-4">
-              <Skeleton active paragraph={{ rows: 6 }} />
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table
-                  columns={categoryColumns}
-                  dataSource={categories}
-                  pagination={false}
-                  rowKey={(record) => record._id}
-                  scroll={{ x: true }}
-                  bordered
-                  size="small"
-                />
-              </div>
-            </div>
-          )}
-        </Col>
-      </Row>
 
-      {/* Expense Modal */}
+          <div style={{ marginTop: 12 }}>
+            <DailySummary
+              selectedDate={dailySumDate}
+              dailyIncome={dailyIncomeForSummary}
+              hideSave
+            />
+          </div>
+        </div>
+
+        <div className="hs-de__side">
+          <div className="hs-de__panel">
+            <div className="hs-de__panel-head">
+              <h3>Categories</h3>
+              <Button
+                type="primary"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setIsEditingCategory(false);
+                  categoryFormik.resetForm({ values: { name: "" } });
+                  setCategoryModalVisible(true);
+                }}
+              >
+                Add
+              </Button>
+            </div>
+            {categoryLoading ? (
+              <div style={{ padding: 12 }}>
+                <Skeleton active paragraph={{ rows: 5 }} />
+              </div>
+            ) : (
+              <Table
+                columns={categoryColumns}
+                dataSource={categories}
+                pagination={false}
+                rowKey={(record) => record._id}
+                size="small"
+                locale={{ emptyText: "No categories yet" }}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
       <Modal
-        title={isEditing ? "Edit Expense" : "Add New Expense"}
+        className="hs-booking-modal"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">Expense</p>
+            <h2 className="hs-booking-modal__title">
+              {isEditing ? "Edit expense" : "Add expense"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              {isEditing
+                ? "Update category, reason, and amount"
+                : "Post one or more expense lines for the selected day"}
+            </p>
+          </div>
+        }
         open={visible}
         onCancel={() => {
           setVisible(false);
@@ -1032,200 +1033,284 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
           });
         }}
         footer={null}
-        width={isEditing ? 520 : 720}>
-        <form onSubmit={formik.handleSubmit}>
+        width={isEditing ? 520 : 760}
+        destroyOnClose
+        centered
+      >
+        <form className="hs-bf" onSubmit={formik.handleSubmit}>
           {isEditing ? (
-            <>
-              <div className="mb-4">
-                <label className="block mb-1 font-medium">Expense Category</label>
-                <Select
-                  name="expenseCategory"
-                  style={{ width: "100%" }}
-                  placeholder="Select expense category"
-                  value={formik.values.expenseCategory}
-                  onChange={(value) => formik.setFieldValue("expenseCategory", value)}
-                  required>
-                  {categories.map((cat) => (
-                    <Select.Option key={cat._id} value={cat.name}>
-                      {cat.name}
-                    </Select.Option>
-                  ))}
-                </Select>
+            <div className="hs-bf__section">
+              <div className="hs-bf__section-head">
+                <h3 className="hs-bf__section-title">Expense details</h3>
               </div>
-              <div className="mb-4">
-                <label className="block mb-1 font-medium">Expense Reason</label>
-                <Input.TextArea
-                  name="expenseReason"
-                  rows={3}
-                  placeholder="Enter expense reason"
-                  value={formik.values.expenseReason}
-                  onChange={formik.handleChange}
-                  required
-                />
+              <div className="hs-bf__section-body">
+                <div className="hs-bf__grid-2">
+                  <div className="hs-bf__field">
+                    <label className="hs-bf__label">Category</label>
+                    <Select
+                      style={{ width: "100%" }}
+                      placeholder="Select category"
+                      value={formik.values.expenseCategory || undefined}
+                      onChange={(value) =>
+                        formik.setFieldValue("expenseCategory", value)
+                      }
+                    >
+                      {categories.map((cat) => (
+                        <Select.Option key={cat._id} value={cat.name}>
+                          {cat.name}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="hs-bf__field">
+                    <label className="hs-bf__label">Amount (BDT)</label>
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      formatter={(value) =>
+                        `৳ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      }
+                      parser={(value) => value.replace(/৳\s?|(,*)/g, "")}
+                      step={0.01}
+                      precision={2}
+                      min={0}
+                      value={formik.values.expenseAmount}
+                      onChange={(value) =>
+                        formik.setFieldValue("expenseAmount", value)
+                      }
+                    />
+                  </div>
+                  <div className="hs-bf__field hs-bf__span-2">
+                    <label className="hs-bf__label">Reason</label>
+                    <Input.TextArea
+                      name="expenseReason"
+                      rows={3}
+                      placeholder="Enter expense reason"
+                      value={formik.values.expenseReason}
+                      onChange={formik.handleChange}
+                    />
+                  </div>
+                  <div className="hs-bf__field">
+                    <label className="hs-bf__label">Expense date</label>
+                    <DatePicker
+                      style={{ width: "100%" }}
+                      value={formik.values.expenseDate}
+                      onChange={(date) =>
+                        formik.setFieldValue("expenseDate", date)
+                      }
+                    />
+                  </div>
+                  <div className="hs-bf__field">
+                    <label className="hs-bf__label">Created at</label>
+                    <DatePicker
+                      style={{ width: "100%" }}
+                      showTime
+                      value={formik.values.createdAt}
+                      onChange={(date) =>
+                        formik.setFieldValue("createdAt", date)
+                      }
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="mb-4">
-                <label className="block mb-1 font-medium">Amount (BDT)</label>
-                <InputNumber
-                  name="expenseAmount"
-                  style={{ width: "100%" }}
-                  formatter={(value) =>
-                    `৳ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                  }
-                  parser={(value) => value.replace(/৳\s?|(,*)/g, "")}
-                  step={0.01}
-                  precision={2}
-                  min={0}
-                  value={formik.values.expenseAmount}
-                  onChange={(value) => formik.setFieldValue("expenseAmount", value)}
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block mb-1 font-medium">Expense Date</label>
-                <DatePicker
-                  name="expenseDate"
-                  style={{ width: "100%" }}
-                  value={formik.values.expenseDate}
-                  onChange={(date) => formik.setFieldValue("expenseDate", date)}
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block mb-1 font-medium">Created At</label>
-                <DatePicker
-                  name="createdAt"
-                  style={{ width: "100%" }}
-                  showTime
-                  value={formik.values.createdAt}
-                  onChange={(date) => formik.setFieldValue("createdAt", date)}
-                />
-              </div>
-            </>
+            </div>
           ) : (
             <>
-              <div className="mb-4">
-                <label className="block mb-1 font-medium">Expense Date</label>
-                <DatePicker
-                  style={{ width: "100%" }}
-                  value={formik.values.expenseDate}
-                  onChange={(date) => formik.setFieldValue("expenseDate", date ? dayjs(date).tz("Asia/Dhaka").startOf("day") : dayjs().tz("Asia/Dhaka").startOf("day"))}
-                  required
-                />
+              <div className="hs-bf__section">
+                <div className="hs-bf__section-head">
+                  <h3 className="hs-bf__section-title">Posting date</h3>
+                </div>
+                <div className="hs-bf__section-body">
+                  <div className="hs-bf__field">
+                    <label className="hs-bf__label">Expense date</label>
+                    <DatePicker
+                      style={{ width: "100%", maxWidth: 240 }}
+                      value={formik.values.expenseDate}
+                      onChange={(date) =>
+                        formik.setFieldValue(
+                          "expenseDate",
+                          date
+                            ? dayjs(date).tz("Asia/Dhaka").startOf("day")
+                            : dayjs().tz("Asia/Dhaka").startOf("day")
+                        )
+                      }
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="mb-2 flex justify-between items-center">
-                <span className="font-medium text-gray-700">Category-wise expense (reason & amount)</span>
-                <Button type="dashed" icon={<PlusOutlined />} onClick={addExpenseRow} size="small">
-                  Add row
-                </Button>
-              </div>
-              <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="border-b border-gray-200 px-3 py-2 text-left font-medium text-gray-600 w-[180px]">Category</th>
-                      <th className="border-b border-gray-200 px-3 py-2 text-left font-medium text-gray-600">Reason</th>
-                      <th className="border-b border-gray-200 px-3 py-2 text-left font-medium text-gray-600 w-[120px]">Amount (BDT)</th>
-                      <th className="border-b border-gray-200 px-3 py-2 w-[56px]"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(formik.values.expenseItems || []).map((row, index) => (
-                      <tr key={index} className="border-b border-gray-100 last:border-b-0">
-                        <td className="px-3 py-2 align-top">
-                          <Select
-                            style={{ width: "100%", minWidth: 160 }}
-                            placeholder="Select category"
-                            value={row.expenseCategory || undefined}
-                            onChange={(value) => updateExpenseRow(index, "expenseCategory", value)}
-                            allowClear>
-                            {categories.map((cat) => (
-                              <Select.Option key={cat._id} value={cat.name}>
-                                {cat.name}
-                              </Select.Option>
-                            ))}
-                          </Select>
-                        </td>
-                        <td className="px-3 py-2 align-top">
-                          <Input
-                            placeholder="Reason"
-                            value={row.expenseReason || ""}
-                            onChange={(e) => updateExpenseRow(index, "expenseReason", e.target.value)}
-                          />
-                        </td>
-                        <td className="px-3 py-2 align-top">
-                          <InputNumber
-                            style={{ width: "100%", minWidth: 100 }}
-                            placeholder="0"
-                            min={0}
-                            step={0.01}
-                            precision={2}
-                            value={row.expenseAmount}
-                            onChange={(value) => updateExpenseRow(index, "expenseAmount", value ?? 0)}
-                          />
-                        </td>
-                        <td className="px-2 py-2 align-top">
-                          <Button
-                            type="text"
-                            danger
-                            size="small"
-                            icon={<DeleteOutlined />}
-                            onClick={() => removeExpenseRow(index)}
-                            disabled={(formik.values.expenseItems || []).length <= 1}
-                            aria-label="Remove row"
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="hs-bf__section">
+                <div className="hs-bf__section-head">
+                  <h3 className="hs-bf__section-title">Line items</h3>
+                  <Button
+                    type="dashed"
+                    icon={<PlusOutlined />}
+                    onClick={addExpenseRow}
+                    size="small"
+                  >
+                    Add row
+                  </Button>
+                </div>
+                <div className="hs-bf__section-body" style={{ padding: 0 }}>
+                  <div className="hs-de__scroll">
+                    <table className="hs-de__lines">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 180 }}>Category</th>
+                          <th>Reason</th>
+                          <th style={{ width: 120 }}>Amount</th>
+                          <th style={{ width: 44 }} />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(formik.values.expenseItems || []).map((row, index) => (
+                          <tr key={index}>
+                            <td>
+                              <Select
+                                style={{ width: "100%", minWidth: 140 }}
+                                placeholder="Category"
+                                value={row.expenseCategory || undefined}
+                                onChange={(value) =>
+                                  updateExpenseRow(
+                                    index,
+                                    "expenseCategory",
+                                    value
+                                  )
+                                }
+                                allowClear
+                              >
+                                {categories.map((cat) => (
+                                  <Select.Option key={cat._id} value={cat.name}>
+                                    {cat.name}
+                                  </Select.Option>
+                                ))}
+                              </Select>
+                            </td>
+                            <td>
+                              <Input
+                                placeholder="Reason"
+                                value={row.expenseReason || ""}
+                                onChange={(e) =>
+                                  updateExpenseRow(
+                                    index,
+                                    "expenseReason",
+                                    e.target.value
+                                  )
+                                }
+                              />
+                            </td>
+                            <td>
+                              <InputNumber
+                                style={{ width: "100%" }}
+                                placeholder="0"
+                                min={0}
+                                step={0.01}
+                                precision={2}
+                                value={row.expenseAmount}
+                                onChange={(value) =>
+                                  updateExpenseRow(
+                                    index,
+                                    "expenseAmount",
+                                    value ?? 0
+                                  )
+                                }
+                              />
+                            </td>
+                            <td>
+                              <Button
+                                type="text"
+                                danger
+                                size="small"
+                                icon={<DeleteOutlined />}
+                                onClick={() => removeExpenseRow(index)}
+                                disabled={
+                                  (formik.values.expenseItems || []).length <= 1
+                                }
+                                aria-label="Remove row"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </>
           )}
 
-          <Button
-            type="primary"
-            loading={loading}
-            htmlType="submit"
-            style={{ width: "100%", backgroundColor: "#2563eb", borderColor: "#2563eb" }}
-            className="mt-2">
-            {isEditing ? "Update Expense" : "Add Expense(s)"}
-          </Button>
+          <div className="hs-bf__footer">
+            <Button
+              onClick={() => {
+                setVisible(false);
+                formik.resetForm();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="primary" loading={loading} htmlType="submit">
+              {isEditing ? "Save changes" : "Post expense(s)"}
+            </Button>
+          </div>
         </form>
       </Modal>
 
-      {/* Category Modal */}
       <Modal
-        title={isEditingCategory ? "Edit Category" : "Add New Category"}
+        className="hs-booking-modal"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">Master data</p>
+            <h2 className="hs-booking-modal__title">
+              {isEditingCategory ? "Edit category" : "Add category"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              Organize expense lines by category
+            </p>
+          </div>
+        }
         open={categoryModalVisible}
         onCancel={() => {
           setCategoryModalVisible(false);
-          categoryFormik.resetForm({
-            values: {
-              name: "",
-            },
-          });
+          categoryFormik.resetForm({ values: { name: "" } });
         }}
-        footer={null}>
-        <form onSubmit={categoryFormik.handleSubmit}>
-          <div className="mb-4">
-            <label className="block mb-1 font-medium">Category Name</label>
-            <Input
-              name="name"
-              placeholder="Enter category name"
-              value={categoryFormik.values.name}
-              onChange={categoryFormik.handleChange}
-              required
-            />
+        footer={null}
+        width={420}
+        destroyOnClose
+        centered
+      >
+        <form className="hs-bf" onSubmit={categoryFormik.handleSubmit}>
+          <div className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Category</h3>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__field">
+                <label className="hs-bf__label">Name</label>
+                <Input
+                  name="name"
+                  placeholder="e.g. Utilities, Supplies"
+                  value={categoryFormik.values.name}
+                  onChange={categoryFormik.handleChange}
+                  required
+                />
+              </div>
+            </div>
           </div>
-
-          <Button
-            type="primary"
-            loading={categoryLoading}
-            htmlType="submit"
-            style={{ width: "100%", backgroundColor: "#2563eb", borderColor: "#2563eb" }}
-            className="mt-2">
-            {isEditingCategory ? "Update Category" : "Add Category"}
-          </Button>
+          <div className="hs-bf__footer">
+            <Button
+              onClick={() => {
+                setCategoryModalVisible(false);
+                categoryFormik.resetForm({ values: { name: "" } });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="primary"
+              loading={categoryLoading}
+              htmlType="submit"
+            >
+              {isEditingCategory ? "Save changes" : "Add category"}
+            </Button>
+          </div>
         </form>
       </Modal>
     </div>

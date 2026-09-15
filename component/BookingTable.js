@@ -27,7 +27,7 @@ const BookingTable = ({
       render: (serialNo, record) => (
         <div className="flex items-center justify-center">
           <Link href={`/dashboard/${record.bookingNo}`} passHref>
-            <p className="text-blue-600 cursor-pointer mr-2">
+            <p className="text-hs-ocean cursor-pointer mr-2">
               {record.bookingNo}
             </p>
           </Link>
@@ -35,7 +35,7 @@ const BookingTable = ({
             <CopyToClipboard
               text={record.bookingNo}
               onCopy={() => message.success("Copied!")}>
-              <CopyOutlined className="cursor-pointer text-blue-600" />
+              <CopyOutlined className="cursor-pointer text-hs-ocean" />
             </CopyToClipboard>
           </Tooltip>
         </div>

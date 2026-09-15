@@ -9,7 +9,7 @@ export default function UserBookingInfo({ userTableData, title }) {
       <div className="bg-white p-4 lg:p-6 rounded-lg shadow-lg mt-4 w-full"> {/* Full width card */}
         <Title
           level={4}
-          className="text-[#6366F1] mb-4 text-center lg:text-left"> {/* Changed to indigo color */}
+          className="text-[#0D6B74] mb-4 text-center lg:text-left"> {/* Changed to indigo color */}
           {title}
         </Title>
 
@@ -20,7 +20,7 @@ export default function UserBookingInfo({ userTableData, title }) {
               {/* Table Header */}
               <thead>
                 <tr style={{ 
-                  backgroundColor: "#6366F1", // Indigo header
+                  backgroundColor: "#0D6B74", // Indigo header
                   color: "white",
                 }}>
                   <th className="border border-gray-200 text-center p-3"> {/* Increased padding */}
@@ -69,7 +69,7 @@ export default function UserBookingInfo({ userTableData, title }) {
                     <td className="border border-gray-200 text-center p-3">
                       ৳{user.totalBillForLast30DaysByFTB?.toLocaleString()}
                     </td>
-                    <td className="border border-gray-200 text-center p-3 font-semibold text-[#6366F1]">
+                    <td className="border border-gray-200 text-center p-3 font-semibold text-[#0D6B74]">
                       ৳{user.totalBillOverall?.toLocaleString()}
                     </td>
                   </tr>

@@ -695,20 +695,20 @@
 //                 {/* Round Paid Seal */}
 //                 {/* Round Paid Seal with Date */}
 //                 <div className="flex justify-center my-6">
-//                   <div className="relative w-36 h-36 rounded-full border-4 border-blue-700 flex flex-col items-center justify-center rotate-[-10deg]">
+//                   <div className="relative w-36 h-36 rounded-full border-4 border-hs-ocean flex flex-col items-center justify-center rotate-[-10deg]">
 //                     {/* PAID text */}
-//                     <span className="text-blue-700 font-extrabold text-3xl tracking-widest">
+//                     <span className="text-hs-ocean font-extrabold text-3xl tracking-widest">
 //                       PAID
 //                     </span>
 //                     {/* Date text */}
-//                     <span className="text-blue-600 font-semibold text-sm mt-1">
+//                     <span className="text-hs-ocean font-semibold text-sm mt-1">
 //                       {new Date().toLocaleDateString("en-GB")}
 //                     </span>
 
 //                     {/* Inner ring */}
-//                     <div className="absolute inset-3 rounded-full border-2 border-blue-500"></div>
+//                     <div className="absolute inset-3 rounded-full border-2 border-hs-lagoon"></div>
 //                     {/* Ink spread effect */}
-//                     <div className="absolute inset-0 rounded-full border-2 border-blue-300 opacity-40 blur-sm"></div>
+//                     <div className="absolute inset-0 rounded-full border-2 border-teal-300 opacity-40 blur-sm"></div>
 //                   </div>
 //                 </div>
 

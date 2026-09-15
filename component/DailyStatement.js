@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Button, message, Alert, Tooltip, InputNumber, Skeleton } from "antd";
+import { Button, message, Tooltip, InputNumber, Skeleton } from "antd";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -11,14 +11,21 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
-import { CopyOutlined } from "@ant-design/icons";
-import { DownloadOutlined } from "@ant-design/icons";
+import {
+  CopyOutlined,
+  DownloadOutlined,
+  LeftOutlined,
+  RightOutlined,
+} from "@ant-design/icons";
 import Link from "next/link";
 import DatePicker from "antd/es/date-picker";
 import { useFormik } from "formik";
 import DailySummary from "./DailySummary";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
 import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
+import "./DailyOps.css";
+
+const fmt = (n) => Number(n || 0).toLocaleString();
 
 const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => {
   const contentPermissions = contentPermissionsFromProps
@@ -831,37 +838,41 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   }
 
   return (
-    <div className="p-4 bg-white">
-      {/* Header Section */}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-800">Daily Statement</h2>
-        <div className="flex items-center gap-2">
-          <Button
-            type="default"
-            onClick={handlePreviousDay}
-            size="small"
-          >
-            ←
-          </Button>
-          <DatePicker
-            value={selectedDate}
-            onChange={handleDateChange}
-            format="YYYY-MM-DD"
-            allowClear={false}
-            size="small"
-            style={{ width: "140px" }}
-            disabledDate={(d) => d && d.isAfter(todayBD(), "day")}
-          />
-          <Button
-            type="default"
-            onClick={handleNextDay}
-            size="small"
-          >
-            →
-          </Button>
+    <div className="hs-ds">
+      <div className="hs-ds__toolbar">
+        <div className="hs-ds__title-block">
+          <p className="hs-ds__eyebrow">Cash desk</p>
+          <h2 className="hs-ds__title">Daily Statement</h2>
+          <p className="hs-ds__meta">
+            {dayjs(selectedDate).tz("Asia/Dhaka").format("dddd, D MMMM YYYY")}
+            {" · "}
+            {(regularDisplay?.length || 0) + (unpaidDisplay?.length || 0)} bookings
+          </p>
+        </div>
+        <div className="hs-ds__controls">
+          <div className="hs-ds__date-nav">
+            <Button
+              type="default"
+              icon={<LeftOutlined />}
+              onClick={handlePreviousDay}
+              aria-label="Previous day"
+            />
+            <DatePicker
+              value={selectedDate}
+              onChange={handleDateChange}
+              format="DD MMM YYYY"
+              allowClear={false}
+              disabledDate={(d) => d && d.isAfter(todayBD(), "day")}
+            />
+            <Button
+              type="default"
+              icon={<RightOutlined />}
+              onClick={handleNextDay}
+              aria-label="Next day"
+            />
+          </div>
           <Button
             type="primary"
-            size="small"
             icon={<DownloadOutlined />}
             onClick={downloadDailyStatementAndSummaryPdf}
           >
@@ -870,198 +881,133 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
         </div>
       </div>
 
-      {/* Main Table - constrained width on large screens for better readability */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden max-w-full lg:max-w-6xl lg:mx-auto">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[980px]" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
+      <div className="hs-ds__kpis">
+        <div className="hs-ds__kpi">
+          <p className="hs-ds__kpi-label">In-house</p>
+          <p className="hs-ds__kpi-value">{regularDisplay?.length || 0}</p>
+        </div>
+        <div className="hs-ds__kpi hs-ds__kpi--soft">
+          <p className="hs-ds__kpi-label">Unpaid / overdue</p>
+          <p className="hs-ds__kpi-value">{unpaidDisplay?.length || 0}</p>
+        </div>
+        <div className="hs-ds__kpi hs-ds__kpi--sand">
+          <p className="hs-ds__kpi-label">Daily cash</p>
+          <p className="hs-ds__kpi-value">
+            ৳{fmt((regularTotals?.dailyAmount || 0) + (unpaidTotals?.dailyAmount || 0))}
+          </p>
+        </div>
+        <div className="hs-ds__kpi hs-ds__kpi--due">
+          <p className="hs-ds__kpi-label">Open due</p>
+          <p className="hs-ds__kpi-value is-due">
+            ৳{fmt((regularTotals?.duePayment || 0) + (unpaidTotals?.duePayment || 0))}
+          </p>
+        </div>
+      </div>
+
+      <div className="hs-ds__panel">
+        <div className="hs-ds__panel-head">
+          <h3>Collection board</h3>
+          <span>Live cash · mobile · bank</span>
+        </div>
+        <div className="hs-ds__scroll">
+          <table className="hs-ds__table">
             <thead>
-              <tr style={{ backgroundColor: '#2563eb' }}>
-                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Sl No.
-                </th>
-                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Room
-                </th>
-                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Invoice
-                </th>
-                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Guest
-                </th>
-                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Phone
-                </th>
-                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Check In
-                </th>
-                <th className="px-2 py-1.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Check Out
-                </th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Nights
-                </th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Total
-                </th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Bkash
-                </th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Bank
-                </th>
-                <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Total Paid
-                </th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Daily Cash
-                </th>
-                <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#dc2626', backgroundColor: '#fee2e2', fontWeight: 600, fontSize: '10px' }}>
-                  Due Amount
-                </th>
-                <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600, fontSize: '10px' }}>
-                  Update
-                </th>
+              <tr>
+                <th className="is-center">Sl</th>
+                <th className="is-center">Room</th>
+                <th>Invoice</th>
+                <th>Guest</th>
+                <th>Phone</th>
+                <th>Check in</th>
+                <th>Check out</th>
+                <th className="is-center">Nights</th>
+                <th className="is-num">Total</th>
+                <th className="is-num">Bkash</th>
+                <th className="is-num">Bank</th>
+                <th className="is-num">Total paid</th>
+                <th className="is-center">Daily cash</th>
+                <th className="is-num is-due">Due</th>
+                <th className="is-center">Update</th>
               </tr>
             </thead>
-
             <tbody>
               {loading ? (
                 Array.from({ length: 8 }).map((_, rowIdx) => (
                   <tr key={`skeleton-${rowIdx}`}>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 24, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 32, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 70, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 88, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 70, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 28, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20, textAlign: "right" }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 60, height: 20, textAlign: "right" }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 50, height: 20 }} />
-                    </td>
-                    <td className="px-2 py-1.5 border border-gray-300">
-                      <Skeleton.Input active size="small" style={{ width: "100%", minWidth: 56, height: 20 }} />
-                    </td>
+                    {Array.from({ length: 15 }).map((__, colIdx) => (
+                      <td key={colIdx}>
+                        <Skeleton.Input
+                          active
+                          size="small"
+                          style={{ width: "100%", minWidth: 28, height: 18 }}
+                        />
+                      </td>
+                    ))}
                   </tr>
                 ))
               ) : bookings.regularInvoice?.length === 0 &&
                 bookings.unPaidInvoice?.length === 0 ? (
                 <tr>
-                  <td colSpan="15" className="text-center p-4">
-                    <Alert message="No bookings found" type="info" />
+                  <td colSpan="15" className="hs-ds__empty">
+                    No bookings found for this date
                   </td>
                 </tr>
               ) : (
                 <>
-                  {/* Regular Invoices */}
                   {regularDisplay.map((booking, index) => {
                     const totals = getCumulativeTotals(booking, selectedDate);
                     const remainingAmount =
                       (booking.totalBill || 0) - totals.totalPaid;
                     const bookingId = booking._id || booking.id;
                     const slNo = index + 1;
+                    const invoice =
+                      booking.bookingNo || booking.bookingNumber || "N/A";
 
                     return (
-                      <tr
-                        key={bookingId}
-                        className="hover:bg-gray-50 transition-colors"
-                      >
-                        <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 border border-gray-300">
-                          {slNo}
+                      <tr key={bookingId}>
+                        <td className="is-center">{slNo}</td>
+                        <td className="is-center">
+                          <strong>
+                            {booking.roomNumberName || booking.roomNumber || 0}
+                          </strong>
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 font-medium border border-gray-300">
-                          {booking.roomNumberName || booking.roomNumber || 0}
-                        </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
-                          <span className="flex items-center justify-center gap-1.5">
+                        <td>
+                          <span className="hs-ds__invoice">
                             <Link
                               target="_blank"
                               href={`/dashboard/${booking.bookingNo || booking.bookingNumber || booking._id}`}
-                              passHref
-                              className="text-blue-600 hover:text-blue-800 cursor-pointer font-medium text-xs"
                             >
-                              {booking.bookingNo || booking.bookingNumber || "N/A"}
+                              {invoice}
                             </Link>
-                            <Tooltip title="Click to copy">
+                            <Tooltip title="Copy invoice">
                               <CopyToClipboard
                                 text={booking.bookingNo || booking.bookingNumber || ""}
                                 onCopy={() => message.success("Copied!")}
                               >
-                                <CopyOutlined className="text-blue-600 hover:text-blue-800 cursor-pointer text-xs" />
+                                <CopyOutlined />
                               </CopyToClipboard>
                             </Tooltip>
                           </span>
                         </td>
-                        <td
-                          className="px-2 py-1.5 text-xs text-gray-700 border border-gray-300 max-w-[140px] truncate"
-                          title={booking.fullName || booking.guestName || ""}
-                        >
-                          {booking.fullName || booking.guestName || "N/A"}
+                        <td>
+                          <div
+                            className="hs-ds__guest"
+                            title={booking.fullName || booking.guestName || ""}
+                          >
+                            {booking.fullName || booking.guestName || "N/A"}
+                          </div>
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {booking.phone || booking.phoneNumber || "N/A"}
-                        </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {moment(booking.checkInDate).format("D MMM")}
-                        </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {moment(booking.checkOutDate).format("D MMM")}
-                        </td>
-                        <td className="px-3 py-2.5 text-center text-xs text-gray-700 border border-gray-300">
-                          {booking.nights || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
-                          {booking.totalBill || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {totals.bkash || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {totals.bank || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right border border-gray-300">
-                          {/* <InputNumber
-                            min={0}
-                            value={totals.totalPaid}
-                            disabled
-                            style={{ width: "80px", backgroundColor: "#f3f4f6", color: "#000", textAlign: "right" }}
-                            inputStyle={{ textAlign: "right" }}
-                          /> */}
-                            {totals.totalPaid || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-center border border-gray-300">
+                        <td>{booking.phone || booking.phoneNumber || "N/A"}</td>
+                        <td>{moment(booking.checkInDate).format("D MMM")}</td>
+                        <td>{moment(booking.checkOutDate).format("D MMM")}</td>
+                        <td className="is-center">{booking.nights || 0}</td>
+                        <td className="is-num">{fmt(booking.totalBill)}</td>
+                        <td className="is-num">{fmt(totals.bkash)}</td>
+                        <td className="is-num">{fmt(totals.bank)}</td>
+                        <td className="is-num">{fmt(totals.totalPaid)}</td>
+                        <td className="is-center">
                           <InputNumber
+                            className="hs-ds__cash-input"
                             min={0}
                             max={remainingAmount}
                             value={formik.values[bookingId]?.dailyAmount ?? ""}
@@ -1084,116 +1030,87 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                               setDailyIncome(newDailyIncome);
                             }}
                             disabled={totals.duePayment <= 0 || !canEdit}
-                            style={{ width: "70px", color: "#000", textAlign: "right", fontSize: "10px" }}
-                            inputStyle={{ textAlign: "right" }}
                           />
                         </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
-                          {totals.duePayment}
-                        </td>
-                        <td className="px-3 py-2.5 text-center border border-gray-300">
+                        <td className="is-num is-due">{fmt(totals.duePayment)}</td>
+                        <td className="is-center">
                           {canEdit && (
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => handleUpdate(bookingId)}
-                            loading={submitting[bookingId]}
-                            disabled={totals.duePayment <= 0}
-                            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
-                          >
-                            Update
-                          </Button>
+                            <Button
+                              className="hs-ds__update-btn"
+                              type="primary"
+                              size="small"
+                              onClick={() => handleUpdate(bookingId)}
+                              loading={submitting[bookingId]}
+                              disabled={totals.duePayment <= 0}
+                            >
+                              Update
+                            </Button>
                           )}
                         </td>
                       </tr>
                     );
                   })}
 
-                  {/* No pagination */}
-                  {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
-                    <tr>
-                  <td colSpan="15" className="p-2"></td>
+                  {unpaidDisplay.length > 0 && regularDisplay.length > 0 && (
+                    <tr className="hs-ds__section-gap">
+                      <td colSpan="15" />
                     </tr>
                   )}
 
-                  {/* Unpaid Invoices */}
                   {unpaidDisplay.map((booking, index) => {
                     const totals = getCumulativeTotals(booking, selectedDate);
                     const remainingAmount =
                       (booking.totalBill || 0) - totals.totalPaid;
                     const bookingId = booking._id || booking.id;
                     const slNo = index + 1;
+                    const invoice =
+                      booking.bookingNo || booking.bookingNumber || "N/A";
 
                     return (
-                      <tr
-                        key={bookingId}
-                        className="transition-colors"
-                        style={{ backgroundColor: "#fee2e2" }}
-                      >
-                        <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 border border-gray-300">
-                          {slNo}
+                      <tr key={bookingId} className="is-unpaid">
+                        <td className="is-center">{slNo}</td>
+                        <td className="is-center">
+                          <strong>
+                            {booking.roomNumberName || booking.roomNumber || 0}
+                          </strong>
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-center text-xs text-gray-800 font-medium border border-gray-300">
-                          {booking.roomNumberName || booking.roomNumber || 0}
-                        </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
-                          <span className="flex items-center justify-center gap-1.5">
+                        <td>
+                          <span className="hs-ds__invoice">
                             <Link
                               target="_blank"
                               href={`/dashboard/${booking.bookingNo || booking.bookingNumber || booking._id}`}
-                              passHref
-                              className="text-blue-600 hover:text-blue-800 cursor-pointer font-medium text-xs"
                             >
-                              {booking.bookingNo || booking.bookingNumber || "N/A"}
+                              {invoice}
                             </Link>
-                            <Tooltip title="Click to copy">
+                            <Tooltip title="Copy invoice">
                               <CopyToClipboard
                                 text={booking.bookingNo || booking.bookingNumber || ""}
                                 onCopy={() => message.success("Copied!")}
                               >
-                                <CopyOutlined className="text-blue-600 hover:text-blue-800 cursor-pointer text-xs" />
+                                <CopyOutlined />
                               </CopyToClipboard>
                             </Tooltip>
                           </span>
                         </td>
-                        <td
-                          className="px-2 py-1.5 text-xs text-gray-700 border border-gray-300 max-w-[140px] truncate"
-                          title={booking.fullName || booking.guestName || ""}
-                        >
-                          {booking.fullName || booking.guestName || "N/A"}
+                        <td>
+                          <div
+                            className="hs-ds__guest"
+                            title={booking.fullName || booking.guestName || ""}
+                          >
+                            {booking.fullName || booking.guestName || "N/A"}
+                          </div>
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {booking.phone || booking.phoneNumber || "N/A"}
-                        </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {moment(booking.checkInDate).format("D MMM")}
-                        </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                          {moment(booking.checkOutDate).format("D MMM")}
-                        </td>
-                        <td className="px-3 py-2.5 text-center text-xs text-gray-700 border border-gray-300">
-                          {booking.nights || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
-                          {booking.totalBill || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {totals.bkash || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-medium border border-gray-300">
-                          {totals.bank || 0}
-                        </td>
-                        <td className="px-3 py-2.5 text-right border border-gray-300">
+                        <td>{booking.phone || booking.phoneNumber || "N/A"}</td>
+                        <td>{moment(booking.checkInDate).format("D MMM")}</td>
+                        <td>{moment(booking.checkOutDate).format("D MMM")}</td>
+                        <td className="is-center">{booking.nights || 0}</td>
+                        <td className="is-num">{fmt(booking.totalBill)}</td>
+                        <td className="is-num">{fmt(totals.bkash)}</td>
+                        <td className="is-num">{fmt(totals.bank)}</td>
+                        <td className="is-num">{fmt(totals.totalPaid)}</td>
+                        <td className="is-center">
                           <InputNumber
-                            min={0}
-                            value={totals.totalPaid}
-                            disabled
-                            style={{ width: "80px", backgroundColor: "#f3f4f6", color: "#000", textAlign: "right" }}
-                            inputStyle={{ textAlign: "right" }}
-                          />
-                        </td>
-                        <td className="px-3 py-2.5 text-center border border-gray-300">
-                          <InputNumber
+                            className="hs-ds__cash-input"
                             min={0}
                             max={remainingAmount}
                             value={formik.values[bookingId]?.dailyAmount ?? ""}
@@ -1216,81 +1133,86 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
                               setDailyIncome(newDailyIncome);
                             }}
                             disabled={totals.duePayment <= 0 || !canEdit}
-                            style={{ width: "70px", color: "#000", textAlign: "right", fontSize: "10px" }}
-                            inputStyle={{ textAlign: "right" }}
                           />
                         </td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
-                          {totals.duePayment}
-                        </td>
-                        <td className="px-3 py-2.5 text-center border border-gray-300">
+                        <td className="is-num is-due">{fmt(totals.duePayment)}</td>
+                        <td className="is-center">
                           {canEdit && (
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => handleUpdate(bookingId)}
-                            loading={submitting[bookingId]}
-                            disabled={totals.duePayment <= 0}
-                            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}
-                          >
-                            Update
-                          </Button>
+                            <Button
+                              className="hs-ds__update-btn"
+                              type="primary"
+                              size="small"
+                              onClick={() => handleUpdate(bookingId)}
+                              loading={submitting[bookingId]}
+                              disabled={totals.duePayment <= 0}
+                            >
+                              Update
+                            </Button>
                           )}
                         </td>
                       </tr>
                     );
                   })}
-
-                  {/* No pagination */}
-
-                  {/* Grand Total: Regular + Unpaid */}
-                  {(bookings.regularInvoice?.length > 0 || bookings.unPaidInvoice?.length > 0) && (
-                    <tr className="bg-blue-100 border-t-2 border-blue-300">
-                      <td
-                        colSpan="8"
-                        className="px-2 py-1.5 text-right text-xs font-bold text-gray-900 border border-gray-300"
-                      >
-                        Total:
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
-                        {(regularTotals?.totalBill || 0) + (unpaidTotals?.totalBill || 0)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
-                        {(regularTotals?.bkash || 0) + (unpaidTotals?.bkash || 0)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
-                        {(regularTotals?.bank ?? 0) + (unpaidTotals?.bank ?? 0)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300">
-                        {(regularTotals?.totalPaid || 0) + (unpaidTotals?.totalPaid || 0)}
-                      </td>
-                      <td className="px-3 py-2.5 text-center text-xs font-bold text-gray-900 border border-gray-300">
-                        {(regularTotals?.dailyAmount || 0) + (unpaidTotals?.dailyAmount || 0)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-xs font-bold text-gray-900 border border-gray-300" style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}>
-                        {(regularTotals?.duePayment || 0) + (unpaidTotals?.duePayment || 0)}
-                      </td>
-                      <td className="px-3 py-2.5 text-center border border-gray-300">
-                        -
-                      </td>
-                    </tr>
-                  )}
                 </>
               )}
             </tbody>
+            {!loading &&
+              (bookings.regularInvoice?.length > 0 ||
+                bookings.unPaidInvoice?.length > 0) && (
+                <tfoot>
+                  <tr>
+                    <td colSpan="8" className="is-num">
+                      Total
+                    </td>
+                    <td className="is-num">
+                      {fmt(
+                        (regularTotals?.totalBill || 0) +
+                          (unpaidTotals?.totalBill || 0)
+                      )}
+                    </td>
+                    <td className="is-num">
+                      {fmt(
+                        (regularTotals?.bkash || 0) + (unpaidTotals?.bkash || 0)
+                      )}
+                    </td>
+                    <td className="is-num">
+                      {fmt(
+                        (regularTotals?.bank ?? 0) + (unpaidTotals?.bank ?? 0)
+                      )}
+                    </td>
+                    <td className="is-num">
+                      {fmt(
+                        (regularTotals?.totalPaid || 0) +
+                          (unpaidTotals?.totalPaid || 0)
+                      )}
+                    </td>
+                    <td className="is-center">
+                      {fmt(
+                        (regularTotals?.dailyAmount || 0) +
+                          (unpaidTotals?.dailyAmount || 0)
+                      )}
+                    </td>
+                    <td className="is-num is-due">
+                      {fmt(
+                        (regularTotals?.duePayment || 0) +
+                          (unpaidTotals?.duePayment || 0)
+                      )}
+                    </td>
+                    <td className="is-center">—</td>
+                  </tr>
+                </tfoot>
+              )}
           </table>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2">
-        <div className="w-full">
-          <DailySummary
-            ref={summaryRef}
-            selectedDate={selectedDate}
-            dailyIncome={totalDailyCashForSummary}
-            hideSave
-          />
-        </div>
+      <div className="hs-ds__bottom">
+        <DailySummary
+          ref={summaryRef}
+          selectedDate={selectedDate}
+          dailyIncome={totalDailyCashForSummary}
+          hideSave
+        />
       </div>
     </div>
   );

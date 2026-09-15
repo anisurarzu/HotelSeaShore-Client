@@ -76,6 +76,8 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import "@/component/DashboardShell.css";
+import "@/component/DashboardHome.css";
 
 // Extend dayjs with plugins
 dayjs.extend(utc);
@@ -236,78 +238,16 @@ const PIE_CHART_DATA = [
   { type: 'Maintenance', value: 10, color: '#ef4444' },
 ];
 
-// Standard Dashboard Card Component
-const DashboardCard = ({ title, value, icon: _icon, color, bgColor = 'white', gradient, bgGradient }) => {
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-
-  const pad = isMobile ? "12px 12px" : "14px 16px";
-
+// Standard KPI tile (SAP-style)
+const DashboardCard = ({ title, value, icon, accent = "ocean" }) => {
   return (
-    <Card
-      className="h-full w-full min-h-0 shadow-lg border-0 hover:shadow-xl transition-shadow duration-300 flex flex-col"
-      style={{
-        background: bgGradient || gradient || "#ffffff",
-        borderRadius: isMobile ? "10px" : "12px",
-        overflow: "hidden",
-        border: "none",
-        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-        position: "relative",
-      }}
-      styles={{
-        body: {
-          padding: pad,
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-        },
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          width: isMobile ? "56px" : "72px",
-          height: isMobile ? "56px" : "72px",
-          background: "rgba(255, 255, 255, 0.08)",
-          borderRadius: "50%",
-          transform: "translate(24px, -24px)",
-          pointerEvents: "none",
-        }}
-      />
-      <div className="relative z-10 min-w-0 flex flex-1 min-h-0 flex-col">
-        <Text
-          className="block shrink-0"
-          style={{
-            fontSize: isMobile ? "12px" : "13px",
-            fontWeight: 600,
-            color: "rgba(255, 255, 255, 0.92)",
-            textShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
-            lineHeight: 1.25,
-          }}
-        >
-          {title}
-        </Text>
-        <Title
-          level={4}
-          className="m-0 shrink-0"
-          style={{
-            fontSize: isMobile ? "22px" : "26px",
-            fontWeight: 800,
-            color: "#ffffff",
-            lineHeight: 1.2,
-            textShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-            textAlign: "right",
-            alignSelf: "stretch",
-            marginTop: "auto",
-            paddingTop: isMobile ? 12 : 16,
-          }}
-        >
-          {value}
-        </Title>
+    <div className={`hs-kpi hs-kpi--${accent}`}>
+      <div className="hs-kpi__top">
+        <p className="hs-kpi__label">{title}</p>
+        {icon ? <span className="hs-kpi__icon">{icon}</span> : null}
       </div>
-    </Card>
+      <p className="hs-kpi__value">{value}</p>
+    </div>
   );
 };
 
@@ -365,7 +305,7 @@ const DashboardContent = ({ sliders }) => {
   const { token } = useToken();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const [topbarCollapsed, setTopbarCollapsed] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState("1");
   const [isMobile, setIsMobile] = useState(false);
@@ -936,7 +876,7 @@ const DashboardContent = ({ sliders }) => {
         width: isMobile ? 80 : 90,
         align: 'right',
         render: (amount) => (
-          <span style={{ fontSize: isMobile ? '10px' : '12px' }} className="text-blue-600">
+          <span style={{ fontSize: isMobile ? '10px' : '12px' }} className="text-hs-ocean">
             ৳{Number(amount || 0).toLocaleString()}
           </span>
         ),
@@ -994,9 +934,9 @@ const DashboardContent = ({ sliders }) => {
           {/* Summary Cards */}
           <Row gutter={isMobile ? [8, 8] : [12, 12]}>
             <Col xs={12} sm={6}>
-              <div className="bg-blue-50 p-2 rounded border border-blue-100" style={{ padding: isMobile ? '8px' : '12px' }}>
+              <div className="bg-[#e8f4f3] p-2 rounded border border-[#d5e0e1]" style={{ padding: isMobile ? '8px' : '12px' }}>
                 <p className="text-gray-500 mb-0.5 font-medium" style={{ fontSize: isMobile ? '9px' : '10px' }}>Total Bookings</p>
-                <p className="font-bold text-blue-600" style={{ fontSize: isMobile ? '11px' : '13px' }}>{summary.count}</p>
+                <p className="font-bold text-hs-ocean" style={{ fontSize: isMobile ? '11px' : '13px' }}>{summary.count}</p>
               </div>
             </Col>
             <Col xs={12} sm={6}>
@@ -1006,9 +946,9 @@ const DashboardContent = ({ sliders }) => {
               </div>
             </Col>
             <Col xs={12} sm={6}>
-              <div className="bg-blue-50 p-2 rounded border border-blue-100" style={{ padding: isMobile ? '8px' : '12px' }}>
+              <div className="bg-[#e8f4f3] p-2 rounded border border-[#d5e0e1]" style={{ padding: isMobile ? '8px' : '12px' }}>
                 <p className="text-gray-500 mb-0.5 font-medium" style={{ fontSize: isMobile ? '9px' : '10px' }}>Total Nights</p>
-                <p className="font-bold text-blue-600" style={{ fontSize: isMobile ? '11px' : '13px' }}>{summary.totalNights}</p>
+                <p className="font-bold text-hs-ocean" style={{ fontSize: isMobile ? '11px' : '13px' }}>{summary.totalNights}</p>
               </div>
             </Col>
             <Col xs={12} sm={6}>
@@ -1058,95 +998,83 @@ const DashboardContent = ({ sliders }) => {
       // Dashboard View - Only 6 cards
       const currentMonthName = dayjs().format("MMMM");
       
-      // Restaurant dashboard cards - Light green theme
+      // Restaurant dashboard cards
       const restaurantDashboardCards = [
         {
           title: "Today's Revenue",
           value: `৳${dashboardStats.todayBookingAmount.toLocaleString()}`,
-          icon: <DollarOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)",
+          icon: <DollarOutlined />,
+          accent: "green",
         },
         {
-          title: `Current Month (${currentMonthName}) Revenue`,
+          title: `Month (${currentMonthName}) Revenue`,
           value: `৳${dashboardStats.currentMonthBookingAmount.toLocaleString()}`,
-          icon: <DollarOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%)",
+          icon: <DollarOutlined />,
+          accent: "lagoon",
         },
         {
           title: "Today's Orders",
           value: dashboardStats.todayCheckIns.toString(),
-          icon: <ShoppingCartOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #14b8a6 0%, #0d9488 50%, #0f766e 100%)",
+          icon: <ShoppingCartOutlined />,
+          accent: "ocean",
         },
         {
           title: "Active Tables",
           value: dashboardStats.todayCheckOuts.toString(),
-          icon: <ShopOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)",
+          icon: <ShopOutlined />,
+          accent: "soft",
         },
         {
           title: "Today's Table Occupancy",
           value: `${dashboardStats.todayOccupancyRate}%`,
-          icon: <CoffeeOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)",
+          icon: <CoffeeOutlined />,
+          accent: "sand",
         },
         {
-          title: "Current Month Occupancy",
+          title: "Month Occupancy",
           value: `${dashboardStats.currentMonthOccupancyRate}%`,
-          icon: <CoffeeOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%)",
+          icon: <CoffeeOutlined />,
+          accent: "deep",
         },
       ];
 
-      // Hotel dashboard cards (row 1 — original blue gradient DashboardCard style)
+      // Hotel KPI tiles
       const hotelDashboardCards = [
         {
           title: "Today's Booking Amount",
           value: `৳${dashboardStats.todayBookingAmount.toLocaleString()}`,
-          icon: <DollarOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1e40af 100%)",
+          icon: <DollarOutlined />,
+          accent: "ocean",
         },
         {
-          title: `Current Month (${currentMonthName}) Booking Amount`,
+          title: `Month (${currentMonthName}) Booking`,
           value: `৳${dashboardStats.currentMonthBookingAmount.toLocaleString()}`,
-          icon: <DollarOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%)",
+          icon: <DollarOutlined />,
+          accent: "lagoon",
         },
         {
           title: "Today's Check-ins",
           value: dashboardStats.todayCheckIns.toString(),
-          icon: <UserOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%)",
+          icon: <UserOutlined />,
+          accent: "soft",
         },
         {
           title: "Today's Check-outs",
           value: dashboardStats.todayCheckOuts.toString(),
-          icon: <CalendarOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%)",
+          icon: <CalendarOutlined />,
+          accent: "sand",
         },
         {
-          title: "Today's Occupancy Rate",
+          title: "Today's Occupancy",
           value: `${dashboardStats.todayOccupancyRate}%`,
-          icon: <HomeOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #1e3a8a 100%)",
+          icon: <HomeOutlined />,
+          accent: "green",
         },
         {
-          title: "Current Month Occupancy Rate",
+          title: "Month Occupancy",
           value: `${dashboardStats.currentMonthOccupancyRate}%`,
-          icon: <HomeOutlined className="text-xl" />,
-          color: "#ffffff",
-          bgGradient: "linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1e40af 100%)",
+          icon: <HomeOutlined />,
+          accent: "deep",
         },
       ];
 
@@ -1172,19 +1100,18 @@ const DashboardContent = ({ sliders }) => {
       const monthAll = bookings.filter(inLast30);
       const weekAll = bookings.filter(inLast7);
 
-      // Row 2 — simpler gradient cards (same look as before)
       const overviewCards = [
         {
-          title: "LAST 7 DAYS ALL BOOKINGS",
+          title: "Last 7 Days Bookings",
           amount: sumBill(weekAll),
           count: weekAll.length,
-          gradient: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)",
+          accent: "lagoon",
         },
         {
-          title: "LAST 30 DAYS ALL BOOKINGS",
+          title: "Last 30 Days Bookings",
           amount: sumBill(monthAll),
           count: monthAll.length,
-          gradient: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+          accent: "ocean",
         },
       ];
 
@@ -1214,127 +1141,122 @@ const DashboardContent = ({ sliders }) => {
         .sort((a, b) => b.overall - a.overall);
 
       return (
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="mb-3 sm:mb-4">
-            <Title
-              level={2}
-              className={`m-0 mb-1 ${darkMode ? 'text-white' : ''}`}
-              style={{
-                fontSize: isMobile ? "20px" : "24px",
-                fontWeight: 600,
-                color: darkMode ? "#ffffff" : "#1f2937",
-              }}
-            >
-              Dashboard
-            </Title>
+        <div>
+          <div className="hs-dash-intro">
+            <h2>Operational Overview</h2>
+            <p>Key performance indicators for today and the current period</p>
           </div>
 
-          {/* Row 1: 6 main stats (lg=4 → 6 per row) */}
-          <Row gutter={isMobile ? [8, 8] : [12, 12]}>
-            {dashboardCards.map((card, idx) => (
-              <Col xs={24} sm={12} md={12} lg={4} key={idx} className="flex" style={{ display: "flex" }}>
-              {bookingsLoading ? (
-                  <Card className="h-full w-full min-h-0 flex-1 shadow-sm border-0" style={{ borderRadius: '8px' }}>
-                    <Skeleton active paragraph={{ rows: 1 }} />
-                </Card>
-              ) : (
-                <DashboardCard
-                    title={card.title}
-                    value={card.value}
-                    icon={card.icon}
-                    color={card.color}
-                    bgGradient={card.bgGradient}
-                    gradient={card.gradient}
-                />
-              )}
-            </Col>
-            ))}
-          </Row>
-
-          {/* Row 2: last 7 / last 30 — simple Card style */}
-          {!isRestaurant && (
-            <Row gutter={isMobile ? [8, 8] : [12, 12]} style={{ marginTop: isMobile ? 8 : 12 }}>
-              {overviewCards.map((card, idx) => (
-                <Col xs={24} sm={12} lg={12} key={`ov-${idx}`}>
-                  {bookingsLoading ? (
-                    <Card className="h-full shadow-sm border-0" style={{ borderRadius: "10px" }}>
-                      <Skeleton active paragraph={{ rows: 1 }} />
-                    </Card>
-                  ) : (
-                    <Card
-                      bordered={false}
-                      style={{
-                        borderRadius: 10,
-                        background: card.gradient,
-                        color: "#fff",
-                        boxShadow: "0 8px 18px rgba(0,0,0,0.08)",
-                      }}
-                      bodyStyle={{ padding: isMobile ? 12 : 14 }}
-                    >
-                      <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: 700 }}>{card.title}</Text>
-                      <div
-                        style={{
-                          fontSize: isMobile ? 30 : 38,
-                          fontWeight: 800,
-                          lineHeight: 1.2,
-                          marginTop: 8,
-                        }}
-                      >
-                        ৳{card.amount.toLocaleString()}
-                      </div>
-                      <Text style={{ color: "#ffffff", opacity: 0.95 }}>{card.count} bookings</Text>
-                    </Card>
-                  )}
+          {bookingsLoading ? (
+            <Row gutter={[10, 10]}>
+              {[1, 2, 3, 4, 5, 6].map((item) => (
+                <Col xs={24} sm={12} lg={4} key={item}>
+                  <Card size="small">
+                    <Skeleton active paragraph={{ rows: 1 }} title={false} />
+                  </Card>
                 </Col>
               ))}
             </Row>
+          ) : (
+            <div className="hs-kpi-grid">
+              {dashboardCards.map((card, idx) => (
+                <DashboardCard
+                  key={idx}
+                  title={card.title}
+                  value={card.value}
+                  icon={card.icon}
+                  accent={card.accent}
+                />
+              ))}
+            </div>
           )}
 
           {!isRestaurant && (
-            <div className="mt-3 space-y-4">
-
-              <Card
-                bordered={false}
-                style={{ borderRadius: 10, boxShadow: "0 8px 18px rgba(0,0,0,0.06)" }}
-                bodyStyle={{ padding: isMobile ? 10 : 12 }}
-              >
-                <Title level={4} style={{ textAlign: "center", marginBottom: 10 }}>
-                  User-wise Booking Overview
-                </Title>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 740 }}>
-                    <thead>
-                      <tr style={{ background: "linear-gradient(90deg,#4f46e5,#6366f1)", color: "#fff" }}>
-                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "center" }}>User ID</th>
-                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Today&apos;s Booking</th>
-                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Last 7 Days Booking</th>
-                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Last 30 Days Booking</th>
-                        <th style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>Overall Booking</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {userRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} style={{ padding: "12px 8px", textAlign: "center", border: "1px solid #d1d5db" }}>
-                            No user booking data found
-                          </td>
-                        </tr>
-                      ) : (
-                        userRows.map((r, idx) => (
-                          <tr key={r.id} style={{ background: idx % 2 === 0 ? "#e0e7ff" : "#ede9fe" }}>
-                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "center", fontWeight: 600 }}>{r.id}</td>
-                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>৳{r.today.toLocaleString()}</td>
-                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>৳{r.seven.toLocaleString()}</td>
-                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right" }}>৳{r.thirty.toLocaleString()}</td>
-                            <td style={{ padding: "9px 8px", border: "1px solid #d1d5db", textAlign: "right", fontWeight: 700 }}>৳{r.overall.toLocaleString()}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+            <div className="hs-section">
+              <div className="hs-section__head">
+                <h3>Booking Period Summary</h3>
+                <p>Aggregated booking amounts</p>
+              </div>
+              {bookingsLoading ? (
+                <Row gutter={[10, 10]}>
+                  {[1, 2].map((item) => (
+                    <Col xs={24} sm={12} key={item}>
+                      <Card size="small">
+                        <Skeleton active paragraph={{ rows: 1 }} title={false} />
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              ) : (
+                <div
+                  className="hs-kpi-grid"
+                  style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+                >
+                  {overviewCards.map((card, idx) => (
+                    <div key={`ov-${idx}`} className={`hs-kpi hs-kpi--${card.accent}`}>
+                      <div className="hs-kpi__top">
+                        <p className="hs-kpi__label">{card.title}</p>
+                        <span className="hs-kpi__icon">
+                          <BarChartOutlined />
+                        </span>
+                      </div>
+                      <div>
+                        <p className="hs-kpi__value">
+                          ৳{card.amount.toLocaleString()}
+                        </p>
+                        <p className="hs-kpi__meta">{card.count} bookings</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </Card>
+              )}
+            </div>
+          )}
+
+          {!isRestaurant && (
+            <div className="hs-section">
+              <div className="hs-section__head">
+                <h3>User-wise Booking Overview</h3>
+                <p>Performance by booking operator</p>
+              </div>
+              <div className="hs-panel">
+                <div className="hs-panel__body">
+                  <div className="hs-table-wrap">
+                    <table className="hs-table">
+                      <thead>
+                        <tr>
+                          <th>User ID</th>
+                          <th className="num">Today</th>
+                          <th className="num">Last 7 Days</th>
+                          <th className="num">Last 30 Days</th>
+                          <th className="num">Overall</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {userRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="empty">
+                              No user booking data found
+                            </td>
+                          </tr>
+                        ) : (
+                          userRows.map((r) => (
+                            <tr key={r.id}>
+                              <td className="id-cell">{r.id}</td>
+                              <td className="num">৳{r.today.toLocaleString()}</td>
+                              <td className="num">৳{r.seven.toLocaleString()}</td>
+                              <td className="num">৳{r.thirty.toLocaleString()}</td>
+                              <td className="num total-cell">
+                                ৳{r.overall.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1371,64 +1293,24 @@ const DashboardContent = ({ sliders }) => {
       <Menu
         theme={darkMode ? "dark" : "light"}
         mode="inline"
-        inlineCollapsed={isCollapsed}
         selectedKeys={[selectedMenu]}
         onClick={handleMenuClick}
-        style={{ 
-          background: "transparent",
-          borderRight: "none",
-          padding: "8px 4px",
-        }}
-        className={`custom-sidebar-menu ${darkMode ? 'dark-menu' : ''}`}
-      >
-        {menuItems.map((item) => (
-          <Menu.Item
-            key={item.key}
-            icon={item.icon}
-            title={isCollapsed ? item.label : undefined}
-            style={{
-              margin: "4px 0",
-              borderRadius: "8px",
-              padding: isCollapsed ? "10px 16px" : (isMobile ? "14px 16px" : "12px 16px"),
-              fontSize: isMobile ? "14px" : "13px",
-              fontWeight: 500,
-              height: isMobile ? "48px" : "42px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: isCollapsed ? "center" : "flex-start",
-              transition: "all 0.3s ease",
-              color: selectedMenu === item.key 
-                ? "#ffffff" 
-                : darkMode ? "#d1d5db" : "#64748b",
-              background: selectedMenu === item.key 
-                ? (isRestaurant 
-                    ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-                    : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)")
-                : "transparent",
-            }}
-            className={darkMode 
-              ? "hover:!bg-gray-700/50 dark:hover:!bg-gray-700/50" 
-              : (isRestaurant
-                  ? "hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50"
-                  : "hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50")}
-          >
-            {!isCollapsed && (
-              <span 
-                className="ml-2"
-                style={{
-                  color: selectedMenu === item.key 
-                    ? "#ffffff" 
-                    : darkMode ? "#d1d5db" : "#64748b",
-                }}
-              >
-                {item.label}
-              </span>
-            )}
-          </Menu.Item>
-        ))}
-      </Menu>
+        className={`custom-sidebar-menu ${darkMode ? "dark-menu" : ""}`}
+        items={menuItems.map((item) => ({
+          key: item.key,
+          icon: item.icon,
+          label: item.label,
+          title: item.label,
+        }))}
+      />
     );
   };
+
+  const currentPageLabel =
+    menuItems.find((item) => item.key === selectedMenu)?.label || "Dashboard";
+  const productName = isRestaurant ? "Sea Shore Restaurant" : "Hotel Sea Shore";
+  const navWidth = collapsed ? 56 : 196;
+  const asideWidth = settingsSidebarCollapsed ? 0 : 280;
 
   const userMenuItems = [
     {
@@ -1450,295 +1332,170 @@ const DashboardContent = ({ sliders }) => {
 
   return (
     <PermissionProvider userInfo={userInfo} isRestaurant={isRestaurant}>
-      <Layout className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900`}>
-        {/* Desktop Sidebar */}
+      <Layout className={`hs-shell min-h-screen ${darkMode ? "hs-shell--dark dark" : ""}`}>
         <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        width={200}
-        breakpoint="lg"
-        collapsedWidth={60}
-        style={{
-          background: darkMode 
-            ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
-            : (isRestaurant
-                ? "linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%)"
-                : "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)"),
-          boxShadow: darkMode 
-            ? "2px 0 15px rgba(0, 0, 0, 0.3)" 
-            : (isRestaurant
-                ? "2px 0 15px rgba(16, 185, 129, 0.1)"
-                : "2px 0 15px rgba(59, 130, 246, 0.1)"),
-          borderRight: darkMode 
-            ? "1px solid rgba(255, 255, 255, 0.1)" 
-            : (isRestaurant
-                ? "1px solid rgba(16, 185, 129, 0.08)"
-                : "1px solid rgba(59, 130, 246, 0.08)"),
-          overflow: "hidden",
-          height: "100vh",
-          position: "fixed",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 100,
-        }}
-        className="hidden lg:block"
-      >
-        <div className={`flex items-center justify-center py-3 h-14 border-b ${darkMode ? 'border-gray-700' : 'border-blue-100'}`}>
-          <img 
-            src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
-            alt="Hotel Sea Shore Logo" 
-            className="h-16 w-auto object-contain"
-          />
-        </div>
-
-        <div className="py-1 px-0 h-[calc(100vh-56px)] overflow-y-auto">
-          {renderMenuItems(collapsed)}
-        </div>
-      </Sider>
-
-      {/* Main Layout */}
-      <Layout 
-        className="lg:ml-0"
-        style={{ 
-          marginLeft: isMobile ? 0 : (collapsed ? 60 : 200),
-          marginRight: isMobile ? 0 : (settingsSidebarCollapsed ? 0 : 200),
-          transition: "all 0.2s ease",
-        minHeight: "100vh",
-        }}
-      >
-        {/* Header */}
-        <Header
-          className="flex justify-between items-center shadow-sm transition-all duration-300"
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          width={196}
+          breakpoint="lg"
+          collapsedWidth={56}
+          className="hs-shell__sider hidden lg:block"
           style={{
-            background: isRestaurant 
-              ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-              : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-            padding: isMobile ? "0 6px" : "0 10px",
-            height: isMobile ? (topbarCollapsed ? "40px" : "52px") : (topbarCollapsed ? "36px" : "48px"),
-            backdropFilter: "blur(10px)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            overflow: "hidden",
+            height: "100vh",
             position: "fixed",
+            left: 0,
             top: 0,
-            left: isMobile ? 0 : (collapsed ? 60 : 200),
-            right: isMobile ? 0 : (settingsSidebarCollapsed ? 0 : 200),
-            zIndex: 99,
-            transition: "all 0.3s ease",
-            width: isMobile 
-              ? "100%"
-              : `calc(100% - ${collapsed ? 60 : 200}px - ${settingsSidebarCollapsed ? 0 : 200}px)`,
+            bottom: 0,
+            zIndex: 100,
           }}
         >
-          {/* Left side - Mobile Menu Button + User Info */}
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* Mobile Menu Button */}
-            <Button
-              type="text"
-              icon={<MenuOutlined className="text-white text-sm" />}
-              onClick={showDrawer}
-              className="lg:hidden hover:bg-white/10"
-              style={{ 
-                color: "white", 
-                minWidth: "auto",
-                padding: isMobile ? "6px" : "4px",
-                minHeight: isMobile ? "32px" : "auto"
-              }}
+          <div className="hs-shell__brand">
+            <img
+              src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg"
+              alt="Hotel Sea Shore"
+              className="hs-shell__brand-logo"
             />
-            
-            {/* Logo on Mobile */}
-            <div className="lg:hidden flex items-center">
-              <img 
-                src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
-                alt="Logo" 
-                className="h-7 sm:h-8 w-auto object-contain"
+            {!collapsed && (
+              <div className="hs-shell__brand-text">
+                <strong>Sea Shore</strong>
+                <span>{isRestaurant ? "Restaurant" : "Starter · Hotel"}</span>
+              </div>
+            )}
+          </div>
+          <div className="hs-shell__nav">
+            {!collapsed && <div className="hs-shell__nav-label">Navigation</div>}
+            {renderMenuItems(collapsed)}
+          </div>
+        </Sider>
+
+        <Layout
+          style={{
+            marginLeft: isMobile ? 0 : navWidth,
+            marginRight: isMobile ? 0 : asideWidth,
+            transition: "margin 0.2s ease",
+            minHeight: "100vh",
+            background: "transparent",
+          }}
+        >
+          <Header
+            className="hs-shell__header"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: isMobile ? 0 : navWidth,
+              right: isMobile ? 0 : asideWidth,
+              zIndex: 99,
+              width: isMobile
+                ? "100%"
+                : `calc(100% - ${navWidth}px - ${asideWidth}px)`,
+              transition: "left 0.2s ease, right 0.2s ease, width 0.2s ease",
+            }}
+          >
+            <div className="hs-shell__header-left">
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={showDrawer}
+                className="hs-shell__icon-btn lg:hidden"
               />
+              <div className="hs-shell__product">
+                <p className="hs-shell__product-name">{productName} Starter</p>
+                <p className="hs-shell__product-meta">
+                  {userInfo?.role?.label || "User"} · Enterprise Console · v2.0
+                </p>
+              </div>
+              <span className="hs-shell__demo-chip hidden sm:inline-flex">Starter v2.0</span>
             </div>
 
-            {/* User Info - Hidden on mobile when topbar collapsed, shown on desktop */}
-            {userInfo && !topbarCollapsed && (
-              <div className="hidden md:flex items-center gap-2 lg:gap-3 flex-1 min-w-0">
-                <Avatar
-                  size={32}
-                  src={userInfo.image}
-                  icon={!userInfo.image && <UserOutlined />}
-                  style={{ 
-                    backgroundColor: "#3b82f6",
-                    border: "2px solid white",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-                  }}
-                />
-                <div className="text-left min-w-0">
-                  {/* <p className="text-white font-semibold m-0 text-[10px] lg:text-xs truncate">
-                    {userInfo.username || userInfo.name || "User"}
-                  </p> */}
-                  <p className="text-blue-100 text-[9px] lg:text-[10px] m-0 truncate">
-                    {userInfo.role?.label || "User"}
-                  </p>
-                </div>
-                <div className="hidden lg:block h-5 w-px bg-white/30 mx-2" />
-                <div className="hidden lg:block text-left">
-                  <p className="text-white text-[20px] m-0">{isRestaurant ? 'Sea Shore Restaurant' : 'Hotel Sea Shore'}</p>
-                
-                </div>
-              </div>
-            )}
-            {topbarCollapsed && userInfo && (
-              <div className="hidden md:flex items-center gap-2">
-                <Avatar
-                  size={24}
-                  src={userInfo.image}
-                  icon={!userInfo.image && <UserOutlined />}
-                  style={{ 
-                    backgroundColor: "#3b82f6",
-                    border: "2px solid white"
-                  }}
-                />
-                <span className="text-white font-medium text-[10px]">
-                  {userInfo.username || "User"}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Right side */}
-          <div className="flex items-center gap-1 lg:gap-2">
-            <Tooltip title={topbarCollapsed ? "Expand Topbar" : "Collapse Topbar"}>
-              <Button
-                type="text"
-                icon={topbarCollapsed ? <DownOutlined className="text-sm" /> : <UpOutlined className="text-sm" />}
-                onClick={toggleTopbar}
-                className="hidden lg:flex hover:bg-white/10"
-                style={{ 
-                  color: "white",
-                  padding: "4px",
-                  minWidth: "28px",
-                  minHeight: "28px"
-                }}
-              />
-            </Tooltip>
-
-            {/* Analytics Button - Always visible */}
-            <Tooltip title={settingsSidebarCollapsed ? "Open Analytics" : "Close Analytics"}>
-              <Button
-                type="text"
-                icon={<BarChartOutlined className={`text-white ${isMobile ? 'text-xs' : 'text-sm'}`} />}
-                onClick={toggleSettingsSidebar}
-                className="hover:bg-white/10"
-                style={{ 
-                  color: "white",
-                  padding: isMobile ? "6px" : "4px 8px",
-                  minWidth: isMobile ? "28px" : "auto",
-                  minHeight: isMobile ? "28px" : "auto"
-                }}
-              />
-            </Tooltip>
-
-            {/* User Menu - Desktop only when not collapsed */}
-            {!topbarCollapsed && (
-              <Dropdown
-                menu={{
-                  items: userMenuItems,
-                }}
-                placement="bottomRight"
-                trigger={['click']}
-                className="hidden lg:block"
-              >
+            <div className="hs-shell__header-right">
+              <Tooltip title={settingsSidebarCollapsed ? "Open Analytics" : "Close Analytics"}>
                 <Button
                   type="text"
-                  icon={<UserOutlined className="text-white text-sm" />}
-                  className="hover:bg-white/10"
-                  style={{ 
-                    color: "white",
-                    padding: "4px",
-                    minWidth: "28px",
-                    minHeight: "28px"
-                  }}
+                  icon={<BarChartOutlined />}
+                  onClick={toggleSettingsSidebar}
+                  className="hs-shell__icon-btn"
                 />
+              </Tooltip>
+
+              <Dropdown
+                menu={{ items: userMenuItems }}
+                placement="bottomRight"
+                trigger={["click"]}
+              >
+                <div className="hs-shell__user">
+                  <Avatar
+                    size={28}
+                    src={userInfo?.image}
+                    icon={!userInfo?.image && <UserOutlined />}
+                    style={{ backgroundColor: "#14919b" }}
+                  />
+                  <div className="hs-shell__user-meta hidden md:block">
+                    <strong>{userInfo?.username || userInfo?.name || "User"}</strong>
+                    <span>{userInfo?.role?.label || "Operator"}</span>
+                  </div>
+                </div>
               </Dropdown>
-            )}
-          </div>
-        </Header>
+            </div>
+          </Header>
 
-        {/* Main Content */}
-        <Content
-          className="responsive-content"
-          style={{
-            margin: isMobile ? "2px" : "8px",
-            marginTop: isMobile ? (topbarCollapsed ? "44px" : "56px") : (topbarCollapsed ? "40px" : "52px"),
-            padding: 0,
-            minHeight: isMobile ? "calc(100vh - 80px)" : "calc(100vh - 70px)",
-            transition: "margin-top 0.3s ease",
-          }}
-        >
-          <div className={`rounded-lg shadow-sm border min-h-[calc(100vh-80px)] ${
-            darkMode 
-              ? 'bg-gray-800 border-gray-700' 
-              : 'bg-white border-gray-100'
-          }`}
-          style={{
-            padding: isMobile ? "12px 8px" : "16px 20px"
-          }}
+          <div
+            style={{
+              marginTop: 48,
+              display: "flex",
+              flexDirection: "column",
+              minHeight: "calc(100vh - 48px)",
+            }}
           >
-            {renderContent()}
-          </div>
-        </Content>
+            <div className="hs-shell__titlebar">
+              <div className="hs-shell__titlebar-main">
+                <h1>{currentPageLabel}</h1>
+                <span className="hs-shell__breadcrumb">
+                  Home / <strong>{currentPageLabel}</strong>
+                </span>
+              </div>
+            </div>
 
-        {/* Status Bar */}
-        <div className={`backdrop-blur-sm border-t flex justify-between items-center ${
-          darkMode 
-            ? 'bg-gray-800/90 border-gray-700' 
-            : 'bg-white/90 border-gray-100'
-        }`}
-        style={{
-          padding: isMobile ? '8px 12px' : '12px 16px',
-          fontSize: isMobile ? '10px' : '12px'
-        }}
+            <Content className="hs-shell__content responsive-content">
+              <div className="hs-shell__workspace">{renderContent()}</div>
+            </Content>
+
+            <div className="hs-shell__footer">
+              <div className="flex items-center gap-2">
+                <span className="hs-shell__status-dot" />
+                <span>System Online · v2.0</span>
+              </div>
+              <div>
+                {isRestaurant ? "Restaurant" : "Hotel"}:{" "}
+                <strong>{isRestaurant ? "Sea Shore Restaurant" : hotelName}</strong>
+                {" · "}
+                <span>Cox Web Solutions</span>
+              </div>
+            </div>
+          </div>
+        </Layout>
+
+        <Drawer
+          open={drawerVisible}
+          onClose={closeDrawer}
+          placement="left"
+          width={280}
+          className="hs-shell-drawer"
+          title={
+            <div className="flex items-center gap-2">
+              <img
+                src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg"
+                alt="Logo"
+                style={{ width: 28, height: 28, borderRadius: 6, objectFit: "contain" }}
+              />
+              <span style={{ color: "#fff", fontWeight: 650 }}>{productName} Starter</span>
+            </div>
+          }
         >
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-            <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>System Online</span>
-          </div>
-          <div className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
-            <span className="hidden sm:inline">{isRestaurant ? 'Restaurant: ' : 'Hotel Name: '}</span>
-            <span className={`font-semibold ${darkMode ? (isRestaurant ? 'text-emerald-400' : 'text-blue-400') : (isRestaurant ? 'text-emerald-600' : 'text-blue-600')}`}>
-              {isRestaurant ? "Sea Shore Restaurant" : hotelName}
-            </span>
-          </div>
-        </div>
-      </Layout>
-
-      {/* Mobile Drawer */}
-      <Drawer
-        open={drawerVisible}
-        onClose={closeDrawer}
-        placement="left"
-        width={isMobile ? 280 : 240}
-        bodyStyle={{ 
-          padding: 0,
-          background: darkMode 
-            ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
-            : "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)",
-        }}
-        headerStyle={{ 
-          padding: isMobile ? "16px" : "12px",
-          background: isRestaurant
-            ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-            : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-          borderBottom: "none"
-        }}
-        title={
-          <div className="flex items-center justify-center">
-            <img 
-              src="https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg" 
-              alt="Hotel Sea Shore Logo" 
-              className="h-16 w-auto object-contain"
-            />
-          </div>
-        }
-      >
-        {renderMenuItems(false)}
-      </Drawer>
+          <div className="hs-shell__nav-label">Navigation</div>
+          {renderMenuItems(false)}
+        </Drawer>
 
       {/* Detail Modal */}
       <DetailModal />
@@ -1746,23 +1503,9 @@ const DashboardContent = ({ sliders }) => {
       {/* Settings Sidebar - Desktop */}
       {!settingsSidebarCollapsed && !isMobile && (
         <Sider
-          width={200}
+          width={280}
+          className="hs-shell__aside hidden lg:block"
           style={{
-            background: darkMode 
-              ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
-              : (isRestaurant
-                  ? "linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%)"
-                  : "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)"),
-            boxShadow: darkMode 
-              ? "-2px 0 15px rgba(0, 0, 0, 0.3)" 
-              : (isRestaurant
-                  ? "-2px 0 15px rgba(16, 185, 129, 0.15)"
-                  : "-2px 0 15px rgba(217, 119, 6, 0.15)"),
-            borderLeft: darkMode 
-              ? "1px solid rgba(255, 255, 255, 0.1)" 
-              : (isRestaurant
-                  ? "1px solid rgba(16, 185, 129, 0.1)"
-                  : "1px solid rgba(217, 119, 6, 0.1)"),
             overflow: "hidden",
             height: "100vh",
             position: "fixed",
@@ -1771,57 +1514,22 @@ const DashboardContent = ({ sliders }) => {
             bottom: 0,
             zIndex: 100,
           }}
-          className="hidden lg:block"
         >
-          {/* Header with Gradient */}
-          <div 
-            className="flex items-center justify-between px-4"
-            style={{
-              background: isRestaurant
-                ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-                : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-              boxShadow: isRestaurant
-                ? "0 2px 8px rgba(16, 185, 129, 0.2)"
-                : "0 2px 8px rgba(59, 130, 246, 0.2)",
-              height: "56px",
-              padding: "0 16px",
-            }}
-          >
-            <div className="flex items-center gap-2.5">
-              <div 
-                className="p-1.5 rounded-lg"
-                style={{
-                  background: "rgba(255, 255, 255, 0.2)",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                <BarChartOutlined className="text-white text-base" />
-              </div>
-              <span className="text-sm font-bold text-white">Analytics</span>
-            </div>
-            <Button
-              type="text"
-              icon={<CloseOutlined className="text-white" />}
-              onClick={toggleSettingsSidebar}
-              className="hover:bg-white/20"
-              size="small"
-              style={{ color: "white" }}
-            />
+          <div className="hs-shell__aside-head">
+            <h2>Analytics</h2>
+            <Button type="text" icon={<CloseOutlined />} onClick={toggleSettingsSidebar} size="small" />
           </div>
-
-          <div className="py-3 px-3 h-[calc(100vh-56px)] overflow-y-auto custom-scrollbar">
+          <div className="py-3 px-3 h-[calc(100vh-48px)] overflow-y-auto custom-scrollbar">
             <div className="space-y-3">
               {/* Dark Mode Toggle */}
               <div 
-                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                className="hs-shell__panel"
                 style={{
-                  background: darkMode 
-                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
-                    : "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-                  borderColor: darkMode ? "#4b5563" : "#dbeafe",
+                  background: darkMode ? "#273039" : "#f7fbfb",
+                  borderColor: darkMode ? "#3a4550" : "#d5e0e1",
                   boxShadow: darkMode 
                     ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
-                    : "0 2px 4px rgba(59, 130, 246, 0.08)",
+                    : "0 2px 4px rgba(11, 92, 102, 0.08)",
                 }}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -1829,8 +1537,8 @@ const DashboardContent = ({ sliders }) => {
                     <div 
                       className="p-1.5 rounded-lg"
                       style={{
-                        background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-                        boxShadow: "0 2px 4px rgba(59, 130, 246, 0.3)",
+                        background: "#0b5c66",
+                        
                       }}
                     >
                       <ThunderboltOutlined className="text-white text-xs" />
@@ -1844,7 +1552,7 @@ const DashboardContent = ({ sliders }) => {
                     unCheckedChildren="OFF"
                     size="small"
                     style={{
-                      background: darkMode ? "#3b82f6" : undefined,
+                      background: darkMode ? "#14919b" : undefined,
                     }}
                   />
                 </div>
@@ -1878,9 +1586,9 @@ const DashboardContent = ({ sliders }) => {
                 const totalBookings = bookings.length;
                 
                 const pieData = [
-                  { type: 'Active', value: activeBookings, color: '#3b82f6' },
+                  { type: 'Active', value: activeBookings, color: '#14919b' },
                   { type: 'Upcoming', value: upcomingBookings, color: '#10b981' },
-                  { type: 'Completed', value: completedBookings, color: '#6366f1' },
+                  { type: 'Completed', value: completedBookings, color: '#0d6b74' },
                 ].filter(item => item.value > 0);
                 
                 const pieConfig = {
@@ -1916,23 +1624,21 @@ const DashboardContent = ({ sliders }) => {
                 
                 return (
               <div 
-                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                className="hs-shell__panel"
                 style={{
-                  background: darkMode 
-                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
-                        : "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-                      borderColor: darkMode ? "#4b5563" : "#dbeafe",
+                  background: darkMode ? "#273039" : "#f7fbfb",
+                      borderColor: darkMode ? "#3a4550" : "#d5e0e1",
                   boxShadow: darkMode 
                     ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
-                        : "0 2px 4px rgba(59, 130, 246, 0.08)",
+                        : "0 2px 4px rgba(11, 92, 102, 0.08)",
                 }}
               >
                 <div className="flex items-center gap-2.5 mb-3">
                   <div 
                     className="p-1.5 rounded-lg"
                     style={{
-                          background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-                          boxShadow: "0 2px 4px rgba(59, 130, 246, 0.3)",
+                          background: "#0b5c66",
+                          
                     }}
                   >
                         <BarChartOutlined className="text-white text-xs" />
@@ -1977,23 +1683,21 @@ const DashboardContent = ({ sliders }) => {
                 
                 return (
               <div 
-                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                className="hs-shell__panel"
                 style={{
-                  background: darkMode 
-                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
-                        : "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-                      borderColor: darkMode ? "#4b5563" : "#dbeafe",
+                  background: darkMode ? "#273039" : "#f7fbfb",
+                      borderColor: darkMode ? "#3a4550" : "#d5e0e1",
                   boxShadow: darkMode 
                     ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
-                        : "0 2px 4px rgba(59, 130, 246, 0.08)",
+                        : "0 2px 4px rgba(11, 92, 102, 0.08)",
                 }}
               >
                 <div className="flex items-center gap-2.5 mb-3">
                   <div 
                     className="p-1.5 rounded-lg"
                     style={{
-                          background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-                          boxShadow: "0 2px 4px rgba(59, 130, 246, 0.3)",
+                          background: "#0b5c66",
+                          
                     }}
                   >
                         <DollarOutlined className="text-white text-xs" />
@@ -2018,7 +1722,7 @@ const DashboardContent = ({ sliders }) => {
                         </div>
                         <div className="flex items-center justify-between">
                           <Text className={`text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Advance</Text>
-                          <Text className={`text-[10px] font-bold text-blue-600`}>
+                          <Text className={`text-[10px] font-bold text-hs-ocean`}>
                             ৳{totalAdvance.toLocaleString()}
                           </Text>
                         </div>
@@ -2065,23 +1769,21 @@ const DashboardContent = ({ sliders }) => {
                 
                 return (
               <div 
-                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                className="hs-shell__panel"
                 style={{
-                  background: darkMode 
-                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
-                        : "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-                      borderColor: darkMode ? "#4b5563" : "#dbeafe",
+                  background: darkMode ? "#273039" : "#f7fbfb",
+                      borderColor: darkMode ? "#3a4550" : "#d5e0e1",
                   boxShadow: darkMode 
                     ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
-                        : "0 2px 4px rgba(59, 130, 246, 0.08)",
+                        : "0 2px 4px rgba(11, 92, 102, 0.08)",
                     }}
                   >
                     <div className="flex items-center gap-2.5 mb-3">
                       <div 
                         className="p-1.5 rounded-lg"
                         style={{
-                          background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-                          boxShadow: "0 2px 4px rgba(59, 130, 246, 0.3)",
+                          background: "#0b5c66",
+                          
                         }}
                       >
                         <TeamOutlined className="text-white text-xs" />
@@ -2101,14 +1803,14 @@ const DashboardContent = ({ sliders }) => {
                             key={idx}
                             className="p-2 rounded-lg"
                 style={{
-                              background: darkMode ? "rgba(59, 130, 246, 0.1)" : "rgba(59, 130, 246, 0.05)",
+                              background: darkMode ? "rgba(20,145,155,0.12)" : "#e8f4f3",
                             }}
                           >
                             <div className="flex items-center justify-between mb-1">
                               <Text className={`text-[10px] font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                                 {user.name}
                               </Text>
-                              <Text className={`text-[10px] font-bold ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                              <Text className={`text-[10px] font-bold ${darkMode ? 'text-hs-soft' : 'text-hs-ocean'}`}>
                                 {user.count} bookings
                               </Text>
                             </div>
@@ -2129,45 +1831,24 @@ const DashboardContent = ({ sliders }) => {
 
       {/* Analytics Drawer - Mobile */}
       <Drawer
-        title={
-          <div className="flex items-center gap-2">
-            <BarChartOutlined className="text-white" />
-            <span className="text-sm sm:text-base font-semibold text-white">Analytics</span>
-          </div>
-        }
+        title="Analytics"
         placement="right"
         onClose={() => setSettingsSidebarCollapsed(true)}
         open={!settingsSidebarCollapsed && isMobile}
-        width={isMobile ? '85%' : 280}
-        bodyStyle={{ 
-          padding: isMobile ? "12px" : "16px",
-          background: darkMode 
-            ? "linear-gradient(180deg, #1f2937 0%, #111827 100%)" 
-            : "linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)",
-        }}
-        headerStyle={{ 
-          padding: isMobile ? "12px 16px" : "16px",
-          background: isRestaurant
-            ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-            : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-          borderBottom: "none",
-        }}
-        styles={{
-          header: { color: "white" },
-        }}
+        width={isMobile ? "85%" : 280}
+        className="hs-shell-drawer"
+        styles={{ body: { padding: 12, background: "var(--shell-bg, #f5f6f7)" } }}
       >
         <div className="space-y-3">
           {/* Dark Mode Toggle */}
           <div 
-            className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+            className="hs-shell__panel"
             style={{
-              background: darkMode 
-                ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
-                : "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-              borderColor: darkMode ? "#4b5563" : "#dbeafe",
+              background: darkMode ? "#273039" : "#f7fbfb",
+              borderColor: darkMode ? "#3a4550" : "#d5e0e1",
               boxShadow: darkMode 
                 ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
-                : "0 2px 4px rgba(59, 130, 246, 0.08)",
+                : "0 2px 4px rgba(11, 92, 102, 0.08)",
             }}
           >
             <div className="flex items-center justify-between mb-2">
@@ -2175,8 +1856,8 @@ const DashboardContent = ({ sliders }) => {
                 <div 
                   className="p-1.5 rounded-lg"
                   style={{
-                    background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-                    boxShadow: "0 2px 4px rgba(59, 130, 246, 0.3)",
+                    background: "#0b5c66",
+                    
                   }}
                 >
                   <ThunderboltOutlined className="text-white text-xs" />
@@ -2190,7 +1871,7 @@ const DashboardContent = ({ sliders }) => {
                 unCheckedChildren="OFF"
                 size="small"
                 style={{
-                  background: darkMode ? "#3b82f6" : undefined,
+                  background: darkMode ? "#14919b" : undefined,
                 }}
               />
             </div>
@@ -2224,9 +1905,9 @@ const DashboardContent = ({ sliders }) => {
             const totalBookings = bookings.length;
             
             const pieData = [
-              { type: 'Active', value: activeBookings, color: '#3b82f6' },
+              { type: 'Active', value: activeBookings, color: '#14919b' },
               { type: 'Upcoming', value: upcomingBookings, color: '#10b981' },
-              { type: 'Completed', value: completedBookings, color: '#6366f1' },
+              { type: 'Completed', value: completedBookings, color: '#0d6b74' },
             ].filter(item => item.value > 0);
             
             const pieConfig = {
@@ -2262,23 +1943,21 @@ const DashboardContent = ({ sliders }) => {
             
             return (
           <div 
-            className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+            className="hs-shell__panel"
             style={{
-              background: darkMode 
-                ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
-                    : "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-                  borderColor: darkMode ? "#4b5563" : "#dbeafe",
+              background: darkMode ? "#273039" : "#f7fbfb",
+                  borderColor: darkMode ? "#3a4550" : "#d5e0e1",
               boxShadow: darkMode 
                 ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
-                    : "0 2px 4px rgba(59, 130, 246, 0.08)",
+                    : "0 2px 4px rgba(11, 92, 102, 0.08)",
             }}
           >
             <div className="flex items-center gap-2.5 mb-3">
               <div 
                 className="p-1.5 rounded-lg"
                 style={{
-                      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-                      boxShadow: "0 2px 4px rgba(59, 130, 246, 0.3)",
+                      background: "#0b5c66",
+                      
                 }}
               >
                     <BarChartOutlined className="text-white text-xs" />
@@ -2323,23 +2002,21 @@ const DashboardContent = ({ sliders }) => {
             
             return (
               <div 
-                className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+                className="hs-shell__panel"
                       style={{
-                  background: darkMode 
-                    ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
-                    : "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-                  borderColor: darkMode ? "#4b5563" : "#dbeafe",
+                  background: darkMode ? "#273039" : "#f7fbfb",
+                  borderColor: darkMode ? "#3a4550" : "#d5e0e1",
                   boxShadow: darkMode 
                     ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
-                    : "0 2px 4px rgba(59, 130, 246, 0.08)",
+                    : "0 2px 4px rgba(11, 92, 102, 0.08)",
                 }}
               >
                 <div className="flex items-center gap-2.5 mb-3">
                   <div 
                     className="p-1.5 rounded-lg"
                       style={{
-                      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-                      boxShadow: "0 2px 4px rgba(59, 130, 246, 0.3)",
+                      background: "#0b5c66",
+                      
                       }}
                   >
                     <DollarOutlined className="text-white text-xs" />
@@ -2364,7 +2041,7 @@ const DashboardContent = ({ sliders }) => {
                     </div>
                     <div className="flex items-center justify-between">
                       <Text className={`text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Advance</Text>
-                      <Text className={`text-[10px] font-bold text-blue-600`}>
+                      <Text className={`text-[10px] font-bold text-hs-ocean`}>
                         ৳{totalAdvance.toLocaleString()}
                       </Text>
                     </div>
@@ -2411,23 +2088,21 @@ const DashboardContent = ({ sliders }) => {
             
             return (
           <div 
-            className="p-3.5 rounded-xl border transition-all duration-300 hover:shadow-md"
+            className="hs-shell__panel"
             style={{
-              background: darkMode 
-                ? "linear-gradient(135deg, #374151 0%, #1f2937 100%)" 
-                    : "linear-gradient(135deg, #ffffff 0%, #eff6ff 100%)",
-                  borderColor: darkMode ? "#4b5563" : "#dbeafe",
+              background: darkMode ? "#273039" : "#f7fbfb",
+                  borderColor: darkMode ? "#3a4550" : "#d5e0e1",
               boxShadow: darkMode 
                 ? "0 2px 4px rgba(0, 0, 0, 0.2)" 
-                    : "0 2px 4px rgba(59, 130, 246, 0.08)",
+                    : "0 2px 4px rgba(11, 92, 102, 0.08)",
             }}
           >
             <div className="flex items-center gap-2.5 mb-3">
               <div 
                 className="p-1.5 rounded-lg"
                 style={{
-                      background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
-                      boxShadow: "0 2px 4px rgba(59, 130, 246, 0.3)",
+                      background: "#0b5c66",
+                      
                 }}
               >
                     <TeamOutlined className="text-white text-xs" />
@@ -2447,14 +2122,14 @@ const DashboardContent = ({ sliders }) => {
                         key={idx}
                         className="p-2 rounded-lg"
             style={{
-                          background: darkMode ? "rgba(59, 130, 246, 0.1)" : "rgba(59, 130, 246, 0.05)",
+                          background: darkMode ? "rgba(20,145,155,0.12)" : "#e8f4f3",
                         }}
                       >
                         <div className="flex items-center justify-between mb-1">
                           <Text className={`text-[10px] font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                             {user.name}
                           </Text>
-                          <Text className={`text-[10px] font-bold ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                          <Text className={`text-[10px] font-bold ${darkMode ? 'text-hs-soft' : 'text-hs-ocean'}`}>
                             {user.count} bookings
                           </Text>
                         </div>
@@ -2471,72 +2146,7 @@ const DashboardContent = ({ sliders }) => {
         </div>
       </Drawer>
 
-      {/* Responsive Styles */}
-      <style jsx global>{`
-        @media (max-width: 640px) {
-          .responsive-content {
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-          }
-          
-          .ant-layout-header {
-            padding-left: 8px !important;
-            padding-right: 8px !important;
-          }
-          
-          .ant-card-body {
-            padding: 14px !important;
-          }
-          
-          .ant-menu-item {
-            min-height: 48px !important;
-            line-height: 48px !important;
-          }
-          
-          .ant-drawer-body {
-            padding: 12px !important;
-          }
-          
-          .ant-modal {
-            margin: 8px !important;
-            max-width: calc(100% - 16px) !important;
-          }
-          
-          .ant-table {
-            font-size: 11px !important;
-          }
-          
-          .ant-table-thead > tr > th {
-            padding: 8px 4px !important;
-            font-size: 10px !important;
-          }
-          
-          .ant-table-tbody > tr > td {
-            padding: 8px 4px !important;
-            font-size: 10px !important;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          .ant-card-body {
-            padding: 12px !important;
-          }
-          
-          .ant-table {
-            font-size: 10px !important;
-          }
-          
-          .ant-table-thead > tr > th {
-            padding: 6px 3px !important;
-            font-size: 9px !important;
-          }
-          
-          .ant-table-tbody > tr > td {
-            padding: 6px 3px !important;
-            font-size: 9px !important;
-          }
-        }
-      `}</style>
+
       </Layout>
     </PermissionProvider>
   );
@@ -2545,14 +2155,10 @@ const DashboardContent = ({ sliders }) => {
 const Dashboard = ({ sliders }) => {
   return (
     <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="hs-shell min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 mx-auto mb-3">
-              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl animate-spin flex items-center justify-center">
-              <div className="text-white text-lg font-bold">S</div>
-            </div>
-          </div>
-            <p className="text-sm text-blue-600 font-medium">Loading Dashboard...</p>
+          <div className="w-10 h-10 mx-auto mb-3 border-2 border-hs-ocean border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-hs-ocean font-medium">Loading console...</p>
         </div>
       </div>
     }>

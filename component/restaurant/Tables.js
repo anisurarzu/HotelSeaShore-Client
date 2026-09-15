@@ -267,7 +267,7 @@ const Tables = () => {
                           <EditOutlined
                             key="edit"
                             onClick={() => handleEdit(table)}
-                            className="text-blue-600 hover:text-blue-800"
+                            className="text-hs-ocean hover:text-hs-deep"
                           />
                         </Tooltip>,
                         <Tooltip title={isAvailable ? "Mark as Occupied" : "Mark as Available"}>

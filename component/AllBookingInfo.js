@@ -1,19 +1,26 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Select, DatePicker, Button, Spin, Alert, message } from "antd";
-import { DownloadOutlined } from "@ant-design/icons";
+import { Select, DatePicker, Button, Skeleton, message } from "antd";
+import { FileExcelOutlined, FilePdfOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import coreAxios from "@/utils/axiosInstance";
+import "./AdminOps.css";
 
 dayjs.extend(isBetween);
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
+
+const fmt = (n) =>
+  Number(n || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
 
 /** Always return an array. Never return a non-array. */
 function toArray(val) {
@@ -292,156 +299,171 @@ const AllBookingInfo = ({ hotelID }) => {
   const advanceSum = hasList ? list.reduce((sum, b) => sum + (Number(b.advancePayment) || 0), 0) : 0;
   const dueSum = hasList ? list.reduce((sum, b) => sum + (Number(b.duePayment) || 0), 0) : 0;
 
+  const dateLabel =
+    Array.isArray(dates) && dates[0] && dates[1]
+      ? `${dayjs(dates[0]).format("D MMM YYYY")} – ${dayjs(dates[1]).format("D MMM YYYY")}`
+      : "All dates";
+
   return (
-    <div style={{ padding: "20px" }}>
-      <h3
-        style={{
-          color: "#38a169",
-          fontWeight: "bold",
-          textAlign: "center",
-          fontSize: "24px",
-          marginBottom: "20px",
-        }}
-      >
-        Booking Information
-      </h3>
-
-      <div style={{ marginBottom: "20px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
-        {/* <Select
-          placeholder="Select Hotel"
-          style={{ minWidth: 140, flex: "1 1 25%" }}
-          value={selectedHotel}
-          onChange={(value) => {
-            setSelectedHotel(value);
-            const selectedHotelObj = hotelsList.find((h) => h.hotelID === value);
-            setSelectedHotelName(selectedHotelObj ? selectedHotelObj.hotelName || selectedHotelObj.name : "");
-          }}
-        >
-          {hotelsList.map((hotel) => (
-            <Option key={hotel.hotelID} value={hotel.hotelID}>
-              {hotel.hotelName || hotel.name}
-            </Option>
-          ))}
-        </Select> */}
-
-        <Select
-          placeholder="Select User"
-          style={{ minWidth: 120, flex: "1 1 25%" }}
-          value={selectedUser}
-          onChange={(value) => setSelectedUser(value)}
-        >
-          {usersList.map((user) => (
-            <Option key={user.id || user._id || user.loginID} value={user.loginID}>
-              {user.loginID || user.username}
-            </Option>
-          ))}
-        </Select>
-
-        <RangePicker
-          value={dates}
-          onChange={(d) => setDates(Array.isArray(d) ? d : [])}
-          style={{ minWidth: 220, flex: "1 1 40%" }}
-        />
-
-        <Button type="primary" onClick={fetchBookings}>
-          Apply Filters
-        </Button>
-
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={exportToExcel}
-          disabled={!hasList}
-        >
-          Export to Excel
-        </Button>
-
-        <Button
-          icon={<DownloadOutlined />}
-          onClick={exportToPDF}
-          disabled={!hasList}
-        >
-          Export to PDF
-        </Button>
+    <div className="hs-ab">
+      <div className="hs-ab__toolbar">
+        <div className="hs-ab__title-block">
+          <p className="hs-ab__eyebrow">Analytics</p>
+          <h2 className="hs-ab__title">Report Dashboard</h2>
+          <p className="hs-ab__meta">
+            Booking ledger · {dateLabel}
+            {selectedUser ? ` · ${selectedUser}` : ""}
+          </p>
+        </div>
+        <div className="hs-ab__controls">
+          <Select
+            placeholder="Select user"
+            allowClear
+            value={selectedUser}
+            onChange={(value) => setSelectedUser(value)}
+            style={{ minWidth: 150 }}
+          >
+            {usersList.map((user) => (
+              <Option key={user.id || user._id || user.loginID} value={user.loginID}>
+                {user.loginID || user.username}
+              </Option>
+            ))}
+          </Select>
+          <RangePicker
+            value={dates}
+            onChange={(d) => setDates(Array.isArray(d) ? d : [])}
+            format="DD MMM YYYY"
+          />
+          <Button type="primary" onClick={fetchBookings}>
+            Apply
+          </Button>
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={exportToExcel}
+            disabled={!hasList}
+          >
+            Excel
+          </Button>
+          <Button
+            icon={<FilePdfOutlined />}
+            onClick={exportToPDF}
+            disabled={!hasList}
+          >
+            PDF
+          </Button>
+        </div>
       </div>
 
-      {loading ? (
-        <Spin style={{ marginTop: "20px" }} tip="Loading, please wait...">
-          <Alert
-            message="Fetching booking data"
-            description="This may take a moment, thank you for your patience."
-            type="info"
-          />
-        </Spin>
-      ) : (
-        <table border="1" style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Booking No</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Full Name</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Check-In</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Check-Out</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Room</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>No. Of Nights</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Method</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>TrxID</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Total Bill</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Advance</th>
-              <th style={{ border: "1px solid black", textAlign: "center" }}>Due</th>
-            </tr>
-          </thead>
-          <tbody>
-            {hasList ? (
-              list.map((booking) => (
-                <tr key={booking._id || booking.bookingNo || Math.random()}>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>{booking.bookingNo}</td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>{booking.fullName}</td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>
-                    {booking.checkInDate ? dayjs(booking.checkInDate).format("DD MMM YYYY") : ""}
-                  </td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>
-                    {booking.checkOutDate ? dayjs(booking.checkOutDate).format("DD MMM YYYY") : ""}
-                  </td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>
-                    {booking.roomCategoryName} ({booking.roomNumberName})
-                  </td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>{booking.nights}</td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>{booking.paymentMethod}</td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>{booking.transactionId}</td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>{booking.totalBill}</td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>{booking.advancePayment}</td>
-                  <td style={{ border: "1px solid black", textAlign: "center" }}>{booking.duePayment}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={11} style={{ textAlign: "center", border: "1px solid black" }}>
-                  No bookings available.
-                </td>
-              </tr>
-            )}
+      <div className="hs-ab__kpis">
+        <div className="hs-ab__kpi">
+          <p className="hs-ab__kpi-label">Bookings</p>
+          <p className="hs-ab__kpi-value">{hasList ? list.length : 0}</p>
+        </div>
+        <div className="hs-ab__kpi hs-ab__kpi--soft">
+          <p className="hs-ab__kpi-label">Total bill</p>
+          <p className="hs-ab__kpi-value">৳{fmt(totalBillSum)}</p>
+        </div>
+        <div className="hs-ab__kpi hs-ab__kpi--sand">
+          <p className="hs-ab__kpi-label">Advance paid</p>
+          <p className="hs-ab__kpi-value">৳{fmt(advanceSum)}</p>
+        </div>
+        <div className="hs-ab__kpi hs-ab__kpi--due">
+          <p className="hs-ab__kpi-label">Due</p>
+          <p className="hs-ab__kpi-value is-due">৳{fmt(dueSum)}</p>
+        </div>
+      </div>
 
-            {hasList && (
-              <tr>
-                <td
-                  colSpan={8}
-                  style={{ textAlign: "right", fontWeight: "bold", border: "1px solid black" }}
-                >
-                  Total:
-                </td>
-                <td style={{ border: "1px solid black", textAlign: "center", fontWeight: "bold" }}>
-                  {totalBillSum.toFixed(2)}
-                </td>
-                <td style={{ border: "1px solid black", textAlign: "center", fontWeight: "bold" }}>
-                  {advanceSum.toFixed(2)}
-                </td>
-                <td style={{ border: "1px solid black", textAlign: "center", fontWeight: "bold" }}>
-                  {dueSum.toFixed(2)}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
+      <div className="hs-ab__panel">
+        <div className="hs-ab__panel-head">
+          <h3>Booking report</h3>
+          <span>{hasList ? `${list.length} rows` : "No data"}</span>
+        </div>
+        {loading ? (
+          <div className="hs-ab__loading">
+            <Skeleton active paragraph={{ rows: 8 }} />
+          </div>
+        ) : (
+          <div className="hs-ab__scroll">
+            <table className="hs-ab__table">
+              <thead>
+                <tr>
+                  <th>Booking no</th>
+                  <th>Guest</th>
+                  <th>Check-in</th>
+                  <th>Check-out</th>
+                  <th>Room</th>
+                  <th className="is-center">Nights</th>
+                  <th>Method</th>
+                  <th>Trx ID</th>
+                  <th className="is-num">Total</th>
+                  <th className="is-num">Advance</th>
+                  <th className="is-num is-due">Due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hasList ? (
+                  list.map((booking) => (
+                    <tr key={booking._id || booking.bookingNo}>
+                      <td>
+                        <span className="hs-ab__invoice">
+                          {booking.bookingNo || "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="hs-ab__guest" title={booking.fullName || ""}>
+                          {booking.fullName || "—"}
+                        </div>
+                      </td>
+                      <td>
+                        {booking.checkInDate
+                          ? dayjs(booking.checkInDate).format("DD MMM YYYY")
+                          : "—"}
+                      </td>
+                      <td>
+                        {booking.checkOutDate
+                          ? dayjs(booking.checkOutDate).format("DD MMM YYYY")
+                          : "—"}
+                      </td>
+                      <td>
+                        <div>
+                          {booking.roomNumberName || "—"}
+                          <div className="hs-ab__room">
+                            {booking.roomCategoryName || ""}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="is-center">{booking.nights ?? "—"}</td>
+                      <td>{booking.paymentMethod || "—"}</td>
+                      <td>{booking.transactionId || "—"}</td>
+                      <td className="is-num">{fmt(booking.totalBill)}</td>
+                      <td className="is-num">{fmt(booking.advancePayment)}</td>
+                      <td className="is-num is-due">{fmt(booking.duePayment)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={11} className="hs-ab__empty">
+                      No bookings for the selected filters. Apply user and date range, then click Apply.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {hasList && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={8} className="is-num">
+                      Total
+                    </td>
+                    <td className="is-num">{fmt(totalBillSum)}</td>
+                    <td className="is-num">{fmt(advanceSum)}</td>
+                    <td className="is-num is-due">{fmt(dueSum)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

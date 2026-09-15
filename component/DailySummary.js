@@ -6,12 +6,15 @@ import coreAxios from "@/utils/axiosInstance";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import "./DailyOps.css";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
 /** Format date as Bangladesh (Asia/Dhaka) YYYY-MM-DD for API */
 const toBangladeshDateStr = (date) => dayjs(date).tz("Asia/Dhaka").format("YYYY-MM-DD");
+
+const fmt = (n) => Number(n || 0).toLocaleString();
 
 const DailySummary = forwardRef(function DailySummary(
   { selectedDate, dailyIncome, hideSave = false },
@@ -147,78 +150,49 @@ const DailySummary = forwardRef(function DailySummary(
     save: () => handleSave(),
   }), [selectedDate, effectiveDailyIncome, totalBalance, dailyExpenses, closingBalance]);
 
-  return (
-    <div className="mt-6">
-      <div className="w-full sm:w-1/2 bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
-            <thead>
-              <tr style={{ backgroundColor: '#2563eb' }}>
-                <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
-                  Daily Summary
-                </th>
-                <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-tight border border-blue-700" style={{ color: '#ffffff', backgroundColor: '#2563eb', fontWeight: 600 }}>
-                  Amount
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="hover:bg-gray-50 transition-colors">
-                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
-                  Opening Balance
-                </td>
-                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
-                  {openingBalance}
-                </td>
-              </tr>
-              <tr className="hover:bg-gray-50 transition-colors">
-                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
-                  Daily Income
-                </td>
-                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
-                  {effectiveDailyIncome}
-                </td>
-              </tr>
-              <tr className="bg-gray-100 hover:bg-gray-50 transition-colors">
-                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-semibold border border-gray-300">
-                  Total Balance
-                </td>
-                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
-                  {totalBalance}
-                </td>
-              </tr>
-              <tr className="hover:bg-gray-50 transition-colors">
-                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
-                  Daily Expenses
-                </td>
-                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
-                  {dailyExpenses}
-                </td>
-              </tr>
-              <tr className="bg-gray-100 hover:bg-gray-50 transition-colors">
-                <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-semibold border border-gray-300">
-                  Closing Balance
-                </td>
-                <td className="px-3 py-2.5 text-right text-xs text-gray-800 font-semibold border border-gray-300">
-                  {closingBalance}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+  const dateLabel = selectedDate
+    ? dayjs(selectedDate).tz("Asia/Dhaka").format("D MMM YYYY")
+    : "";
 
-      {!hideSave && (
-        <div className="mt-4 no-print">
-          <Button
-            type="primary"
-            onClick={handleSave}
-            loading={loading}
-            style={{ backgroundColor: "#2563eb", borderColor: "#2563eb" }}>
-            Save Summary
-          </Button>
+  return (
+    <div className="hs-dsum">
+      <div className="hs-dsum__panel">
+        <div className="hs-dsum__head">
+          <h3>Daily Summary</h3>
+          <span>{dateLabel || "Cash position"}</span>
         </div>
-      )}
+        <table className="hs-dsum__table">
+          <tbody>
+            <tr>
+              <td className="hs-dsum__label">Opening Balance</td>
+              <td className="hs-dsum__value">{fmt(openingBalance)}</td>
+            </tr>
+            <tr>
+              <td className="hs-dsum__label">Daily Income</td>
+              <td className="hs-dsum__value">{fmt(effectiveDailyIncome)}</td>
+            </tr>
+            <tr className="is-total">
+              <td className="hs-dsum__label">Total Balance</td>
+              <td className="hs-dsum__value">{fmt(totalBalance)}</td>
+            </tr>
+            <tr className="is-expense">
+              <td className="hs-dsum__label">Daily Expenses</td>
+              <td className="hs-dsum__value">{fmt(dailyExpenses)}</td>
+            </tr>
+            <tr className="is-closing">
+              <td className="hs-dsum__label">Closing Balance</td>
+              <td className="hs-dsum__value">{fmt(closingBalance)}</td>
+            </tr>
+          </tbody>
+        </table>
+        {!hideSave && (
+          <div className="hs-dsum__footer no-print">
+            <Button type="primary" onClick={handleSave} loading={loading} block>
+              Save Summary
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 });

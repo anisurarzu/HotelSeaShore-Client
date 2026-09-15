@@ -3,9 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 255, 255, 255; /* Changed to white */
-  --background-end-rgb: 255, 255, 255;   /* Changed to white */
+  --foreground-rgb: 20, 42, 46;
+  --background-start-rgb: 247, 251, 250;
+  --background-end-rgb: 247, 251, 250;
+
+  /* Hotel Sea Shore brand (matches login) */
+  --hs-deep: #04343a;
+  --hs-ocean: #0b5c66;
+  --hs-lagoon: #14919b;
+  --hs-soft: #3db5be;
+  --hs-mist: #e8f4f3;
+  --hs-pearl: #f7fbfa;
+  --hs-sand: #c9a66b;
+  --hs-ink: #142a2e;
+  --hs-muted: #5f7478;
+  --hs-primary-gradient: linear-gradient(135deg, #0b5c66 0%, #14919b 100%);
+  --hs-primary-gradient-deep: linear-gradient(135deg, #14919b 0%, #0b5c66 50%, #04343a 100%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -65,7 +78,7 @@ html {
   font-family: 'Poppins', sans-serif;
 }
 
-/* Dark mode menu styles */
+/* Dark mode menu styles (legacy) — shell overrides these for hs-shell */
 .dark-menu .ant-menu-item {
   color: #d1d5db !important;
 }
@@ -76,8 +89,8 @@ html {
 }
 
 .dark-menu .ant-menu-item-selected {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-  color: #ffffff !important;
+  background: rgba(20, 145, 155, 0.22) !important;
+  color: #3db5be !important;
 }
 
 .dark-menu .ant-menu-item-icon {
@@ -91,26 +104,57 @@ html {
 
 /* Left sidebar collapse button styling */
 .ant-layout-sider-trigger {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  background: var(--hs-primary-gradient) !important;
   border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
   color: #ffffff !important;
   transition: all 0.3s ease !important;
 }
 
 .ant-layout-sider-trigger:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+  background: var(--hs-primary-gradient-deep) !important;
   color: #ffffff !important;
 }
 
 .dark .ant-layout-sider-trigger {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  background: var(--hs-primary-gradient) !important;
   border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
   color: #ffffff !important;
 }
 
 .dark .ant-layout-sider-trigger:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+  background: var(--hs-primary-gradient-deep) !important;
   color: #ffffff !important;
+}
+
+/* Soft Ant Design primary accents across the app */
+.ant-btn-primary {
+  background: var(--hs-ocean) !important;
+  border-color: var(--hs-ocean) !important;
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  background: var(--hs-lagoon) !important;
+  border-color: var(--hs-lagoon) !important;
+}
+
+.ant-pagination-item-active {
+  border-color: var(--hs-ocean) !important;
+}
+
+.ant-pagination-item-active a {
+  color: var(--hs-ocean) !important;
+}
+
+.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--hs-ocean) !important;
+}
+
+.ant-tabs-ink-bar {
+  background: var(--hs-lagoon) !important;
+}
+
+.ant-switch-checked {
+  background: var(--hs-lagoon) !important;
 }
 
 /* Daily expense table – category-wise colors (green, purple, yellow, blue, orange) */

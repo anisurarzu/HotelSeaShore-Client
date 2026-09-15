@@ -551,7 +551,7 @@ const BookingTable = ({ hotelID }) => {
                               )}
                             </td>
 
-                            <td className="border  border-tableBorder text-center   text-blue-900">
+                            <td className="border  border-tableBorder text-center   text-hs-deep">
                               {booking?.updatedByID}{" "}
                               {booking?.updatedByID &&
                                 dayjs(booking?.updatedAt).format(

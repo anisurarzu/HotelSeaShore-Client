@@ -52,6 +52,8 @@ import { CopyOutlined, ReloadOutlined, PlusOutlined, SearchOutlined, MinusCircle
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
+import "./Booking/BookingForm.css";
+import "./BookingInfo.css";
 
 const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps }) => {
   const router = useRouter();
@@ -1331,468 +1333,422 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
   };
 
   return (
-    <div>
+    <div className="hs-bi">
       {bookingPermissions.viewAccess ? (
         <>
           <div>
-            <div className="space-y-4">
-                <div className="mb-3">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Bookings</h1>
-                    <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 sm:items-center">
-                      <div className="w-full sm:w-auto flex flex-row gap-2 flex-wrap sm:flex-nowrap">
-                        <Input
-                          placeholder="Search bookings..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          allowClear
-                          className="flex-1 sm:flex-initial"
-                          style={{ height: "40px", minWidth: "150px" }}
-                          prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
-                        />
-                        <DatePicker
-                          value={checkInDate}
-                          onChange={(date) => setCheckInDate(date)}
-                          format="MMM D, YYYY"
-                          allowClear
-                          placeholder="Check-in Date"
-                          className="flex-1 sm:flex-initial"
-                          style={{ height: "40px", minWidth: "130px", width: "130px" }}
-                        />
-                        {(searchTerm || checkInDate) && (
-                          <Button
-                            onClick={() => {
-                              setSearchTerm("");
-                              setCheckInDate(null);
-                            }}
-                            className="w-full sm:w-auto sm:flex-initial"
-                            style={{ height: "40px" }}
-                          >
-                            Clear
-                          </Button>
-                        )}
-                      </div>
-                      
-                      <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:flex-row gap-2">
-                        <Button
-                          icon={<ReloadOutlined />}
-                          onClick={() => {
-                            fetchBookings();
-                            fetchHotelInfo();
-                          }}
-                          loading={tableLoading}
-                          className="w-full sm:w-auto"
-                          style={{ height: "40px" }}
-                        >
-                          Refresh
-                        </Button>
-                        {bookingPermissions?.insertAccess && (
-                          <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={() => {
-                              formik.resetForm();
-                              setVisible(true);
-                              setIsEditing(false);
-                              setEditingKey(null);
-                              setPrevData(null);
-                              setInitialPaymentCount(0);
-                              setIsHotelFromReference(false);
-                              setRoomCategories([]);
-                              setRoomNumbers([]);
-                              hasHandledQueryParams.current = false;
-                              if (searchParams.get("room") || searchParams.get("date")) {
-                                router.replace("/dashboard?menu=6");
-                              }
-                              fetchHotelInfo();
-                            }}
-                            className="w-full sm:w-auto"
-                            style={{ height: "40px" }}
-                          >
-                            <span className="hidden sm:inline">Create Booking</span>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {filteredBookings.length !== bookings.length && (
-                    <div className="mt-2 text-sm text-gray-600">
-                      Showing {filteredBookings.length} of {bookings.length} bookings
-                    </div>
-                  )}
-                </div>
+            <div className="hs-bi__toolbar">
+              <div className="hs-bi__title-block">
+                <p className="hs-bi__eyebrow">Operations</p>
+                <h1 className="hs-bi__title">Booking Info</h1>
+                <p className="hs-bi__meta">
+                  {filteredBookings.length !== bookings.length
+                    ? `Showing ${filteredBookings.length} of ${bookings.length} bookings`
+                    : `${bookings.length} booking${bookings.length === 1 ? "" : "s"}`}
+                </p>
+              </div>
 
-                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse" style={{ fontSize: "11px", border: "1px solid #e5e7eb" }}>
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Booking No.
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Guest Name
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Phone
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Room Category
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Room Type
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Check In
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Check Out
-                          </th>
-                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Nights
-                          </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Paid
-                          </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Total
-                          </th>
-                          <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            DUE
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Payment Methods
-                          </th>
-                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Status
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-green-100 border border-gray-300">
-                            Booked By
-                          </th>
-                          <th className="px-2 py-1.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-tight bg-yellow-100 border border-gray-300">
-                            Updated By
-                          </th>
-                          <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-tight bg-gray-100 border border-gray-300">
-                            Actions
-                          </th>
+              <div className="hs-bi__controls">
+                <Input
+                  placeholder="Search booking, guest, phone…"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  allowClear
+                  prefix={<SearchOutlined style={{ color: "#8aa0a4" }} />}
+                />
+                <DatePicker
+                  value={checkInDate}
+                  onChange={(date) => setCheckInDate(date)}
+                  format="DD MMM YYYY"
+                  allowClear
+                  placeholder="Check-in"
+                />
+                {(searchTerm || checkInDate) && (
+                  <Button
+                    onClick={() => {
+                      setSearchTerm("");
+                      setCheckInDate(null);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={() => {
+                    fetchBookings();
+                    fetchHotelInfo();
+                  }}
+                  loading={tableLoading}
+                >
+                  Refresh
+                </Button>
+                {bookingPermissions?.insertAccess && (
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      formik.resetForm();
+                      setVisible(true);
+                      setIsEditing(false);
+                      setEditingKey(null);
+                      setPrevData(null);
+                      setInitialPaymentCount(0);
+                      setIsHotelFromReference(false);
+                      setRoomCategories([]);
+                      setRoomNumbers([]);
+                      hasHandledQueryParams.current = false;
+                      if (searchParams.get("room") || searchParams.get("date")) {
+                        router.replace("/dashboard?menu=6");
+                      }
+                      fetchHotelInfo();
+                    }}
+                  >
+                    <span className="hidden sm:inline">Create Booking</span>
+                    
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="hs-bi__panel">
+              <div className="hs-bi__scroll">
+                <table className="hs-bi__table">
+                  <thead>
+                    <tr>
+                      <th>Booking</th>
+                      <th>Guest</th>
+                      <th>Phone</th>
+                      <th>Category</th>
+                      <th>Room</th>
+                      <th>Check-in</th>
+                      <th>Check-out</th>
+                      <th className="is-center">Nights</th>
+                      <th className="is-num">Paid</th>
+                      <th className="is-num">Total</th>
+                      <th className="is-num">Due</th>
+                      <th>Payments</th>
+                      <th className="is-center">Status</th>
+                      <th>Booked by</th>
+                      <th>Updated by</th>
+                      <th className="is-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableLoading ? (
+                      Array.from({ length: 8 }).map((_, idx) => (
+                        <tr key={`skeleton-${idx}`}>
+                          {Array.from({ length: 16 }).map((__, cidx) => (
+                            <td key={cidx}>
+                              <Skeleton.Input
+                                active
+                                size="small"
+                                style={{ width: cidx === 15 ? 90 : 72, height: 14 }}
+                              />
+                            </td>
+                          ))}
                         </tr>
-                      </thead>
+                      ))
+                    ) : paginatedBookings?.length ? (
+                      paginatedBookings.map((booking) => {
+                        const totalFromPayments = (booking.payments || []).reduce(
+                          (s, p) => s + (Number(p.amount) || 0),
+                          0
+                        );
+                        const totalBill = Number(booking.totalBill) || 0;
+                        const paid =
+                          totalFromPayments > 0
+                            ? totalFromPayments
+                            : Number(booking.advancePayment) || 0;
+                        const due =
+                          totalFromPayments > 0
+                            ? Math.max(0, totalBill - totalFromPayments)
+                            : booking.duePayment != null
+                              ? Number(booking.duePayment)
+                              : Math.max(0, totalBill - paid);
 
-                      <tbody>
-                        {tableLoading ? (
-                          Array.from({ length: 8 }).map((_, idx) => (
-                            <tr key={`skeleton-${idx}`}>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 100, height: 16 }} />
-                              </td>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 120, height: 16 }} />
-                              </td>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 100, height: 16 }} />
-                              </td>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
-                              </td>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 60, height: 16 }} />
-                              </td>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
-                              </td>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 80, height: 16 }} />
-                              </td>
-                              <td className="px-3 py-2.5 text-center border border-gray-300">
-                                <div style={{ display: "flex", justifyContent: "center" }}>
-                                  <Skeleton.Input active size="small" style={{ width: 40, height: 16 }} />
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5 text-right border border-gray-300">
-                                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                  <Skeleton.Input active size="small" style={{ width: 70, height: 16 }} />
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5 text-right border border-gray-300">
-                                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                  <Skeleton.Input active size="small" style={{ width: 70, height: 16 }} />
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5 text-right border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 60, height: 16 }} />
-                              </td>
-                              <td className="px-2 py-1.5 border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 90, height: 16 }} />
-                              </td>
-                              <td className="px-3 py-2.5 text-center border border-gray-300">
-                                <div style={{ display: "flex", justifyContent: "center" }}>
-                                  <Skeleton.Button active size="small" style={{ width: 70, height: 24 }} />
-                                </div>
-                              </td>
-                              <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 110, height: 16 }} />
-                              </td>
-                              <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
-                                <Skeleton.Input active size="small" style={{ width: 110, height: 16 }} />
-                              </td>
-                              <td className="px-3 py-2.5 text-center border border-gray-300">
-                                <div style={{ display: "flex", justifyContent: "center", gap: "4px" }}>
-                                  <Skeleton.Button active size="small" style={{ width: 50, height: 24 }} />
-                                  <Skeleton.Button active size="small" style={{ width: 50, height: 24 }} />
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          paginatedBookings?.map((booking) => (
+                        const merged = {};
+                        (booking.payments || []).forEach((p) => {
+                          const method = ((p.paymentMethod || p.method || "CASH") + "").toUpperCase();
+                          const amt = Number(p.amount) || 0;
+                          if (amt > 0) merged[method] = (merged[method] || 0) + amt;
+                        });
+                        if (
+                          !booking.payments?.length &&
+                          booking.paymentMethod &&
+                          (Number(booking.advancePayment) || 0) > 0
+                        ) {
+                          const m = (booking.paymentMethod + "").toUpperCase();
+                          merged[m] = (merged[m] || 0) + (Number(booking.advancePayment) || 0);
+                        }
+                        const payEntries = Object.entries(merged).filter(([, amt]) => amt > 0);
+                        const isCanceled = booking.statusID === 255;
+
+                        return (
                           <tr
                             key={booking._id}
-                            className={`hover:bg-gray-50 transition-colors ${
-                              booking.statusID === 255 ? "bg-red-50" : ""
-                            }`}
+                            className={isCanceled ? "is-canceled" : undefined}
                           >
-                            <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
-                              <span className="flex items-center gap-1.5">
+                            <td>
+                              <span className="hs-bi__booking-no">
                                 <Link
                                   target="_blank"
                                   href={`/dashboard/${booking.bookingNo}`}
                                   passHref
-                                  className="text-blue-600 hover:text-blue-800 cursor-pointer font-medium text-xs"
                                 >
                                   {booking.bookingNo}
                                 </Link>
-                                <Tooltip title="Click to copy">
+                                <Tooltip title="Copy booking no.">
                                   <CopyToClipboard
                                     text={booking.bookingNo}
                                     onCopy={() => message.success("Copied!")}
                                   >
-                                    <CopyOutlined className="text-blue-600 hover:text-blue-800 cursor-pointer text-xs" />
+                                    <CopyOutlined className="hs-bi__copy" />
                                   </CopyToClipboard>
                                 </Tooltip>
                               </span>
                             </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-800 font-medium border border-gray-300">
-                              {booking.fullName}
+                            <td>
+                              <span className="hs-bi__guest">{booking.fullName}</span>
                             </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                              {booking.phone}
+                            <td>
+                              <span className="hs-bi__muted">{booking.phone || "—"}</span>
                             </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 font-medium border border-gray-300">
-                              {booking.roomCategoryName || "—"}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                              {booking.roomNumberName || "—"}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                              {moment(booking.checkInDate).format("D MMM YY")}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border border-gray-300">
-                              {moment(booking.checkOutDate).format("D MMM YY")}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-center border border-gray-300">
-                              {booking.nights}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-right border border-gray-300">
-                              {(() => {
-                                const totalFromPayments = (booking.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
-                                return totalFromPayments > 0 ? totalFromPayments : (booking.advancePayment ?? "—");
-                              })()}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs font-semibold text-green-700 text-right border border-gray-300">
-                              {booking.totalBill}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 text-right border border-gray-300">
-                              {(() => {
-                                const totalFromPayments = (booking.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
-                                const totalBill = Number(booking.totalBill) || 0;
-                                const due = Math.max(0, totalBill - totalFromPayments);
-                                return totalFromPayments > 0 ? due : (booking.duePayment != null ? Number(booking.duePayment) : Math.max(0, totalBill - (Number(booking.advancePayment) || 0)));
-                              })()}
-                            </td>
-                            <td className="px-2 py-1.5 text-[10px] text-gray-700 border border-gray-300 align-top">
-                              {(() => {
-                                const merged = {};
-                                (booking.payments || []).forEach((p) => {
-                                  const method = ((p.paymentMethod || p.method || "CASH") + "").toUpperCase();
-                                  const amt = Number(p.amount) || 0;
-                                  if (amt > 0) merged[method] = (merged[method] || 0) + amt;
-                                });
-                                if (!booking.payments?.length && booking.paymentMethod && (Number(booking.advancePayment) || 0) > 0) {
-                                  const m = (booking.paymentMethod + "").toUpperCase();
-                                  merged[m] = (merged[m] || 0) + (Number(booking.advancePayment) || 0);
-                                }
-                                const entries = Object.entries(merged).filter(([, amt]) => amt > 0);
-                                if (entries.length === 0) return "—";
-                                return (
-                                  <>
-                                    {entries.map(([method, amount]) => (
-                                      <div key={method} className="leading-tight text-[10px]">
-                                        {method}: {amount}
-                                      </div>
-                                    ))}
-                                  </>
-                                );
-                              })()}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-center border border-gray-300">
-                              <span
-                                className="px-2 py-1 rounded text-xs font-semibold"
-                                style={{
-                                  backgroundColor: booking.statusID === 255 ? "#fee2e2" : "#dcfce7",
-                                  color: booking.statusID === 255 ? "#dc2626" : "#16a34a",
-                                }}
-                              >
-                                {booking.statusID === 255 ? "Canceled" : "Confirmed"}
+                            <td>
+                              <span className="hs-bi__muted">
+                                {booking.roomCategoryName || "—"}
                               </span>
                             </td>
-                            <td className="px-2 py-1.5 text-[10px] text-gray-900 font-medium border border-gray-300 align-top bg-green-50">
-                              <div className="leading-tight">
-                                <div className="font-semibold underline underline-offset-2">
+                            <td>
+                              <span className="hs-bi__guest">
+                                {booking.roomNumberName || "—"}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="hs-bi__muted">
+                                {moment(booking.checkInDate).format("DD MMM YY")}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="hs-bi__muted">
+                                {moment(booking.checkOutDate).format("DD MMM YY")}
+                              </span>
+                            </td>
+                            <td className="is-center">{booking.nights ?? "—"}</td>
+                            <td className="is-num">
+                              <span className="hs-bi__money">
+                                ৳{Number(paid || 0).toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="is-num">
+                              <span className="hs-bi__money hs-bi__money--total">
+                                ৳{Number(totalBill || 0).toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="is-num">
+                              <span
+                                className={`hs-bi__money ${
+                                  due > 0 ? "hs-bi__money--due" : "hs-bi__money--zero"
+                                }`}
+                              >
+                                ৳{Number(due || 0).toLocaleString()}
+                              </span>
+                            </td>
+                            <td>
+                              {payEntries.length === 0 ? (
+                                <span className="hs-bi__muted">—</span>
+                              ) : (
+                                <div className="hs-bi__pay-methods">
+                                  {payEntries.map(([method, amount]) => (
+                                    <div key={method} className="hs-bi__pay-chip">
+                                      <span>{method}</span>
+                                      <span>৳{Number(amount).toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td className="is-center">
+                              <span
+                                className={`hs-bi__status ${
+                                  isCanceled ? "hs-bi__status--cancel" : "hs-bi__status--ok"
+                                }`}
+                              >
+                                {isCanceled ? "Canceled" : "Confirmed"}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="hs-bi__audit">
+                                <span className="hs-bi__audit-name">
                                   {booking.bookedByID || booking.bookedBy || "—"}
-                                </div>
-                                <div className="text-[10px] text-gray-900">
-                                  {(booking.createdAt || booking.createTime || booking.createdDate)
-                                    ? moment(booking.createdAt || booking.createTime || booking.createdDate).format("D MMM YYYY, h:mm A")
+                                </span>
+                                <span className="hs-bi__audit-time">
+                                  {(booking.createdAt ||
+                                    booking.createTime ||
+                                    booking.createdDate)
+                                    ? moment(
+                                        booking.createdAt ||
+                                          booking.createTime ||
+                                          booking.createdDate
+                                      ).format("DD MMM YY, h:mm A")
                                     : "—"}
-                                </div>
+                                </span>
                               </div>
                             </td>
-                            <td className="px-2 py-1.5 text-[10px] text-gray-900 font-medium border border-gray-300 align-top bg-yellow-50">
-                              <div className="leading-tight">
-                                {booking.updatedByID && booking.updatedByID !== "Not Updated" ? (
+                            <td>
+                              <div className="hs-bi__audit">
+                                {booking.updatedByID &&
+                                booking.updatedByID !== "Not Updated" ? (
                                   <>
-                                    <div className="font-semibold underline underline-offset-2">
+                                    <span className="hs-bi__audit-name">
                                       {booking.updatedByID}
-                                    </div>
-                                    <div className="text-[10px] text-gray-900">
-                                      {(booking.updatedAt || booking.updateTime || booking.updatedDate)
-                                        ? moment(booking.updatedAt || booking.updateTime || booking.updatedDate).format("D MMM YYYY, h:mm A")
+                                    </span>
+                                    <span className="hs-bi__audit-time">
+                                      {(booking.updatedAt ||
+                                        booking.updateTime ||
+                                        booking.updatedDate)
+                                        ? moment(
+                                            booking.updatedAt ||
+                                              booking.updateTime ||
+                                              booking.updatedDate
+                                          ).format("DD MMM YY, h:mm A")
                                         : ""}
-                                    </div>
+                                    </span>
                                   </>
                                 ) : (
-                                  ""
+                                  <span className="hs-bi__muted">—</span>
                                 )}
                               </div>
                             </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap border border-gray-300">
-                              <div className="flex gap-1.5 justify-center items-center">
+                            <td className="is-center">
+                              <div className="hs-bi__actions">
                                 {bookingPermissions?.viewAccess && (
                                   <Button
                                     type="link"
                                     size="small"
                                     onClick={() => handleViewDetails(booking)}
-                                    style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
                                   >
                                     View
                                   </Button>
                                 )}
-                                <>
-                                  {bookingPermissions?.editAccess && (
-                                    <Button 
-                                      onClick={() => handleEdit(booking)}
-                                      size="small"
-                                      style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
-                                    >
-                                      Edit
-                                    </Button>
-                                  )}
+                                {bookingPermissions?.editAccess && (
+                                  <Button size="small" onClick={() => handleEdit(booking)}>
+                                    Edit
+                                  </Button>
+                                )}
+                                <Popconfirm
+                                  title="Cancel booking? Enter reason in the next step."
+                                  onConfirm={() => handleDelete(booking)}
+                                  okText="Yes"
+                                  cancelText="No"
+                                >
+                                  <Button type="link" danger size="small">
+                                    Cancel
+                                  </Button>
+                                </Popconfirm>
+                                {bookingPermissions?.deleteAccess && (
                                   <Popconfirm
-                                    title="Cancel booking? Enter reason in the next step."
-                                    onConfirm={() => handleDelete(booking)}
+                                    title="Are you sure to delete this booking?"
+                                    onConfirm={() => handleHardDelete(booking)}
                                     okText="Yes"
                                     cancelText="No"
                                   >
-                                    <Button
-                                      type="link"
-                                      danger
-                                      size="small"
-                                      style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
-                                    >
-                                      Cancel
+                                    <Button type="link" danger size="small">
+                                      Delete
                                     </Button>
                                   </Popconfirm>
-                                  {bookingPermissions?.deleteAccess && (
-                                    <>
-                                      <Popconfirm
-                                        title="Are you sure to delete this booking?"
-                                        onConfirm={() => handleHardDelete(booking)}
-                                        okText="Yes"
-                                        cancelText="No"
-                                      >
-                                        <Button
-                                          type="link"
-                                          danger
-                                          size="small"
-                                          style={{ fontSize: "11px", height: "24px", padding: "0 8px", display: "flex", alignItems: "center" }}
-                                        >
-                                          Delete
-                                        </Button>
-                                      </Popconfirm>
-                                    </>
-                                  )}
-                                </>
+                                )}
                               </div>
                             </td>
                           </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={16}>
+                          <div className="hs-bi__empty">
+                            <p className="hs-bi__empty-title">No bookings found</p>
+                            <p className="hs-bi__empty-sub">
+                              Try clearing filters or create a new booking.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-                  {!tableLoading && filteredBookings.length > 0 && (
-                    <div className="flex justify-between items-center px-3 py-2 border-t bg-gray-50">
-                      <div className="text-xs text-gray-700">
-                        Showing {paginatedBookings.length} of {filteredBookings.length} bookings
-                      </div>
-                      <Pagination
-                        current={pagination.current}
-                        pageSize={pagination.pageSize}
-                        total={filteredBookings.length}
-                        onChange={(page, pageSize) =>
-                          setPagination({ current: page, pageSize })
-                        }
-                        showSizeChanger
-                        pageSizeOptions={['10', '20', '50', '100']}
-                      />
-                    </div>
-                  )}
+              {!tableLoading && filteredBookings.length > 0 && (
+                <div className="hs-bi__footer">
+                  <div className="hs-bi__footer-meta">
+                    Showing {paginatedBookings.length} of {filteredBookings.length} bookings
+                  </div>
+                  <Pagination
+                    current={pagination.current}
+                    pageSize={pagination.pageSize}
+                    total={filteredBookings.length}
+                    onChange={(page, pageSize) =>
+                      setPagination({ current: page, pageSize })
+                    }
+                    showSizeChanger
+                    pageSizeOptions={["10", "20", "50", "100"]}
+                    size="small"
+                  />
                 </div>
+              )}
+            </div>
 
                 <Modal
-                  title="Cancel Booking"
+                  className="hs-booking-modal"
+                  title={
+                    <div className="hs-booking-modal__head">
+                      <p className="hs-booking-modal__eyebrow">Action</p>
+                      <h2 className="hs-booking-modal__title">Cancel Booking</h2>
+                      <p className="hs-booking-modal__sub">
+                        Provide a reason before confirming cancellation
+                      </p>
+                    </div>
+                  }
                   open={isModalVisible}
                   onOk={handleOk}
                   onCancel={handleCancel}
                   confirmLoading={submitLoading}
                   okText="Confirm Cancellation"
-                  cancelText="Cancel"
+                  cancelText="Hide"
                   destroyOnClose
+                  centered
                 >
-                  <div className="space-y-4">
+                  <div className="hs-bf" style={{ paddingBottom: 8 }}>
                     {currentBooking && (
-                      <div className="bg-gray-50 p-3 rounded">
-                        <p className="font-semibold">Booking: {currentBooking.bookingNo}</p>
-                        <p className="text-sm text-gray-600">
-                          Guest: {currentBooking.fullName} | Room: {currentBooking.roomNumberName}
-                        </p>
+                      <div className="hs-bf__section" style={{ marginBottom: 12 }}>
+                        <div className="hs-bf__section-body" style={{ paddingBottom: 14 }}>
+                          <p style={{ margin: 0, fontWeight: 700 }}>
+                            {currentBooking.bookingNo}
+                          </p>
+                          <p style={{ margin: "4px 0 0", color: "#5f7478", fontSize: 12 }}>
+                            Guest: {currentBooking.fullName} · Room:{" "}
+                            {currentBooking.roomNumberName}
+                          </p>
+                        </div>
                       </div>
                     )}
-                    <div>
-                      <label htmlFor="reason" className="block text-sm font-medium mb-2">
-                        Cancellation Reason <span className="text-red-500">*</span>
-                      </label>
-                      <Input.TextArea
-                        id="reason"
-                        value={cancellationReason}
-                        onChange={handleCancelReasonChange}
-                        placeholder="Enter cancellation reason"
-                        rows={4}
-                        autoFocus
-                      />
-                    </div>
+                    <Form layout="vertical" className="hs-bf">
+                      <Form.Item
+                        label="Cancellation reason"
+                        required
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Input.TextArea
+                          id="reason"
+                          value={cancellationReason}
+                          onChange={handleCancelReasonChange}
+                          placeholder="Enter cancellation reason"
+                          rows={4}
+                          autoFocus
+                        />
+                      </Form.Item>
+                    </Form>
                   </div>
                 </Modal>
 
@@ -1961,7 +1917,20 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                 </Modal>
 
                 <Modal
-                  title={isEditing ? "Edit Booking" : "Create New Booking"}
+                  className="hs-booking-modal"
+                  title={
+                    <div className="hs-booking-modal__head">
+                      <p className="hs-booking-modal__eyebrow">
+                        {isEditing ? "Update record" : "New reservation"}
+                      </p>
+                      <h2 className="hs-booking-modal__title">
+                        {isEditing ? "Edit Booking" : "Create Booking"}
+                      </h2>
+                      <p className="hs-booking-modal__sub">
+                        Guest, room, stay dates and payment in one place
+                      </p>
+                    </div>
+                  }
                   open={visible}
                   onCancel={() => {
                     setVisible(false);
@@ -1980,88 +1949,53 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                     }
                   }}
                   footer={null}
-                  width={1200}
+                  width={1080}
+                  centered
                   destroyOnClose
                 >
-                  <Form 
-                    onFinish={formik.handleSubmit} 
-                    layout="vertical" 
-                    style={{ padding: "0" }}
-                    className="booking-form"
+                  <Form
+                    onFinish={formik.handleSubmit}
+                    layout="vertical"
+                    className="hs-bf booking-form"
+                    requiredMark="optional"
                   >
-                    <style dangerouslySetInnerHTML={{__html: `
-                      .booking-form .ant-form-item {
-                        margin-bottom: 12px !important;
-                        display: flex !important;
-                        flex-direction: column !important;
-                      }
-                      .booking-form .ant-form-item-label {
-                        padding-bottom: 4px !important;
-                        line-height: 1.5 !important;
-                      }
-                      .booking-form .ant-form-item-label > label {
-                        font-size: 12px !important;
-                        font-weight: 500 !important;
-                        height: auto !important;
-                        line-height: 1.5 !important;
-                      }
-                      .booking-form .ant-form-item-control {
-                        flex: 1 !important;
-                      }
-                      .booking-form .ant-input,
-                      .booking-form .ant-picker,
-                      .booking-form .ant-select-selector,
-                      .booking-form .ant-input-number {
-                        height: 40px !important;
-                        font-size: 14px !important;
-                        padding: 8px 12px !important;
-                        line-height: 1.5 !important;
-                        display: flex !important;
-                        align-items: center !important;
-                      }
-                      .booking-form .ant-picker-input {
-                        height: 100% !important;
-                      }
-                      .booking-form .ant-picker-input > input {
-                        height: 100% !important;
-                        line-height: 1.5 !important;
-                      }
-                      .booking-form .ant-input-number {
-                        width: 100% !important;
-                      }
-                      .booking-form .ant-input-number-input {
-                        height: 38px !important;
-                        font-size: 14px !important;
-                        line-height: 1.5 !important;
-                      }
-                      .booking-form .ant-select {
-                        height: 40px !important;
-                      }
-                      .booking-form .ant-select-selector {
-                        display: flex !important;
-                        align-items: center !important;
-                      }
-                      .booking-form .ant-row {
-                        display: flex !important;
-                        flex-wrap: wrap !important;
-                        align-items: flex-start !important;
-                      }
-                      .booking-form .ant-col {
-                        display: flex !important;
-                        flex-direction: column !important;
-                      }
-                    `}} />
-                    
-                    <Card 
-                      title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Guest Information</span>}
-                      size="small" 
-                      className="mb-3"
-                      style={{ border: "1px solid #e8e8e8", borderRadius: "6px" }}
-                      bodyStyle={{ padding: "16px 20px" }}
-                    >
-                      <Row gutter={[16, 0]}>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Reference Booking No." style={{ marginBottom: "12px" }}>
+                    <div className="hs-bf__summary">
+                      <div className="hs-bf__kpi">
+                        <p className="hs-bf__kpi-label">Total bill</p>
+                        <p className="hs-bf__kpi-value">
+                          ৳{Number(formik.values.totalBill || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="hs-bf__kpi hs-bf__kpi--paid">
+                        <p className="hs-bf__kpi-label">Advance paid</p>
+                        <p className="hs-bf__kpi-value">
+                          ৳
+                          {Number(
+                            Array.isArray(formik.values.payments)
+                              ? formik.values.payments.reduce(
+                                  (s, p) => s + (Number(p.amount) || 0),
+                                  0
+                                )
+                              : formik.values.advancePayment || 0
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="hs-bf__kpi hs-bf__kpi--due">
+                        <p className="hs-bf__kpi-label">Due</p>
+                        <p className="hs-bf__kpi-value">
+                          ৳{Number(formik.values.duePayment || 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <section className="hs-bf__section">
+                      <div className="hs-bf__section-head">
+                        <h3 className="hs-bf__section-title">Guest information</h3>
+                        <p className="hs-bf__section-hint">Primary guest contact</p>
+                      </div>
+                      <div className="hs-bf__section-body">
+                        <div className="hs-bf__guest-grid">
+                          <Form.Item label="Reference booking no.">
                             <Input
                               name="reference"
                               value={formik.values.reference}
@@ -2071,102 +2005,88 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               }}
                               onBlur={handleBlur}
                               placeholder="Previous booking no."
-                              style={{ height: "40px" }}
+                              allowClear
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Full Name" required style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Full name" required>
                             <Input
                               name="fullName"
                               value={formik.values.fullName}
                               onChange={formik.handleChange}
-                              placeholder="Enter full name"
+                              placeholder="Guest full name"
                               required
-                              style={{ height: "40px" }}
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Phone Number" required style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Phone number" required>
                             <Input
                               name="phone"
                               value={formik.values.phone}
                               onChange={formik.handleChange}
-                              placeholder="Enter phone number"
+                              placeholder="01XXXXXXXXX"
                               required
-                              style={{ height: "40px" }}
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="NID/Passport" style={{ marginBottom: "12px" }}>
+                          <Form.Item label="NID / Passport">
                             <Input
                               name="nidPassport"
                               value={formik.values.nidPassport}
                               onChange={formik.handleChange}
-                              placeholder="Enter NID/Passport"
-                              style={{ height: "40px" }}
+                              placeholder="ID document number"
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={18}>
-                          <Form.Item label="Address" style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Address" className="hs-bf__span-full">
                             <Input
                               name="address"
                               value={formik.values.address}
                               onChange={formik.handleChange}
-                              placeholder="Enter address"
-                              style={{ height: "40px" }}
+                              placeholder="Full address"
                             />
                           </Form.Item>
-                        </Col>
-                      </Row>
-                    </Card>
+                        </div>
+                      </div>
+                    </section>
 
-                    <Card 
-                      title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Booking Details</span>}
-                      size="small" 
-                      className="mb-3"
-                      style={{ border: "1px solid #e8e8e8", borderRadius: "6px" }}
-                      bodyStyle={{ padding: "16px 20px" }}
-                    >
-                      <Row gutter={[16, 0]}>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Check In Date" required style={{ marginBottom: "12px" }}>
+                    <section className="hs-bf__section">
+                      <div className="hs-bf__section-head">
+                        <h3 className="hs-bf__section-title">Stay details</h3>
+                        <p className="hs-bf__section-hint">Check-in · check-out · guests</p>
+                      </div>
+                      <div className="hs-bf__section-body">
+                        <div className="hs-bf__dates-grid">
+                          <Form.Item label="Check-in date" required>
                             <DatePicker
                               name="checkInDate"
                               value={formik.values.checkInDate}
                               onChange={handleCheckInChange}
+                              format="DD/MM/YYYY"
                               className="w-full"
-                              style={{ width: "100%", height: "40px" }}
                               disabledDate={(current) => {
                                 if (!current) return false;
                                 return isDateInExistingBooking(current, "checkIn");
                               }}
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Check Out Date" required style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Check-out date" required>
                             <DatePicker
                               name="checkOutDate"
                               value={formik.values.checkOutDate}
                               onChange={handleCheckOutChange}
+                              format="DD/MM/YYYY"
                               className="w-full"
-                              style={{ width: "100%", height: "40px" }}
                               disabledDate={(current) => {
                                 if (!current) return false;
                                 const checkIn = formik.values.checkInDate;
-                                if (checkIn && (current.isBefore(dayjs(checkIn), "day") || current.isSame(dayjs(checkIn), "day")))
+                                if (
+                                  checkIn &&
+                                  (current.isBefore(dayjs(checkIn), "day") ||
+                                    current.isSame(dayjs(checkIn), "day"))
+                                )
                                   return true;
                                 return isDateInExistingBooking(current, "checkOut");
                               }}
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Number of Nights" required style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Nights" required>
                             <Input
                               name="nights"
                               type="number"
@@ -2176,8 +2096,10 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 formik.handleChange(e);
                                 const nights = Number(e.target.value) || 0;
                                 const roomPrice = Number(formik.values.roomPrice) || 0;
-                                const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
-                                const totalBill = (nights * roomPrice) + breakfastTotalBill;
+                                const breakfastTotalBill = formik.values.isBreakfast
+                                  ? Number(formik.values.breakfastTotalBill) || 0
+                                  : 0;
+                                const totalBill = nights * roomPrice + breakfastTotalBill;
                                 const advancePayment = Number(formik.values.advancePayment) || 0;
                                 const duePayment = Math.max(0, totalBill - advancePayment);
                                 formik.setFieldValue("totalBill", totalBill);
@@ -2185,13 +2107,10 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               }}
                               placeholder="Nights"
                               required
-                              style={{ height: "40px" }}
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Adults / Children" style={{ marginBottom: "12px" }}>
-                            <Input.Group compact>
+                          <Form.Item label="Adults / Children">
+                            <div className="hs-bf__split">
                               <Input
                                 name="adults"
                                 type="number"
@@ -2199,7 +2118,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 value={formik.values.adults}
                                 onChange={formik.handleChange}
                                 placeholder="Adults"
-                                style={{ width: "50%", height: "40px" }}
+                                addonBefore="A"
                               />
                               <Input
                                 name="children"
@@ -2208,24 +2127,22 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 value={formik.values.children}
                                 onChange={formik.handleChange}
                                 placeholder="Children"
-                                style={{ width: "50%", height: "40px" }}
+                                addonBefore="C"
                               />
-                            </Input.Group>
+                            </div>
                           </Form.Item>
-                        </Col>
-                      </Row>
-                    </Card>
+                        </div>
+                      </div>
+                    </section>
 
-                    <Card 
-                      title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Room Selection</span>}
-                      size="small" 
-                      className="mb-3"
-                      style={{ border: "1px solid #e8e8e8", borderRadius: "6px" }}
-                      bodyStyle={{ padding: "16px 20px" }}
-                    >
-                      <Row gutter={[16, 0]}>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Hotel Name" required style={{ marginBottom: "12px" }}>
+                    <section className="hs-bf__section">
+                      <div className="hs-bf__section-head">
+                        <h3 className="hs-bf__section-title">Room selection</h3>
+                        <p className="hs-bf__section-hint">Hotel · category · room · rate</p>
+                      </div>
+                      <div className="hs-bf__section-body">
+                        <div className="hs-bf__room-grid">
+                          <Form.Item label="Hotel" required>
                             <Select
                               name="hotelName"
                               value={formik.values.hotelName}
@@ -2238,15 +2155,15 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 const children = option?.children || "";
                                 return children.toLowerCase().indexOf(input.toLowerCase()) >= 0;
                               }}
-                              notFoundContent={hotelInfo.length === 0 ? "No hotels available" : "No matching hotels found"}
-                              style={{ height: "40px" }}
+                              notFoundContent={
+                                hotelInfo.length === 0
+                                  ? "No hotels available"
+                                  : "No matching hotels found"
+                              }
                             >
                               {hotelInfo && hotelInfo.length > 0 ? (
                                 hotelInfo.map((hotel) => (
-                                  <Select.Option
-                                    key={hotel.hotelID}
-                                    value={hotel.hotelName}
-                                  >
+                                  <Select.Option key={hotel.hotelID} value={hotel.hotelName}>
                                     {hotel.hotelName || `Hotel ${hotel.hotelID}`}
                                   </Select.Option>
                                 ))
@@ -2257,9 +2174,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               )}
                             </Select>
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Room Category" required style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Room category" required>
                             <Select
                               name="roomCategoryID"
                               value={formik.values.roomCategoryID}
@@ -2272,48 +2187,45 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
                               }
                               notFoundContent="No categories available"
-                              style={{ height: "40px" }}
                             >
                               {roomCategories.map((category) => (
-                                <Select.Option
-                                  key={category._id}
-                                  value={category._id}
-                                >
+                                <Select.Option key={category._id} value={category._id}>
                                   {category.name}
                                 </Select.Option>
                               ))}
                             </Select>
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Room Number" required style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Room number" required>
                             <Select
                               name="roomNumberID"
                               value={formik.values.roomNumberID}
                               onChange={(value) => {
-                                const selectedRoom = roomNumbers.find(
-                                  (room) => room._id === value
-                                );
+                                const selectedRoom = roomNumbers.find((room) => room._id === value);
                                 formik.setFieldValue("roomNumberID", value);
                                 formik.setFieldValue(
                                   "roomNumberName",
                                   selectedRoom ? selectedRoom.name || selectedRoom.roomId : ""
                                 );
-                                
+
                                 if (selectedRoom) {
                                   if (selectedRoom.capacity?.adults) {
                                     formik.setFieldValue("adults", selectedRoom.capacity.adults);
                                   }
                                   if (selectedRoom.capacity?.children !== undefined) {
-                                    formik.setFieldValue("children", selectedRoom.capacity.children || 0);
+                                    formik.setFieldValue(
+                                      "children",
+                                      selectedRoom.capacity.children || 0
+                                    );
                                   }
                                 }
-                                
+
                                 if (selectedRoom && selectedRoom.price) {
                                   formik.setFieldValue("roomPrice", selectedRoom.price);
                                   const nights = Number(formik.values.nights) || 0;
-                                  const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
-                                  const totalBill = (nights * selectedRoom.price) + breakfastTotalBill;
+                                  const breakfastTotalBill = formik.values.isBreakfast
+                                    ? Number(formik.values.breakfastTotalBill) || 0
+                                    : 0;
+                                  const totalBill = nights * selectedRoom.price + breakfastTotalBill;
                                   const advancePayment = Number(formik.values.advancePayment) || 0;
                                   const duePayment = Math.max(0, totalBill - advancePayment);
                                   formik.setFieldValue("totalBill", totalBill);
@@ -2321,7 +2233,9 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 }
                               }}
                               placeholder={
-                                formik.values.checkInDate && formik.values.checkOutDate && roomNumbers.length === 0
+                                formik.values.checkInDate &&
+                                formik.values.checkOutDate &&
+                                roomNumbers.length === 0
                                   ? "No rooms available for selected dates"
                                   : "Select room"
                               }
@@ -2336,7 +2250,6 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                   ? "No available rooms for selected dates"
                                   : "No rooms available"
                               }
-                              style={{ height: "40px" }}
                             >
                               {roomNumbers.map((room) => (
                                 <Select.Option key={room._id} value={room._id}>
@@ -2345,9 +2258,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               ))}
                             </Select>
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Room Price (per night)" required style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Room price / night" required>
                             <Input
                               name="roomPrice"
                               type="number"
@@ -2356,32 +2267,32 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                 formik.handleChange(e);
                                 const roomPrice = Number(e.target.value) || 0;
                                 const nights = Number(formik.values.nights) || 0;
-                                const breakfastTotalBill = formik.values.isBreakfast ? Number(formik.values.breakfastTotalBill) || 0 : 0;
-                                const totalBill = (nights * roomPrice) + breakfastTotalBill;
+                                const breakfastTotalBill = formik.values.isBreakfast
+                                  ? Number(formik.values.breakfastTotalBill) || 0
+                                  : 0;
+                                const totalBill = nights * roomPrice + breakfastTotalBill;
                                 const advancePayment = Number(formik.values.advancePayment) || 0;
                                 const duePayment = Math.max(0, totalBill - advancePayment);
                                 formik.setFieldValue("totalBill", totalBill);
                                 formik.setFieldValue("duePayment", duePayment);
                               }}
                               placeholder="Price per night"
+                              prefix="৳"
                               required
-                              style={{ height: "40px" }}
                             />
                           </Form.Item>
-                        </Col>
-                      </Row>
-                    </Card>
+                        </div>
+                      </div>
+                    </section>
 
-                    <Card 
-                      title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Payment Information</span>}
-                      size="small" 
-                      className="mb-3"
-                      style={{ border: "1px solid #e8e8e8", borderRadius: "6px" }}
-                      bodyStyle={{ padding: "16px 20px" }}
-                    >
-                      <Row gutter={[16, 0]} className="mb-3">
-                        <Col xs={24} sm={12} md={8}>
-                          <Form.Item label="Total Bill" required style={{ marginBottom: "12px" }}>
+                    <section className="hs-bf__section">
+                      <div className="hs-bf__section-head">
+                        <h3 className="hs-bf__section-title">Payment</h3>
+                        <p className="hs-bf__section-hint">Totals update from payment rows</p>
+                      </div>
+                      <div className="hs-bf__section-body">
+                        <div className="hs-bf__pay-totals">
+                          <Form.Item label="Total bill" required>
                             <Input
                               name="totalBill"
                               type="number"
@@ -2389,30 +2300,29 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               value={formik.values.totalBill}
                               onChange={handleTotalBillChange}
                               placeholder="Total bill"
-                              style={{ height: "40px", backgroundColor: "#f5f5f5" }}
+                              prefix="৳"
                               disabled
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={8}>
-                          <Form.Item label="Advance (total)" style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Advance (total)">
                             <Input
                               type="number"
                               min={0}
                               value={
-                                (Array.isArray(formik.values.payments)
-                                  ? formik.values.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                                Array.isArray(formik.values.payments)
+                                  ? formik.values.payments.reduce(
+                                      (s, p) => s + (Number(p.amount) || 0),
+                                      0
+                                    )
                                   : formik.values.advancePayment
-                              )}
+                              }
                               onChange={handleAdvanceTotalChange}
                               placeholder="Advance"
-                              style={{ height: "40px", backgroundColor: "#f5f5f5" }}
+                              prefix="৳"
                               disabled
                             />
                           </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12} md={8}>
-                          <Form.Item label="Due Payment" style={{ marginBottom: "12px" }}>
+                          <Form.Item label="Due payment">
                             <Input
                               name="duePayment"
                               type="number"
@@ -2420,227 +2330,293 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                               value={formik.values.duePayment}
                               onChange={handleDuePaymentChange}
                               placeholder="Due"
-                              style={{ height: "40px", backgroundColor: "#f5f5f5" }}
+                              prefix="৳"
                               disabled
                             />
                           </Form.Item>
-                        </Col>
-                      </Row>
-                      {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map((_, index) => {
-                        const isExistingPayment = isEditing && index < initialPaymentCount;
-                        const usedMethods = (formik.values.payments || [])
-                          .map((p, i) =>
-                            i !== index && (p.paymentMethod || "").trim()
-                              ? String(p.paymentMethod).trim().toUpperCase()
-                              : null
-                          )
-                          .filter(Boolean);
-                        return (
-                        <Row key={index} gutter={[12, 0]} align="middle" className="mb-2">
-                          <Col xs={24} sm={8} md={5}>
-                            <Form.Item label={index === 0 ? "Method" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
-                              <Select
-                                value={
-                                  formik.values.payments[index]?.paymentMethod
-                                    ? String(formik.values.payments[index].paymentMethod).trim().toUpperCase()
-                                    : undefined
-                                }
-                                onChange={(value) => {
-                                  const next = [...formik.values.payments];
-                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
-                                  next[index].paymentMethod = value ?? "";
-                                  formik.setFieldValue("payments", next);
-                                  syncAdvanceFromPayments(next);
-                                }}
-                                placeholder="Method"
-                                style={{ width: "100%", minWidth: 90 }}
-                                optionFilterProp="label"
-                                allowClear
-                                disabled={isExistingPayment}
-                              >
-                                <Select.Option value="BKASH" label="BKASH" disabled={usedMethods.includes("BKASH")}>BKASH</Select.Option>
-                                <Select.Option value="NAGAD" label="NAGAD" disabled={usedMethods.includes("NAGAD")}>NAGAD</Select.Option>
-                                <Select.Option value="BANK" label="BANK" disabled={usedMethods.includes("BANK")}>BANK</Select.Option>
-                                <Select.Option value="CASH" label="CASH" disabled={usedMethods.includes("CASH")}>CASH</Select.Option>
-                              </Select>
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={8} md={7}>
-                            <Form.Item label={index === 0 ? "Payment Date" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
-                              <DatePicker
-                                value={formik.values.payments[index]?.date ? dayjs(formik.values.payments[index].date) : null}
-                                onChange={(date) => {
-                                  const next = [...formik.values.payments];
-                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "", date: null };
-                                  next[index].date = date || null;
-                                  formik.setFieldValue("payments", next);
-                                }}
-                                format="YYYY-MM-DD"
-                                style={{ width: "100%", height: "40px" }}
-                                allowClear
-                                disabled={isExistingPayment}
-                              />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={8} md={4}>
-                            <Form.Item label={index === 0 ? "Amount" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={formik.values.payments[index]?.amount ?? ""}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  const totalBill = parseFloat(formik.values.totalBill) || 0;
-                                  const next = [...formik.values.payments];
-                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
-                                  next[index].amount = val > totalBill ? totalBill : val;
-                                  formik.setFieldValue("payments", next);
-                                  syncAdvanceFromPayments(next);
-                                }}
-                                placeholder="Amount"
-                                style={{ width: "100%" }}
-                                disabled={isExistingPayment}
-                              />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={6} md={6}>
-                            <Form.Item label={index === 0 ? "Transaction ID" : ""} style={{ marginBottom: index > 0 ? "12px" : "12px" }}>
-                              <Input
-                                value={formik.values.payments[index]?.transactionId ?? ""}
-                                onChange={(e) => {
-                                  const next = [...formik.values.payments];
-                                  if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
-                                  next[index].transactionId = e.target.value;
-                                  formik.setFieldValue("payments", next);
-                                }}
-                                placeholder="Trx ID (optional)"
-                                style={{ width: "100%" }}
-                                disabled={isExistingPayment}
-                              />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={2} md={2}>
-                            {isExistingPayment ? (
-                              <Popconfirm
-                                title="Delete this payment?"
-                                description="This will remove only this payment row from booking."
-                                onConfirm={() =>
-                                  deleteBookingPaymentById(
-                                    editingKey,
-                                    formik.values.payments[index],
-                                    index
-                                  )
-                                }
-                                okText="Yes"
-                                cancelText="No"
-                              >
-                                <Button
-                                  type="text"
-                                  danger
-                                  icon={<MinusCircleOutlined />}
-                                  loading={submitLoading}
-                                  style={{ marginTop: index === 0 ? "30px" : 0 }}
-                                />
-                              </Popconfirm>
-                            ) : formik.values.payments.length > 1 ? (
-                              <Button
-                                type="text"
-                                danger
-                                icon={<MinusCircleOutlined />}
-                                onClick={() => {
-                                  const next = formik.values.payments.filter((_, i) => i !== index);
-                                  if (next.length === 0) next.push({ paymentMethod: "", amount: 0, transactionId: "", date: null });
-                                  formik.setFieldValue("payments", next);
-                                  syncAdvanceFromPayments(next);
-                                }}
-                                style={{ marginTop: index === 0 ? "30px" : 0 }}
-                              />
-                            ) : null}
-                          </Col>
-                        </Row>
-                      ); })}
-                      <Button
-                        type="dashed"
-                        icon={<PlusOutlined />}
-                        onClick={() => {
-                          const next = [
-                            ...(formik.values.payments || []),
-                            { paymentMethod: "", amount: 0, transactionId: "", date: null },
-                          ];
-                          formik.setFieldValue("payments", next);
-                        }}
-                        style={{ marginTop: 4 }}
-                      >
-                        Add another payment
-                      </Button>
-                    </Card>
+                        </div>
 
-                    <Card 
-                      title={<span style={{ fontSize: "14px", fontWeight: 600 }}>Additional Services</span>}
-                      size="small" 
-                      className="mb-3"
-                      style={{ border: "1px solid #e8e8e8", borderRadius: "6px" }}
-                      bodyStyle={{ padding: "16px 20px" }}
-                    >
-                      <Row gutter={[16, 0]}>
-                        <Col xs={24} sm={12} md={12} lg={6}>
-                          <Form.Item label="Breakfast" style={{ marginBottom: "12px" }}>
-                            <Switch
-                              checked={formik.values.isBreakfast}
-                              onChange={(checked) => {
-                                formik.setFieldValue("isBreakfast", checked);
-                                if (!checked) {
-                                  formik.setFieldValue("breakfastTotalBill", 0);
-                                  const nights = Number(formik.values.nights) || 0;
-                                  const roomPrice = Number(formik.values.roomPrice) || 0;
-                                  const totalBill = (nights * roomPrice);
-                                  const advancePayment = Number(formik.values.advancePayment) || 0;
-                                  const duePayment = Math.max(0, totalBill - advancePayment);
-                                  formik.setFieldValue("totalBill", totalBill);
-                                  formik.setFieldValue("duePayment", duePayment);
-                                }
-                              }}
-                            />
-                          </Form.Item>
-                          {formik.values.isBreakfast && (
-                            <Form.Item label="Breakfast Bill" style={{ marginBottom: "12px" }}>
-                              <Input
-                                type="number"
-                                min={0}
-                                value={formik.values.breakfastTotalBill || ""}
-                                onChange={(e) => {
-                                  const breakfastTotalBill = Number(e.target.value) || 0;
-                                  formik.setFieldValue("breakfastTotalBill", breakfastTotalBill);
-                                  const nights = Number(formik.values.nights) || 0;
-                                  const roomPrice = Number(formik.values.roomPrice) || 0;
-                                  const totalBill = (nights * roomPrice) + breakfastTotalBill;
-                                  const advancePayment = Number(formik.values.advancePayment) || 0;
-                                  const duePayment = Math.max(0, totalBill - advancePayment);
-                                  formik.setFieldValue("totalBill", totalBill);
-                                  formik.setFieldValue("duePayment", duePayment);
-                                }}
-                                placeholder="Enter breakfast bill"
-                                style={{ height: "40px" }}
-                              />
-                            </Form.Item>
-                          )}
-                        </Col>
-                        <Col xs={24} sm={24} md={24} lg={12}>
-                          <Form.Item label="Note" style={{ marginBottom: "12px" }}>
+                        {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map(
+                          (_, index) => {
+                            const isExistingPayment = isEditing && index < initialPaymentCount;
+                            const usedMethods = (formik.values.payments || [])
+                              .map((p, i) =>
+                                i !== index && (p.paymentMethod || "").trim()
+                                  ? String(p.paymentMethod).trim().toUpperCase()
+                                  : null
+                              )
+                              .filter(Boolean);
+                            return (
+                              <div className="hs-bf__pay-row" key={index}>
+                                <Form.Item label={index === 0 ? "Method" : " "}>
+                                  <Select
+                                    value={
+                                      formik.values.payments[index]?.paymentMethod
+                                        ? String(formik.values.payments[index].paymentMethod)
+                                            .trim()
+                                            .toUpperCase()
+                                        : undefined
+                                    }
+                                    onChange={(value) => {
+                                      const next = [...formik.values.payments];
+                                      if (!next[index])
+                                        next[index] = {
+                                          paymentMethod: "",
+                                          amount: 0,
+                                          transactionId: "",
+                                        };
+                                      next[index].paymentMethod = value ?? "";
+                                      formik.setFieldValue("payments", next);
+                                      syncAdvanceFromPayments(next);
+                                    }}
+                                    placeholder="Method"
+                                    optionFilterProp="label"
+                                    allowClear
+                                    disabled={isExistingPayment}
+                                  >
+                                    <Select.Option
+                                      value="BKASH"
+                                      label="BKASH"
+                                      disabled={usedMethods.includes("BKASH")}
+                                    >
+                                      BKASH
+                                    </Select.Option>
+                                    <Select.Option
+                                      value="NAGAD"
+                                      label="NAGAD"
+                                      disabled={usedMethods.includes("NAGAD")}
+                                    >
+                                      NAGAD
+                                    </Select.Option>
+                                    <Select.Option
+                                      value="BANK"
+                                      label="BANK"
+                                      disabled={usedMethods.includes("BANK")}
+                                    >
+                                      BANK
+                                    </Select.Option>
+                                    <Select.Option
+                                      value="CASH"
+                                      label="CASH"
+                                      disabled={usedMethods.includes("CASH")}
+                                    >
+                                      CASH
+                                    </Select.Option>
+                                  </Select>
+                                </Form.Item>
+                                <Form.Item label={index === 0 ? "Payment date" : " "}>
+                                  <DatePicker
+                                    value={
+                                      formik.values.payments[index]?.date
+                                        ? dayjs(formik.values.payments[index].date)
+                                        : null
+                                    }
+                                    onChange={(date) => {
+                                      const next = [...formik.values.payments];
+                                      if (!next[index])
+                                        next[index] = {
+                                          paymentMethod: "",
+                                          amount: 0,
+                                          transactionId: "",
+                                          date: null,
+                                        };
+                                      next[index].date = date || null;
+                                      formik.setFieldValue("payments", next);
+                                    }}
+                                    format="DD/MM/YYYY"
+                                    allowClear
+                                    disabled={isExistingPayment}
+                                  />
+                                </Form.Item>
+                                <Form.Item label={index === 0 ? "Amount" : " "}>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={formik.values.payments[index]?.amount ?? ""}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      const totalBill = parseFloat(formik.values.totalBill) || 0;
+                                      const next = [...formik.values.payments];
+                                      if (!next[index])
+                                        next[index] = {
+                                          paymentMethod: "",
+                                          amount: 0,
+                                          transactionId: "",
+                                        };
+                                      next[index].amount = val > totalBill ? totalBill : val;
+                                      formik.setFieldValue("payments", next);
+                                      syncAdvanceFromPayments(next);
+                                    }}
+                                    placeholder="Amount"
+                                    prefix="৳"
+                                    disabled={isExistingPayment}
+                                  />
+                                </Form.Item>
+                                <Form.Item label={index === 0 ? "Transaction ID" : " "}>
+                                  <Input
+                                    value={formik.values.payments[index]?.transactionId ?? ""}
+                                    onChange={(e) => {
+                                      const next = [...formik.values.payments];
+                                      if (!next[index])
+                                        next[index] = {
+                                          paymentMethod: "",
+                                          amount: 0,
+                                          transactionId: "",
+                                        };
+                                      next[index].transactionId = e.target.value;
+                                      formik.setFieldValue("payments", next);
+                                    }}
+                                    placeholder="Optional"
+                                    disabled={isExistingPayment}
+                                  />
+                                </Form.Item>
+                                <div className="hs-bf__pay-actions">
+                                  {isExistingPayment ? (
+                                    <Popconfirm
+                                      title="Delete this payment?"
+                                      description="This will remove only this payment row from booking."
+                                      onConfirm={() =>
+                                        deleteBookingPaymentById(
+                                          editingKey,
+                                          formik.values.payments[index],
+                                          index
+                                        )
+                                      }
+                                      okText="Yes"
+                                      cancelText="No"
+                                    >
+                                      <Button
+                                        type="text"
+                                        danger
+                                        icon={<MinusCircleOutlined />}
+                                        loading={submitLoading}
+                                      />
+                                    </Popconfirm>
+                                  ) : formik.values.payments.length > 1 ? (
+                                    <Button
+                                      type="text"
+                                      danger
+                                      icon={<MinusCircleOutlined />}
+                                      onClick={() => {
+                                        const next = formik.values.payments.filter(
+                                          (_, i) => i !== index
+                                        );
+                                        if (next.length === 0)
+                                          next.push({
+                                            paymentMethod: "",
+                                            amount: 0,
+                                            transactionId: "",
+                                            date: null,
+                                          });
+                                        formik.setFieldValue("payments", next);
+                                        syncAdvanceFromPayments(next);
+                                      }}
+                                    />
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          }
+                        )}
+                        <Button
+                          type="dashed"
+                          block
+                          icon={<PlusOutlined />}
+                          className="hs-bf__add-pay"
+                          onClick={() => {
+                            const next = [
+                              ...(formik.values.payments || []),
+                              {
+                                paymentMethod: "",
+                                amount: 0,
+                                transactionId: "",
+                                date: null,
+                              },
+                            ];
+                            formik.setFieldValue("payments", next);
+                          }}
+                        >
+                          Add payment method
+                        </Button>
+                      </div>
+                    </section>
+
+                    <section className="hs-bf__section">
+                      <div className="hs-bf__section-head">
+                        <h3 className="hs-bf__section-title">Extras & notes</h3>
+                        <p className="hs-bf__section-hint">Optional services</p>
+                      </div>
+                      <div className="hs-bf__section-body">
+                        <div className="hs-bf__extra-grid">
+                          <div>
+                            <div className="hs-bf__breakfast">
+                              <div className="hs-bf__breakfast-top">
+                                <div>
+                                  <div className="hs-bf__breakfast-label">Breakfast</div>
+                                  <div className="hs-bf__breakfast-hint">
+                                    Include breakfast with this stay
+                                  </div>
+                                </div>
+                                <Switch
+                                  checked={formik.values.isBreakfast}
+                                  onChange={(checked) => {
+                                    formik.setFieldValue("isBreakfast", checked);
+                                    if (!checked) {
+                                      formik.setFieldValue("breakfastTotalBill", 0);
+                                      const nights = Number(formik.values.nights) || 0;
+                                      const roomPrice = Number(formik.values.roomPrice) || 0;
+                                      const totalBill = nights * roomPrice;
+                                      const advancePayment =
+                                        Number(formik.values.advancePayment) || 0;
+                                      const duePayment = Math.max(0, totalBill - advancePayment);
+                                      formik.setFieldValue("totalBill", totalBill);
+                                      formik.setFieldValue("duePayment", duePayment);
+                                    }
+                                  }}
+                                />
+                              </div>
+                              {formik.values.isBreakfast && (
+                                <Form.Item label="Breakfast bill" style={{ marginBottom: 0 }}>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={formik.values.breakfastTotalBill || ""}
+                                    onChange={(e) => {
+                                      const breakfastTotalBill = Number(e.target.value) || 0;
+                                      formik.setFieldValue(
+                                        "breakfastTotalBill",
+                                        breakfastTotalBill
+                                      );
+                                      const nights = Number(formik.values.nights) || 0;
+                                      const roomPrice = Number(formik.values.roomPrice) || 0;
+                                      const totalBill = nights * roomPrice + breakfastTotalBill;
+                                      const advancePayment =
+                                        Number(formik.values.advancePayment) || 0;
+                                      const duePayment = Math.max(0, totalBill - advancePayment);
+                                      formik.setFieldValue("totalBill", totalBill);
+                                      formik.setFieldValue("duePayment", duePayment);
+                                    }}
+                                    placeholder="Breakfast amount"
+                                    prefix="৳"
+                                  />
+                                </Form.Item>
+                              )}
+                            </div>
+                          </div>
+                          <Form.Item label="Internal note">
                             <Input.TextArea
                               name="note"
                               value={formik.values.note}
                               onChange={formik.handleChange}
-                              placeholder="Enter any additional notes..."
-                              rows={5}
-                              style={{ minHeight: "120px", fontSize: "14px", padding: "10px 12px" }}
+                              placeholder="Special requests, arrival time, remarks…"
+                              rows={4}
                             />
                           </Form.Item>
-                        </Col>
-                      </Row>
-                    </Card>
+                        </div>
+                      </div>
+                    </section>
 
-                    <div className="flex justify-end gap-3 pt-3 border-t items-center" style={{ marginTop: "16px", paddingTop: "16px" }}>
+                    <div className="hs-bf__footer">
                       <Button
                         onClick={() => {
                           setVisible(false);
@@ -2651,23 +2627,15 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           setIsHotelFromReference(false);
                           formik.resetForm();
                         }}
-                        style={{ height: "40px", padding: "0 24px", fontSize: "14px", display: "flex", alignItems: "center" }}
                       >
                         Cancel
                       </Button>
-                      <Button
-                        type="primary"
-                        htmlType="submit"
-                        loading={submitLoading}
-                        className="bg-[#8ABF55] hover:bg-[#7DA54E]"
-                        style={{ height: "40px", padding: "0 32px", fontSize: "14px", fontWeight: 500, display: "flex", alignItems: "center" }}
-                      >
+                      <Button type="primary" htmlType="submit" loading={submitLoading}>
                         {isEditing ? "Update Booking" : "Create Booking"}
                       </Button>
                     </div>
                   </Form>
                 </Modal>
-            </div>
           </div>
         </>
       ) : (

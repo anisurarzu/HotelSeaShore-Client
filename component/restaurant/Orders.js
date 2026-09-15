@@ -733,7 +733,7 @@ const Orders = () => {
       key: "orderNumber",
       width: 140,
       render: (text, record) => (
-        <span className="font-medium text-blue-600">
+        <span className="font-medium text-hs-ocean">
           {text || record.invoiceNo || "N/A"}
         </span>
       ),

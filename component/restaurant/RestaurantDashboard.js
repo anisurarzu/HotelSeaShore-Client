@@ -268,14 +268,14 @@ const RestaurantDashboard = () => {
       // Order status data for pie chart
       const orderStatusData = [
         { type: 'Pending', value: pendingOrders, color: '#f59e0b' },
-        { type: 'Confirmed', value: confirmedOrders, color: '#3b82f6' },
+        { type: 'Confirmed', value: confirmedOrders, color: '#14919b' },
       ].filter(item => item.value > 0);
 
       // Payment status data for pie chart
       const paymentStatusData = [
         { type: 'Paid', value: paidOrders, color: '#22c55e' },
         { type: 'Pending', value: orders.filter(o => (o.paymentStatus || "").toLowerCase() === "pending").length, color: '#f59e0b' },
-        { type: 'Partially Paid', value: partiallyPaidOrders, color: '#3b82f6' },
+        { type: 'Partially Paid', value: partiallyPaidOrders, color: '#14919b' },
       ].filter(item => item.value > 0);
 
       // Calculate tables
@@ -481,7 +481,7 @@ const RestaurantDashboard = () => {
       title: "Confirmed Orders",
       value: stats.confirmedOrders.toString(),
       icon: <CheckCircleOutlined className="text-xl" />,
-      bgGradient: "linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%)",
+      bgGradient: "linear-gradient(135deg, #14919b 0%, #0b5c66 50%, #1d4ed8 100%)",
     },
     {
       title: "Paid Orders",
@@ -493,7 +493,7 @@ const RestaurantDashboard = () => {
       title: "Total Tables",
       value: stats.totalTables.toString(),
       icon: <ShopOutlined className="text-xl" />,
-      bgGradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%)",
+      bgGradient: "linear-gradient(135deg, #0d6b74 0%, #0b5c66 50%, #04343a 100%)",
     },
     {
       title: "Active Tables",
@@ -655,7 +655,7 @@ const RestaurantDashboard = () => {
             <Statistic
               title="Total Orders"
               value={stats.totalOrders}
-              valueStyle={{ color: "#3b82f6", fontSize: "24px", fontWeight: 700 }}
+              valueStyle={{ color: "#14919b", fontSize: "24px", fontWeight: 700 }}
               suffix={
                 <span style={{ fontSize: "14px", color: "#6b7280" }}>
                   ({stats.paidOrders} paid)

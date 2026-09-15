@@ -45,6 +45,8 @@ import {
 import { useFormik } from "formik";
 import coreAxios from "@/utils/axiosInstance";
 import { uploadMultipleImagesToImgbb } from "@/utils/imgbbUpload";
+import "./HotelInformation.css";
+import "./Booking/BookingForm.css";
 
 const { Panel } = Collapse;
 const { TextArea } = Input;
@@ -78,6 +80,7 @@ const HotelInformation = () => {
   const [roomRows, setRoomRows] = useState([{ name: "", status: "available" }]);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [selectedHotelForDetails, setSelectedHotelForDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   // Fetch hotels list
   const fetchHotels = async (page = 1, pageSize = 50, search = "") => {
@@ -579,47 +582,47 @@ const HotelInformation = () => {
     setHotelModalVisible(true);
   };
 
-  const handleEditHotel = () => {
-    const normalizedTerms = Array.isArray(hotelData?.termsAndConditions)
-      ? hotelData.termsAndConditions
+  const handleEditHotel = (hotelOverride = null) => {
+    const source = hotelOverride || hotelData;
+    const normalizedTerms = Array.isArray(source?.termsAndConditions)
+      ? source.termsAndConditions
           .map((t) => (typeof t === "string" ? t : String(t)))
           .map((t) => t.trim())
           .filter(Boolean)
-      : typeof hotelData?.termsAndConditions === "string" && hotelData.termsAndConditions.trim()
-        ? [hotelData.termsAndConditions.trim()]
+      : typeof source?.termsAndConditions === "string" && source.termsAndConditions.trim()
+        ? [source.termsAndConditions.trim()]
         : [];
 
     hotelFormik.setValues({
-      hotelName: hotelData?.hotelName || "",
-      hotelDescription: hotelData?.hotelDescription || "",
+      hotelName: source?.hotelName || "",
+      hotelDescription: source?.hotelDescription || "",
       termsAndConditions: normalizedTerms.length > 0 ? normalizedTerms : [""],
       address: {
         address1:
-          hotelData?.address?.address1 ||
-          hotelData?.address?.street ||
+          source?.address?.address1 ||
+          source?.address?.street ||
           "",
         address2:
-          hotelData?.address?.address2 ||
-          hotelData?.address?.city ||
+          source?.address?.address2 ||
+          source?.address?.city ||
           "",
         address3:
-          hotelData?.address?.address3 ||
-          hotelData?.address?.state ||
+          source?.address?.address3 ||
+          source?.address?.state ||
           "",
       },
       contact: {
-        phone: hotelData?.contact?.phone || "",
-        email: hotelData?.contact?.email || "",
-        website: hotelData?.contact?.website || "",
+        phone: source?.contact?.phone || "",
+        email: source?.contact?.email || "",
+        website: source?.contact?.website || "",
       },
-      checkInTime: hotelData?.checkInTime || "14:00",
-      checkOutTime: hotelData?.checkOutTime || "11:00",
-      status: hotelData?.status || "active",
+      checkInTime: source?.checkInTime || "14:00",
+      checkOutTime: source?.checkOutTime || "11:00",
+      status: source?.status || "active",
     });
-    // Set existing images
-    if (hotelData?.images && hotelData.images.length > 0) {
+    if (source?.images && source.images.length > 0) {
       setHotelImages(
-        hotelData.images.map((url) => ({
+        source.images.map((url) => ({
           uid: url,
           name: url.split("/").pop(),
           status: "done",
@@ -629,6 +632,13 @@ const HotelInformation = () => {
     } else {
       setHotelImages([]);
     }
+    if (source?.hotelID) {
+      setSelectedHotelId(source.hotelID);
+      setHotelData(source);
+      if (source.roomCategories) {
+        setCategories(source.roomCategories);
+      }
+    }
     setIsEditingHotel(true);
     setIsCreatingHotel(false);
     setHotelModalVisible(true);
@@ -636,18 +646,32 @@ const HotelInformation = () => {
 
   const handleViewDetails = async (hotel) => {
     try {
-      setLoading(true);
+      setSelectedHotelForDetails(hotel);
+      setDetailsLoading(true);
+      setDetailsModalVisible(true);
       const response = await coreAxios.get(`/hotels/${hotel.hotelID}`);
-      if (response.status === 200 && response.data.success) {
-        setSelectedHotelForDetails(response.data.data);
-        setDetailsModalVisible(true);
+      const payload =
+        response?.data?.data ||
+        response?.data?.hotel ||
+        response?.data ||
+        null;
+      if (response.status === 200 && payload) {
+        setSelectedHotelForDetails(payload);
       }
     } catch (error) {
       console.error("Error fetching hotel details:", error);
-      message.error("Failed to fetch hotel details");
+      setSelectedHotelForDetails(hotel);
+      message.warning("Showing list data. Full details could not be loaded.");
     } finally {
-      setLoading(false);
+      setDetailsLoading(false);
     }
+  };
+
+  const handleHideHotelWorkspace = () => {
+    setSelectedHotelId(null);
+    setHotelData(null);
+    setCategories([]);
+    setExpandedCategories([]);
   };
 
   const handleEditCategory = (category) => {
@@ -813,14 +837,19 @@ const HotelInformation = () => {
   };
 
   const getStatusTag = (status) => {
-    const statusConfig = {
-      active: { color: "green", text: "Active" },
-      inactive: { color: "red", text: "Inactive" },
-      maintenance: { color: "orange", text: "Maintenance" },
-      available: { color: "green", text: "Available" },
+    const key = String(status || "").toLowerCase();
+    const map = {
+      active: { cls: "hs-hi__status--ok", text: "Active" },
+      available: { cls: "hs-hi__status--ok", text: "Available" },
+      inactive: { cls: "hs-hi__status--bad", text: "Inactive" },
+      maintenance: { cls: "hs-hi__status--warn", text: "Maintenance" },
+      booked: { cls: "hs-hi__status--warn", text: "Booked" },
     };
-    const config = statusConfig[status] || { color: "default", text: status };
-    return <Tag color={config.color}>{config.text}</Tag>;
+    const config = map[key] || {
+      cls: "hs-hi__status--neutral",
+      text: status || "—",
+    };
+    return <span className={`hs-hi__status ${config.cls}`}>{config.text}</span>;
   };
 
   // Room columns
@@ -860,16 +889,14 @@ const HotelInformation = () => {
       width: 150,
       fixed: "right",
       render: (_, record) => (
-        <Space size="small" className="flex-wrap">
+        <div className="hs-hi__actions">
           <Button
             type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEditRoom(categoryId, record)}
-            className="p-0 text-xs"
           >
-            <span className="hidden sm:inline">Edit</span>
-           
+            Edit
           </Button>
           <Popconfirm
             title="Are you sure you want to delete this room?"
@@ -877,470 +904,524 @@ const HotelInformation = () => {
             okText="Yes"
             cancelText="No"
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} className="p-0 text-xs">
-              <span className="hidden sm:inline">Delete</span>
-          
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              Delete
             </Button>
           </Popconfirm>
-        </Space>
+        </div>
       ),
     },
   ];
 
-  if (loading && !hotelData) {
-    return (
-      <div className="p-4 sm:p-6">
-        <div className="mb-6">
-          <Skeleton.Input active size="large" className="mb-2" style={{ width: 280, height: 32 }} />
-          <Skeleton.Input active style={{ width: 360, height: 22 }} />
-        </div>
-        <Card className="mb-6">
-          <Skeleton active paragraph={{ rows: 2 }} className="mb-4" />
-          <Skeleton active paragraph={{ rows: 6 }} />
-        </Card>
-        <Card>
-          <Skeleton active paragraph={{ rows: 8 }} />
-        </Card>
-      </div>
-    );
-  }
-
-  // Handle search
   const handleSearch = (value) => {
     setSearchText(value);
     fetchHotels(1, pagination.pageSize, value);
   };
 
-  // Hotel table columns
   const hotelColumns = [
     {
       title: "ID",
       dataIndex: "hotelID",
       key: "hotelID",
-      width: 80,
+      width: 72,
       responsive: ["md"],
+      render: (id) => <span className="hs-hi__muted">{id}</span>,
     },
     {
-      title: "Hotel Name",
+      title: "Hotel",
       dataIndex: "hotelName",
       key: "hotelName",
-      width: 200,
+      render: (name) => <span className="hs-hi__hotel-name">{name}</span>,
     },
     {
-      title: "City",
-      dataIndex: ["address", "city"],
-      key: "city",
-      width: 150,
+      title: "Location",
+      key: "location",
+      width: 180,
       responsive: ["sm"],
+      render: (_, record) => {
+        const loc =
+          record.address?.city ||
+          record.address?.address2 ||
+          record.address?.address1 ||
+          record.address?.street ||
+          "—";
+        return <span className="hs-hi__muted">{loc}</span>;
+      },
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 120,
+      width: 110,
       render: (status) => getStatusTag(status),
       responsive: ["md"],
     },
     {
-      title: "Total Rooms",
+      title: "Rooms",
       dataIndex: "totalRooms",
       key: "totalRooms",
-      width: 120,
-      render: (rooms) => rooms || 0,
+      width: 90,
+      align: "right",
       responsive: ["lg"],
+      render: (rooms) => <span className="hs-hi__muted">{rooms || 0}</span>,
     },
     {
-      title: "Available Rooms",
+      title: "Available",
       dataIndex: "availableRooms",
       key: "availableRooms",
-      width: 140,
-      render: (rooms) => rooms || 0,
+      width: 100,
+      align: "right",
       responsive: ["lg"],
+      render: (rooms) => (
+        <strong style={{ color: "#0b5c66" }}>{rooms || 0}</strong>
+      ),
     },
     {
       title: "Actions",
       key: "actions",
-      width: 200,
+      width: 160,
       fixed: "right",
       render: (_, record) => (
-        <Space size="small" className="flex-wrap">
+        <div className="hs-hi__actions" onClick={(e) => e.stopPropagation()}>
           <Button
             type="link"
             size="small"
             icon={<EyeOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleViewDetails(record);
-            }}
-            className="p-0"
+            onClick={() => handleViewDetails(record)}
           >
-            <span className="hidden sm:inline">Details</span>
-            <span className="sm:hidden">View</span>
+            Details
           </Button>
           <Button
-            type="link"
             size="small"
-            icon={<EditOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
+            type={selectedHotelId === record.hotelID ? "primary" : "default"}
+            onClick={() => {
               setSelectedHotelId(record.hotelID);
               fetchHotelData(record.hotelID);
             }}
-            className="p-0"
           >
-            Select
+            {selectedHotelId === record.hotelID ? "Selected" : "Open"}
           </Button>
-        </Space>
+        </div>
       ),
     },
   ];
 
+  const addressLine = (hotel) => {
+    if (!hotel?.address) return "—";
+    return (
+      [
+        hotel.address.address1 || hotel.address.street,
+        hotel.address.address2 || hotel.address.city,
+        hotel.address.address3 || hotel.address.state,
+      ]
+        .filter(Boolean)
+        .join(", ") || "—"
+    );
+  };
+
+  const categoryCount = categories.length;
+  const roomCount =
+    hotelData?.totalRooms ??
+    categories.reduce((s, c) => s + (c.roomNumbers?.length || 0), 0);
+  const availableCount = hotelData?.availableRooms ?? "—";
+
   return (
-    <div className="p-4 sm:p-6">
-      <div className="mb-6">
-        <Title level={2} className="m-0 mb-2">
-          Hotel Information
-        </Title>
-        <Text type="secondary">Manage hotel details, categories, and rooms</Text>
+    <div className="hs-hi">
+      <div className="hs-hi__toolbar">
+        <div className="hs-hi__title-block">
+          <p className="hs-hi__eyebrow">Master data</p>
+          <h1 className="hs-hi__title">Hotel Information</h1>
+          <p className="hs-hi__meta">
+            Manage hotels, room categories, and inventory in one place
+          </p>
+        </div>
+        <div className="hs-hi__controls">
+          <Input.Search
+            placeholder="Search hotels…"
+            allowClear
+            value={searchText}
+            onChange={(e) => {
+              setSearchText(e.target.value);
+              if (!e.target.value) handleSearch("");
+            }}
+            onSearch={handleSearch}
+          />
+          <Button
+            onClick={() =>
+              fetchHotels(pagination.current, pagination.pageSize, searchText)
+            }
+            loading={loading}
+          >
+            Refresh
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateHotel}>
+            Create Hotel
+          </Button>
+        </div>
       </div>
 
-      {/* Hotels Table */}
-      <Card
-        className="mb-6 shadow-sm"
-        title={
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-            {/* <span className="text-base sm:text-lg">Hotels List</span> */}
-            <div className="w-full sm:w-auto flex justify-end">
-              {/*
-              <Input.Search
-                placeholder="Search hotels..."
-                allowClear
-                onSearch={handleSearch}
-                onChange={(e) => {
-                  if (!e.target.value) {
-                    handleSearch("");
-                  }
-                }}
-                className="w-full sm:w-auto"
-                style={{ minWidth: "200px" }}
-              />
-              */}
-              <div className="flex flex-row gap-2">
-                <Button
-                  type="default"
-                  onClick={() => fetchHotels(pagination.current, pagination.pageSize, searchText)}
-                  loading={loading}
-                  className="hidden sm:inline-flex items-center"
-                >
-                  Refresh
+      <div className="hs-hi__panel">
+        <div className="hs-hi__panel-head">
+          <div>
+            <h2 className="hs-hi__panel-title">Hotels</h2>
+            <p className="hs-hi__panel-hint">
+              Select a row to manage details and room structure
+            </p>
+          </div>
+          <p className="hs-hi__panel-hint">
+            {pagination.total || hotels.length} total
+          </p>
+        </div>
+        <div className="hs-hi__panel-body">
+          {loading && hotels.length === 0 ? (
+            <div style={{ padding: 16 }}>
+              <Skeleton active paragraph={{ rows: 6 }} />
+            </div>
+          ) : (
+            <Table
+              columns={hotelColumns}
+              dataSource={hotels}
+              rowKey="hotelID"
+              loading={loading && hotels.length > 0}
+              pagination={{
+                current: pagination.current,
+                pageSize: pagination.pageSize,
+                total: pagination.total,
+                showSizeChanger: true,
+                pageSizeOptions: ["5", "10", "20", "50"],
+                showTotal: (total) => `${total} hotels`,
+                onChange: (page, pageSize) => {
+                  fetchHotels(page, pageSize, searchText);
+                },
+              }}
+              scroll={{ x: "max-content" }}
+              size="small"
+              rowClassName={(record) =>
+                selectedHotelId === record.hotelID ? "hs-hi__row--selected" : ""
+              }
+              onRow={(record) => ({
+                onClick: () => {
+                  setSelectedHotelId(record.hotelID);
+                  fetchHotelData(record.hotelID);
+                },
+                style: { cursor: "pointer" },
+              })}
+              locale={{
+                emptyText: (
+                  <div className="hs-hi__empty">
+                    <p className="hs-hi__empty-title">No hotels yet</p>
+                    <p className="hs-hi__empty-sub">
+                      Create a hotel to start configuring categories and rooms.
+                    </p>
+                  </div>
+                ),
+              }}
+            />
+          )}
+        </div>
+      </div>
+
+      {!selectedHotelId && (
+        <div className="hs-hi__panel">
+          <div className="hs-hi__empty">
+            <p className="hs-hi__empty-title">No hotel selected</p>
+            <p className="hs-hi__empty-sub">
+              Click a hotel in the list above to open its object page.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {selectedHotelId && (
+        <>
+          <div className="hs-hi__object">
+            <div className="hs-hi__object-head">
+              <div>
+                <p className="hs-hi__eyebrow">Hotel object</p>
+                <h2 className="hs-hi__object-name">
+                  {hotelData?.hotelName || "Loading…"}
+                </h2>
+                <p className="hs-hi__object-sub">
+                  ID {selectedHotelId}
+                  {hotelData?.status ? ` · ${String(hotelData.status)}` : ""}
+                </p>
+              </div>
+              <div className="hs-hi__object-actions">
+                <Button icon={<CloseOutlined />} onClick={handleHideHotelWorkspace}>
+                  Hide
                 </Button>
+                <Button type="primary" icon={<EditOutlined />} onClick={handleEditHotel}>
+                  Edit Hotel
+                </Button>
+              </div>
+            </div>
+
+            <div className="hs-hi__kpi-row">
+              <div className="hs-hi__kpi">
+                <p className="hs-hi__kpi-label">Total rooms</p>
+                <p className="hs-hi__kpi-value">{roomCount || 0}</p>
+              </div>
+              <div className="hs-hi__kpi hs-hi__kpi--soft">
+                <p className="hs-hi__kpi-label">Available</p>
+                <p className="hs-hi__kpi-value">{availableCount}</p>
+              </div>
+              <div className="hs-hi__kpi hs-hi__kpi--sand">
+                <p className="hs-hi__kpi-label">Categories</p>
+                <p className="hs-hi__kpi-value">{categoryCount}</p>
+              </div>
+              <div className="hs-hi__kpi hs-hi__kpi--deep">
+                <p className="hs-hi__kpi-label">Status</p>
+                <p className="hs-hi__kpi-value" style={{ fontSize: 14 }}>
+                  {hotelData ? getStatusTag(hotelData.status) : "—"}
+                </p>
+              </div>
+            </div>
+
+            <div className="hs-hi__attrs">
+              {loading && !hotelData ? (
+                <div className="hs-hi__attr--full">
+                  <Skeleton active paragraph={{ rows: 4 }} />
+                </div>
+              ) : hotelData ? (
+                <>
+                  <div className="hs-hi__attr hs-hi__attr--full">
+                    <label>Description</label>
+                    <p>{hotelData.hotelDescription || "—"}</p>
+                  </div>
+                  <div className="hs-hi__attr">
+                    <label>Address</label>
+                    <p>{addressLine(hotelData)}</p>
+                  </div>
+                  <div className="hs-hi__attr">
+                    <label>Contact</label>
+                    <p>
+                      {[
+                        hotelData.contact?.phone,
+                        hotelData.contact?.email,
+                        hotelData.contact?.website,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "—"}
+                    </p>
+                  </div>
+                  <div className="hs-hi__attr">
+                    <label>Check-in</label>
+                    <p>{hotelData.checkInTime || "14:00"}</p>
+                  </div>
+                  <div className="hs-hi__attr">
+                    <label>Check-out</label>
+                    <p>{hotelData.checkOutTime || "11:00"}</p>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="hs-hi__panel">
+            <div className="hs-hi__panel-head">
+              <div>
+                <h2 className="hs-hi__panel-title">Room categories & rooms</h2>
+                <p className="hs-hi__panel-hint">
+                  Expand a category to manage individual rooms
+                </p>
+              </div>
+              <div className="hs-hi__object-actions">
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}
-                  onClick={handleCreateHotel}
-                  className="inline-flex items-center"
+                  size="small"
+                  onClick={() => {
+                    categoryFormik.resetForm();
+                    setIsEditingCategory(false);
+                    setEditingCategoryId(null);
+                    setCategoryModalVisible(true);
+                  }}
                 >
-                  <span className="hidden sm:inline">Create Hotel</span>
-                  <span className="sm:hidden">New</span>
+                  Add Category
+                </Button>
+                <Button size="small" icon={<CloseOutlined />} onClick={handleHideHotelWorkspace}>
+                  Hide
                 </Button>
               </div>
             </div>
-          </div>
-        }
-      >
-        {loading ? (
-          <Skeleton active paragraph={{ rows: 6 }} title={{ width: "100%" }} />
-        ) : (
-          <Table
-            columns={hotelColumns}
-            dataSource={hotels}
-            rowKey="hotelID"
-            pagination={{
-              current: pagination.current,
-              pageSize: pagination.pageSize,
-              total: pagination.total,
-              showSizeChanger: true,
-              pageSizeOptions: ["5", "10", "20", "50"],
-              defaultPageSize: 5,
-              showTotal: (total) => `Total ${total} hotels`,
-              onChange: (page, pageSize) => {
-                fetchHotels(page, pageSize, searchText);
-              },
-            }}
-            scroll={{ x: "max-content" }}
-            size="small"
-            onRow={(record) => ({
-              onClick: () => {
-                setSelectedHotelId(record.hotelID);
-                fetchHotelData(record.hotelID);
-              },
-              style: { cursor: "pointer" },
-            })}
-          />
-        )}
-      </Card>
-
-      {!selectedHotelId && (
-        <Card className="mb-6 shadow-sm">
-          <div className="text-center py-8 text-gray-500">
-            Please select a hotel to view and manage its information
-          </div>
-        </Card>
-      )}
-
-      {/* Hotel Information Card */}
-      {selectedHotelId && (
-        <>
-          <Card
-            className="mb-6 shadow-sm"
-            title={
-              <div className="flex items-center gap-2">
-                <HomeOutlined />
-                <span>Hotel Details</span>
-              </div>
-            }
-            extra={
-              <Button 
-                type="primary" 
-                icon={<EditOutlined />} 
-                onClick={handleEditHotel}
-                className="w-full sm:w-auto"
-                size="small"
-              >
-                <span className="hidden sm:inline">Edit Hotel</span>
-               
-              </Button>
-            }
-          >
-            {loading && !hotelData ? (
-              <Skeleton active paragraph={{ rows: 6 }} title={false} />
-            ) : hotelData ? (
-              <Row gutter={[16, 16]}>
-                <Col xs={24} md={12}>
-                  <Text strong>Hotel Name:</Text>
-                  <div className="mb-3">{hotelData.hotelName}</div>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Text strong>Status:</Text>
-                  <div className="mb-3">{getStatusTag(hotelData.status)}</div>
-                </Col>
-                <Col xs={24}>
-                  <Text strong>Description:</Text>
-                  <div className="mb-3">{hotelData.hotelDescription}</div>
-                </Col>
-                <Col xs={24} md={12}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <EnvironmentOutlined />
-                    <Text strong>Address</Text>
-                  </div>
-                  <div className="ml-6">
-                    {(hotelData.address?.address1 || hotelData.address?.street) && (
-                      <div>{hotelData.address.address1 || hotelData.address.street}</div>
-                    )}
-                    {(hotelData.address?.address2 || hotelData.address?.city) && (
-                      <div>{hotelData.address.address2 || hotelData.address.city}</div>
-                    )}
-                    {(hotelData.address?.address3 || hotelData.address?.state) && (
-                      <div>{hotelData.address.address3 || hotelData.address.state}</div>
-                    )}
-                  </div>
-                </Col>
-                <Col xs={24} md={12}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <PhoneOutlined />
-                    <Text strong>Contact</Text>
-                  </div>
-                  <div className="ml-6">
-                    {hotelData.contact?.phone && (
-                      <div className="mb-1">
-                        <PhoneOutlined className="mr-2" />
-                        {hotelData.contact.phone}
-                      </div>
-                    )}
-                    {hotelData.contact?.email && (
-                      <div className="mb-1">
-                        <MailOutlined className="mr-2" />
-                        {hotelData.contact.email}
-                      </div>
-                    )}
-                    {hotelData.contact?.website && (
-                      <div>
-                        <GlobalOutlined className="mr-2" />
-                        {hotelData.contact.website}
-                      </div>
-                    )}
-                  </div>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Text strong>Total Rooms:</Text>
-                  <div className="mb-3">{hotelData.totalRooms || 0}</div>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Text strong>Available Rooms:</Text>
-                  <div className="mb-3">{hotelData.availableRooms || 0}</div>
-                </Col>
-              </Row>
-            ) : null}
-          </Card>
-
-          {/* Categories and Rooms Section */}
-          <Card
-        className="shadow-sm"
-        title={
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-base sm:text-lg">Room Categories & Rooms</span>
-            </div>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                categoryFormik.resetForm();
-                setIsEditingCategory(false);
-                setEditingCategoryId(null);
-                setCategoryModalVisible(true);
-              }}
-              className="w-full sm:w-auto"
-              size="small"
-            >
-              <span className="hidden sm:inline">Add Category</span>
-              
-            </Button>
-          </div>
-        }
-      >
-        {loading ? (
-          <>
-            <Skeleton active avatar paragraph={{ rows: 2 }} className="mb-4" />
-            <Skeleton active avatar paragraph={{ rows: 2 }} className="mb-4" />
-            <Skeleton active avatar paragraph={{ rows: 2 }} className="mb-4" />
-            <Skeleton active paragraph={{ rows: 4 }} />
-          </>
-        ) : categories.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No categories found. Add a category to get started.
-          </div>
-        ) : (
-          <Collapse
-            activeKey={expandedCategories}
-            onChange={setExpandedCategories}
-            className="mb-4"
-          >
-            {categories.map((category) => (
-              <Panel
-                key={category._id}
-                header={
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full pr-2 sm:pr-4 gap-2 sm:gap-0">
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <Text strong className="text-sm sm:text-base">{category.name}</Text>
-                      {!category.isActive && <Tag color="red" className="text-xs">Inactive</Tag>}
-                      <Text type="secondary" className="text-xs sm:text-sm">
-                        ({category.roomNumbers?.length || 0} rooms)
-                      </Text>
-                    </div>
-                    <Space onClick={(e) => e.stopPropagation()} className="flex-wrap">
-                      <Button
-                        type="link"
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => handleEditCategory(category)}
-                        className="text-xs sm:text-sm"
-                      >
-                        <span className="hidden sm:inline">Edit</span>
-                  
-                      </Button>
-                      <Popconfirm
-                        title="Are you sure you want to delete this category?"
-                        onConfirm={() => handleDeleteCategory(category._id)}
-                        okText="Yes"
-                        cancelText="No"
-                      >
-                        <Button type="link" size="small" danger icon={<DeleteOutlined />} className="text-xs sm:text-sm">
-                          <span className="hidden sm:inline">Delete</span>
-                         
-                        </Button>
-                      </Popconfirm>
-                      <Button
-                        type="primary"
-                        size="small"
-                        icon={<PlusOutlined />}
-                        onClick={() => handleAddRoom(category._id)}
-                        className="text-xs sm:text-sm"
-                      >
-                        <span className="hidden sm:inline">Add Room</span>
-                         
-                      </Button>
-                    </Space>
-                  </div>
-                }
-              >
-                {category.description && (
-                  <div className="mb-3">
-                    <Text type="secondary">{category.description}</Text>
-                  </div>
-                )}
-                <div className="mb-3">
-                  <Text strong>Base Price: </Text>
-                  <Text>৳{category.basePrice || 0}</Text>
-                  <Text className="ml-4" strong>
-                    Max Occupancy:{" "}
-                  </Text>
-                  <Text>
-                    {category.maxOccupancy?.adults || 0} Adults,{" "}
-                    {category.maxOccupancy?.children || 0} Children
-                  </Text>
+            <div className="hs-hi__panel-body hs-hi__panel-body--pad">
+              {loading && categories.length === 0 && !hotelData ? (
+                <>
+                  <Skeleton active paragraph={{ rows: 2 }} className="mb-4" />
+                  <Skeleton active paragraph={{ rows: 2 }} />
+                </>
+              ) : categories.length === 0 ? (
+                <div className="hs-hi__empty">
+                  <p className="hs-hi__empty-title">No categories yet</p>
+                  <p className="hs-hi__empty-sub">
+                    Add a category first, then create rooms under it.
+                  </p>
                 </div>
-                {category.roomNumbers && category.roomNumbers.length > 0 ? (
-                  <Table
-                    columns={roomColumns(category._id)}
-                    dataSource={category.roomNumbers}
-                    rowKey="_id"
-                    pagination={false}
-                    size="small"
-                    scroll={{ x: "max-content" }}
-                  />
-                ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    No rooms in this category. Click "Add Room" to add one.
-                  </div>
-                )}
-              </Panel>
-            ))}
-          </Collapse>
-        )}
-      </Card>
+              ) : (
+                <Collapse
+                  activeKey={expandedCategories}
+                  onChange={setExpandedCategories}
+                  bordered={false}
+                >
+                  {categories.map((category) => (
+                    <Panel
+                      key={category._id}
+                      header={
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full pr-2">
+                          <div className="hs-hi__cat-main">
+                            <span className="hs-hi__cat-name">{category.name}</span>
+                            {!category.isActive && getStatusTag("inactive")}
+                            <span className="hs-hi__cat-meta">
+                              {category.roomNumbers?.length || 0} rooms
+                            </span>
+                            <span className="hs-hi__cat-price">
+                              ৳{Number(category.basePrice || 0).toLocaleString()}
+                            </span>
+                          </div>
+                          <div
+                            className="hs-hi__cat-actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              type="link"
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={() => handleEditCategory(category)}
+                            >
+                              Edit
+                            </Button>
+                            <Popconfirm
+                              title="Are you sure you want to delete this category?"
+                              onConfirm={() => handleDeleteCategory(category._id)}
+                              okText="Yes"
+                              cancelText="No"
+                            >
+                              <Button
+                                type="link"
+                                size="small"
+                                danger
+                                icon={<DeleteOutlined />}
+                              >
+                                Delete
+                              </Button>
+                            </Popconfirm>
+                            <Button
+                              type="primary"
+                              size="small"
+                              icon={<PlusOutlined />}
+                              onClick={() => handleAddRoom(category._id)}
+                            >
+                              Add Room
+                            </Button>
+                          </div>
+                        </div>
+                      }
+                    >
+                      {category.description && (
+                        <p className="hs-hi__cat-desc">{category.description}</p>
+                      )}
+                      <p className="hs-hi__cat-meta" style={{ marginBottom: 10 }}>
+                        Max occupancy: {category.maxOccupancy?.adults || 0} adults,{" "}
+                        {category.maxOccupancy?.children || 0} children
+                      </p>
+                      {category.roomNumbers && category.roomNumbers.length > 0 ? (
+                        <Table
+                          columns={roomColumns(category._id)}
+                          dataSource={category.roomNumbers}
+                          rowKey="_id"
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: "max-content" }}
+                        />
+                      ) : (
+                        <div className="hs-hi__empty" style={{ padding: "24px 8px" }}>
+                          <p className="hs-hi__empty-title">No rooms in this category</p>
+                          <p className="hs-hi__empty-sub">
+                            Click Add Room to create inventory.
+                          </p>
+                        </div>
+                      )}
+                    </Panel>
+                  ))}
+                </Collapse>
+              )}
+            </div>
+          </div>
         </>
       )}
 
       {/* Create/Edit Hotel Modal */}
       <Modal
-        title={isCreatingHotel ? "Create New Hotel" : "Edit Hotel Information"}
+        className="hs-booking-modal"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">
+              {isCreatingHotel ? "New record" : "Update record"}
+            </p>
+            <h2 className="hs-booking-modal__title">
+              {isCreatingHotel ? "Create Hotel" : "Edit Hotel"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              Profile, address, contact, policies and branding
+            </p>
+          </div>
+        }
         open={hotelModalVisible}
         onCancel={() => {
           setHotelModalVisible(false);
           setIsEditingHotel(false);
           setIsCreatingHotel(false);
           hotelFormik.resetForm();
+          setHotelImages([]);
         }}
         footer={null}
-        width="95%"
-        style={{ maxWidth: "800px" }}
+        width={860}
+        centered
+        destroyOnClose
       >
-        <Form layout="vertical" onFinish={hotelFormik.handleSubmit}>
-          <Form.Item label="Hotel Name" required>
-            <Input
-              name="hotelName"
-              value={hotelFormik.values.hotelName}
-              onChange={hotelFormik.handleChange}
-              placeholder="Enter hotel name"
-            />
-          </Form.Item>
-          <Divider orientation="left">Address</Divider>
-          <Row gutter={16}>
-            <Col xs={24} sm={24}>
+        <Form
+          layout="vertical"
+          onFinish={hotelFormik.handleSubmit}
+          className="hs-bf"
+          requiredMark="optional"
+        >
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Basic information</h3>
+              <p className="hs-bf__section-hint">Name and operating status</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__grid-2">
+                <Form.Item label="Hotel name" required>
+                  <Input
+                    name="hotelName"
+                    value={hotelFormik.values.hotelName}
+                    onChange={hotelFormik.handleChange}
+                    placeholder="Enter hotel name"
+                  />
+                </Form.Item>
+                <Form.Item label="Status">
+                  <Select
+                    value={hotelFormik.values.status}
+                    onChange={(value) => hotelFormik.setFieldValue("status", value)}
+                  >
+                    <Option value="active">Active</Option>
+                    <Option value="inactive">Inactive</Option>
+                    <Option value="maintenance">Maintenance</Option>
+                  </Select>
+                </Form.Item>
+              </div>
+            </div>
+          </section>
+
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Address</h3>
+              <p className="hs-bf__section-hint">Location lines</p>
+            </div>
+            <div className="hs-bf__section-body">
               <Form.Item label="Address 1">
                 <Input
-                  name="address.address1"
                   value={hotelFormik.values.address.address1}
                   onChange={(e) =>
                     hotelFormik.setFieldValue("address.address1", e.target.value)
@@ -1348,378 +1429,200 @@ const HotelInformation = () => {
                   placeholder="Address line 1"
                 />
               </Form.Item>
-            </Col>
-            <Col xs={24} sm={24}>
-              <Form.Item label="Address 2">
-                <Input
-                  name="address.address2"
-                  value={hotelFormik.values.address.address2}
-                  onChange={(e) =>
-                    hotelFormik.setFieldValue("address.address2", e.target.value)
-                  }
-                  placeholder="Address line 2"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={24}>
-              <Form.Item label="Address 3">
-                <Input
-                  name="address.address3"
-                  value={hotelFormik.values.address.address3}
-                  onChange={(e) =>
-                    hotelFormik.setFieldValue("address.address3", e.target.value)
-                  }
-                  placeholder="Address line 3"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Divider orientation="left">Contact Information</Divider>
-          <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Front Desk Number">
-                <Input
-                  name="contact.phone"
-                  value={hotelFormik.values.contact.phone}
-                  onChange={(e) =>
-                    hotelFormik.setFieldValue("contact.phone", e.target.value)
-                  }
-                  placeholder="Front desk phone number"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Reservation Number">
-                <Input
-                  name="contact.email"
-                  type="number"
-                  value={hotelFormik.values.contact.email}
-                  onChange={(e) =>
-                    hotelFormik.setFieldValue("contact.email", e.target.value)
-                  }
-                  placeholder="Reservation number"
-                />
-              </Form.Item>
-            </Col>
-            {/* Website field temporarily disabled
-            <Col xs={24}>
-              <Form.Item label="Website">
-                <Input
-                  name="contact.website"
-                  value={hotelFormik.values.contact.website}
-                  onChange={(e) =>
-                    hotelFormik.setFieldValue("contact.website", e.target.value)
-                  }
-                  placeholder="Website URL"
-                />
-              </Form.Item>
-            </Col>
-            */}
-          </Row>
-          <Divider orientation="left">Check-in / Check-out Time</Divider>
-          <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Check-in Time">
-                <TimePicker
-                  value={dayjs(hotelFormik.values.checkInTime || "14:00", "HH:mm")}
-                  onChange={(time) =>
-                    hotelFormik.setFieldValue("checkInTime", time ? time.format("HH:mm") : "14:00")
-                  }
-                  format="h:mm A"
-                  use12Hours
-                  style={{ width: "100%" }}
-                  placeholder="e.g. 2:00 PM"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Check-out Time">
-                <TimePicker
-                  value={dayjs(hotelFormik.values.checkOutTime || "11:00", "HH:mm")}
-                  onChange={(time) =>
-                    hotelFormik.setFieldValue("checkOutTime", time ? time.format("HH:mm") : "11:00")
-                  }
-                  format="h:mm A"
-                  use12Hours
-                  style={{ width: "100%" }}
-                  placeholder="e.g. 11:00 AM"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Divider orientation="left">Terms & Conditions</Divider>
-          <Form.Item
-            label="Terms & Conditions"
-            extra="Each line will be saved as a separate item (array) in the database."
-          >
-            <div className="space-y-2">
-              {(hotelFormik.values.termsAndConditions || []).map((term, idx) => (
-                <div key={idx} className="flex gap-2 items-start">
+              <div className="hs-bf__grid-2">
+                <Form.Item label="Address 2">
                   <Input
-                    value={term}
-                    onChange={(e) => {
-                      const next = [...(hotelFormik.values.termsAndConditions || [])];
-                      next[idx] = e.target.value;
-                      hotelFormik.setFieldValue("termsAndConditions", next);
-                    }}
-                    placeholder={`Term ${idx + 1}`}
+                    value={hotelFormik.values.address.address2}
+                    onChange={(e) =>
+                      hotelFormik.setFieldValue("address.address2", e.target.value)
+                    }
+                    placeholder="Address line 2"
                   />
-                  <Button
-                    danger
-                    type="default"
-                    icon={<MinusCircleOutlined />}
-                    onClick={() => {
-                      const current = [...(hotelFormik.values.termsAndConditions || [])];
-                      const next = current.filter((_, i) => i !== idx);
-                      hotelFormik.setFieldValue(
-                        "termsAndConditions",
-                        next.length > 0 ? next : [""]
-                      );
-                    }}
+                </Form.Item>
+                <Form.Item label="Address 3">
+                  <Input
+                    value={hotelFormik.values.address.address3}
+                    onChange={(e) =>
+                      hotelFormik.setFieldValue("address.address3", e.target.value)
+                    }
+                    placeholder="Address line 3"
                   />
-                </div>
-              ))}
-              <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  const next = [...(hotelFormik.values.termsAndConditions || [])];
-                  next.push("");
-                  hotelFormik.setFieldValue("termsAndConditions", next);
-                }}
-                block
-              >
-                Add Term
-              </Button>
-            </div>
-          </Form.Item>
-          <Divider orientation="left">Logo</Divider>
-          <Form.Item label="Hotel Logo">
-            <Upload
-              listType="picture-card"
-              fileList={hotelImages}
-              onChange={({ fileList }) => setHotelImages(fileList)}
-              beforeUpload={() => false}
-              maxCount={1}
-              onRemove={(file) => {
-                const newList = hotelImages.filter((item) => item.uid !== file.uid);
-                setHotelImages(newList);
-                return true;
-              }}
-            >
-              {hotelImages.length < 1 && (
-                <div>
-                  <UploadOutlined />
-                  <div style={{ marginTop: 8 }}>Upload Logo</div>
-                </div>
-              )}
-            </Upload>
-          </Form.Item>
-          <Form.Item label="Status">
-            <Select
-              value={hotelFormik.values.status}
-              onChange={(value) => hotelFormik.setFieldValue("status", value)}
-              style={{ width: "100%" }}
-            >
-              <Option value="active">Active</Option>
-              <Option value="inactive">Inactive</Option>
-              <Option value="maintenance">Maintenance</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={submitting}
-                icon={<SaveOutlined />}
-                className="w-full sm:w-auto"
-              >
-                {isCreatingHotel ? "Create Hotel" : "Save Changes"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setHotelModalVisible(false);
-                  setIsEditingHotel(false);
-                  setIsCreatingHotel(false);
-                  hotelFormik.resetForm();
-                  setHotelImages([]);
-                }}
-                icon={<CloseOutlined />}
-                className="w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
-            </div>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Hotel Details Modal */}
-      <Modal
-        title="Hotel Details"
-        open={detailsModalVisible}
-        onCancel={() => {
-          setDetailsModalVisible(false);
-          setSelectedHotelForDetails(null);
-        }}
-        footer={[
-          <Button key="close" onClick={() => {
-            setDetailsModalVisible(false);
-            setSelectedHotelForDetails(null);
-          }}>
-            Close
-          </Button>,
-          selectedHotelForDetails && (
-            <Button
-              key="select"
-              type="primary"
-              onClick={() => {
-                setSelectedHotelId(selectedHotelForDetails.hotelID);
-                fetchHotelData(selectedHotelForDetails.hotelID);
-                setDetailsModalVisible(false);
-                setSelectedHotelForDetails(null);
-              }}
-            >
-              Select Hotel
-            </Button>
-          ),
-        ]}
-        width="95%"
-        style={{ maxWidth: "900px" }}
-      >
-        {selectedHotelForDetails && (
-          <div>
-            {selectedHotelForDetails.images && selectedHotelForDetails.images.length > 0 && (
-              <div className="mb-4">
-                <Text strong className="block mb-2">Images:</Text>
-                <Image.PreviewGroup>
-                  <Row gutter={[8, 8]}>
-                    {selectedHotelForDetails.images.map((img, index) => (
-                      <Col key={index} xs={8} sm={8} md={8}>
-                        <Image
-                          src={img}
-                          alt={`Hotel ${index + 1}`}
-                          style={{ width: "100%", height: "150px", objectFit: "cover" }}
-                        />
-                      </Col>
-                    ))}
-                  </Row>
-                </Image.PreviewGroup>
+                </Form.Item>
               </div>
-            )}
-            <Collapse defaultActiveKey={["basic", "address", "contact"]} className="mb-4">
-              <Panel header="Basic Information" key="basic">
-                <Row gutter={[16, 16]}>
-                  <Col xs={24} md={12}>
-                    <Text strong>Hotel ID:</Text>
-                    <div className="mb-3">{selectedHotelForDetails.hotelID}</div>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Text strong>Hotel Name:</Text>
-                    <div className="mb-3">{selectedHotelForDetails.hotelName}</div>
-                  </Col>
-                  <Col xs={24}>
-                    <Text strong>Description:</Text>
-                    <div className="mb-3">{selectedHotelForDetails.hotelDescription}</div>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Text strong>Status:</Text>
-                    <div className="mb-3">{getStatusTag(selectedHotelForDetails.status)}</div>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Text strong>Total Rooms:</Text>
-                    <div className="mb-3">{selectedHotelForDetails.totalRooms || 0}</div>
-                  </Col>
-                  <Col xs={24} md={12}>
-                    <Text strong>Available Rooms:</Text>
-                    <div className="mb-3">{selectedHotelForDetails.availableRooms || 0}</div>
-                  </Col>
-                </Row>
-              </Panel>
-              {Array.isArray(selectedHotelForDetails.termsAndConditions) &&
-                selectedHotelForDetails.termsAndConditions.length > 0 && (
-                  <Panel header="Terms & Conditions" key="terms">
-                    <ul className="list-disc pl-5">
-                      {selectedHotelForDetails.termsAndConditions.map((t, idx) => (
-                        <li key={idx} className="mb-1">
-                          {t}
-                        </li>
-                      ))}
-                    </ul>
-                  </Panel>
-                )}
-              {selectedHotelForDetails.address && (
-                <Panel header="Address" key="address">
-                  <div className="ml-4">
-                    {(selectedHotelForDetails.address.address1 ||
-                      selectedHotelForDetails.address.street) && (
-                      <div className="mb-2">
-                        {selectedHotelForDetails.address.address1 ||
-                          selectedHotelForDetails.address.street}
-                      </div>
-                    )}
-                    {(selectedHotelForDetails.address.address2 ||
-                      selectedHotelForDetails.address.city) && (
-                      <div className="mb-2">
-                        {selectedHotelForDetails.address.address2 ||
-                          selectedHotelForDetails.address.city}
-                      </div>
-                    )}
-                    {(selectedHotelForDetails.address.address3 ||
-                      selectedHotelForDetails.address.state) && (
-                      <div className="mb-2">
-                        {selectedHotelForDetails.address.address3 ||
-                          selectedHotelForDetails.address.state}
-                      </div>
-                    )}
+            </div>
+          </section>
+
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Contact & schedule</h3>
+              <p className="hs-bf__section-hint">Front desk and stay times</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__grid-2">
+                <Form.Item label="Front desk number">
+                  <Input
+                    value={hotelFormik.values.contact.phone}
+                    onChange={(e) =>
+                      hotelFormik.setFieldValue("contact.phone", e.target.value)
+                    }
+                    placeholder="Front desk phone"
+                  />
+                </Form.Item>
+                <Form.Item label="Reservation number">
+                  <Input
+                    value={hotelFormik.values.contact.email}
+                    onChange={(e) =>
+                      hotelFormik.setFieldValue("contact.email", e.target.value)
+                    }
+                    placeholder="Reservation number"
+                  />
+                </Form.Item>
+                <Form.Item label="Check-in time">
+                  <TimePicker
+                    value={dayjs(hotelFormik.values.checkInTime || "14:00", "HH:mm")}
+                    onChange={(time) =>
+                      hotelFormik.setFieldValue(
+                        "checkInTime",
+                        time ? time.format("HH:mm") : "14:00"
+                      )
+                    }
+                    format="h:mm A"
+                    use12Hours
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
+                <Form.Item label="Check-out time">
+                  <TimePicker
+                    value={dayjs(hotelFormik.values.checkOutTime || "11:00", "HH:mm")}
+                    onChange={(time) =>
+                      hotelFormik.setFieldValue(
+                        "checkOutTime",
+                        time ? time.format("HH:mm") : "11:00"
+                      )
+                    }
+                    format="h:mm A"
+                    use12Hours
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
+              </div>
+            </div>
+          </section>
+
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Terms & branding</h3>
+              <p className="hs-bf__section-hint">Policies and hotel logo</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <Form.Item
+                label="Terms & conditions"
+                extra="Each line is stored as a separate policy item."
+              >
+                {(hotelFormik.values.termsAndConditions || []).map((term, idx) => (
+                  <div className="hs-bf__term-row" key={idx}>
+                    <Input
+                      value={term}
+                      onChange={(e) => {
+                        const next = [...(hotelFormik.values.termsAndConditions || [])];
+                        next[idx] = e.target.value;
+                        hotelFormik.setFieldValue("termsAndConditions", next);
+                      }}
+                      placeholder={`Term ${idx + 1}`}
+                    />
+                    <Button
+                      danger
+                      type="text"
+                      icon={<MinusCircleOutlined />}
+                      onClick={() => {
+                        const current = [...(hotelFormik.values.termsAndConditions || [])];
+                        const next = current.filter((_, i) => i !== idx);
+                        hotelFormik.setFieldValue(
+                          "termsAndConditions",
+                          next.length > 0 ? next : [""]
+                        );
+                      }}
+                    />
                   </div>
-                </Panel>
-              )}
-              {selectedHotelForDetails.contact && (
-                <Panel header="Contact Information" key="contact">
-                  <div className="ml-4">
-                    {selectedHotelForDetails.contact.phone && (
-                      <div className="mb-2">
-                        <PhoneOutlined className="mr-2" />
-                        {selectedHotelForDetails.contact.phone}
-                      </div>
-                    )}
-                    {selectedHotelForDetails.contact.email && (
-                      <div className="mb-2">
-                        <MailOutlined className="mr-2" />
-                        {selectedHotelForDetails.contact.email}
-                      </div>
-                    )}
-                    {(selectedHotelForDetails.checkInTime || selectedHotelForDetails.checkOutTime) && (
-                      <div className="mt-3">
-                        <div className="mb-2">
-                          <Text strong>Check-in Time:</Text>{" "}
-                          <Text>{selectedHotelForDetails.checkInTime || "—"}</Text>
-                        </div>
-                        <div>
-                          <Text strong>Check-out Time:</Text>{" "}
-                          <Text>{selectedHotelForDetails.checkOutTime || "—"}</Text>
-                        </div>
-                      </div>
-                    )}
-                    {selectedHotelForDetails.contact.website && (
-                      <div>
-                        <GlobalOutlined className="mr-2" />
-                        {selectedHotelForDetails.contact.website}
-                      </div>
-                    )}
-                  </div>
-                </Panel>
-              )}
-            </Collapse>
+                ))}
+                <Button
+                  type="dashed"
+                  block
+                  icon={<PlusOutlined />}
+                  className="hs-bf__add-pay"
+                  onClick={() => {
+                    const next = [...(hotelFormik.values.termsAndConditions || [])];
+                    next.push("");
+                    hotelFormik.setFieldValue("termsAndConditions", next);
+                  }}
+                >
+                  Add term
+                </Button>
+              </Form.Item>
+              <Form.Item label="Hotel logo">
+                <Upload
+                  listType="picture-card"
+                  fileList={hotelImages}
+                  onChange={({ fileList }) => setHotelImages(fileList)}
+                  beforeUpload={() => false}
+                  maxCount={1}
+                  onRemove={(file) => {
+                    setHotelImages(hotelImages.filter((item) => item.uid !== file.uid));
+                    return true;
+                  }}
+                >
+                  {hotelImages.length < 1 && (
+                    <div>
+                      <UploadOutlined />
+                      <div style={{ marginTop: 8 }}>Upload</div>
+                    </div>
+                  )}
+                </Upload>
+              </Form.Item>
+            </div>
+          </section>
+
+          <div className="hs-bf__footer">
+            <Button
+              icon={<CloseOutlined />}
+              onClick={() => {
+                setHotelModalVisible(false);
+                setIsEditingHotel(false);
+                setIsCreatingHotel(false);
+                hotelFormik.resetForm();
+                setHotelImages([]);
+              }}
+            >
+              Hide
+            </Button>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={submitting}
+              icon={<SaveOutlined />}
+            >
+              {isCreatingHotel ? "Create Hotel" : "Save Changes"}
+            </Button>
           </div>
-        )}
+        </Form>
       </Modal>
 
       {/* Category Modal */}
       <Modal
-        title={isEditingCategory ? "Edit Category" : "Add Category"}
+        className="hs-booking-modal"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">
+              {isEditingCategory ? "Update record" : "New record"}
+            </p>
+            <h2 className="hs-booking-modal__title">
+              {isEditingCategory ? "Edit Category" : "Add Category"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              Pricing, occupancy and availability for a room group
+            </p>
+          </div>
+        }
         open={categoryModalVisible}
         onCancel={() => {
           setCategoryModalVisible(false);
@@ -1729,97 +1632,119 @@ const HotelInformation = () => {
           setCategoryImages([]);
         }}
         footer={null}
-        width="95%"
-        style={{ maxWidth: "600px" }}
+        width={640}
+        centered
+        destroyOnClose
       >
-        <Form layout="vertical" onFinish={categoryFormik.handleSubmit}>
-          <Form.Item label="Category Name" required>
-            <Input
-              name="name"
-              value={categoryFormik.values.name}
-              onChange={categoryFormik.handleChange}
-              placeholder="Enter category name"
-            />
-          </Form.Item>
-          {/* Description and Images commented out
-          <Form.Item label="Description">...</Form.Item>
-          <Form.Item label="Category Images (Max 3)">...</Form.Item>
-          */}
-          <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Base Price">
-                <InputNumber
-                  name="basePrice"
-                  value={categoryFormik.values.basePrice}
-                  onChange={(value) => categoryFormik.setFieldValue("basePrice", value || 0)}
-                  style={{ width: "100%" }}
-                  min={0}
-                  placeholder="Base price"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Max Adults">
-                <InputNumber
-                  value={categoryFormik.values.maxOccupancy.adults}
-                  onChange={(value) =>
-                    categoryFormik.setFieldValue("maxOccupancy.adults", value || 2)
-                  }
-                  style={{ width: "100%" }}
-                  min={1}
-                  placeholder="Max adults"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Max Children">
-                <InputNumber
-                  value={categoryFormik.values.maxOccupancy.children}
-                  onChange={(value) =>
-                    categoryFormik.setFieldValue("maxOccupancy.children", value || 0)
-                  }
-                  style={{ width: "100%" }}
-                  min={0}
-                  placeholder="Max children"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Active Status">
-                <Switch
-                  checked={categoryFormik.values.isActive}
-                  onChange={(checked) => categoryFormik.setFieldValue("isActive", checked)}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button type="primary" htmlType="submit" loading={submitting} className="w-full sm:w-auto">
-                {isEditingCategory ? "Update" : "Create"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setCategoryModalVisible(false);
-                  setIsEditingCategory(false);
-                  setEditingCategoryId(null);
-                  categoryFormik.resetForm();
-                  setCategoryImages([]);
-                }}
-                className="w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
+        <Form
+          layout="vertical"
+          onFinish={categoryFormik.handleSubmit}
+          className="hs-bf"
+          requiredMark="optional"
+        >
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Category details</h3>
             </div>
-          </Form.Item>
+            <div className="hs-bf__section-body">
+              <Form.Item label="Category name" required>
+                <Input
+                  name="name"
+                  value={categoryFormik.values.name}
+                  onChange={categoryFormik.handleChange}
+                  placeholder="e.g. Deluxe Sea View"
+                />
+              </Form.Item>
+              <div className="hs-bf__grid-3">
+                <Form.Item label="Base price">
+                  <InputNumber
+                    value={categoryFormik.values.basePrice}
+                    onChange={(value) =>
+                      categoryFormik.setFieldValue("basePrice", value || 0)
+                    }
+                    min={0}
+                    placeholder="0"
+                    prefix="৳"
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
+                <Form.Item label="Max adults">
+                  <InputNumber
+                    value={categoryFormik.values.maxOccupancy.adults}
+                    onChange={(value) =>
+                      categoryFormik.setFieldValue("maxOccupancy.adults", value || 2)
+                    }
+                    min={1}
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
+                <Form.Item label="Max children">
+                  <InputNumber
+                    value={categoryFormik.values.maxOccupancy.children}
+                    onChange={(value) =>
+                      categoryFormik.setFieldValue("maxOccupancy.children", value || 0)
+                    }
+                    min={0}
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
+              </div>
+              <div className="hs-bf__breakfast">
+                <div className="hs-bf__breakfast-top">
+                  <div>
+                    <div className="hs-bf__breakfast-label">Active status</div>
+                    <div className="hs-bf__breakfast-hint">
+                      Inactive categories stay hidden from booking flows
+                    </div>
+                  </div>
+                  <Switch
+                    checked={categoryFormik.values.isActive}
+                    onChange={(checked) =>
+                      categoryFormik.setFieldValue("isActive", checked)
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+          <div className="hs-bf__footer">
+            <Button
+              icon={<CloseOutlined />}
+              onClick={() => {
+                setCategoryModalVisible(false);
+                setIsEditingCategory(false);
+                setEditingCategoryId(null);
+                categoryFormik.resetForm();
+                setCategoryImages([]);
+              }}
+            >
+              Hide
+            </Button>
+            <Button type="primary" htmlType="submit" loading={submitting}>
+              {isEditingCategory ? "Save Changes" : "Create Category"}
+            </Button>
+          </div>
         </Form>
       </Modal>
 
       {/* Room Modal */}
       <Modal
-        title={isEditingRoom ? "Edit Room" : "Add Room"}
+        className="hs-booking-modal"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">
+              {isEditingRoom ? "Update record" : "New inventory"}
+            </p>
+            <h2 className="hs-booking-modal__title">
+              {isEditingRoom ? "Edit Room" : "Add Room"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              {isEditingRoom
+                ? "Update room identity and status"
+                : "Add one or multiple rooms under this category"}
+            </p>
+          </div>
+        }
         open={roomModalVisible}
         onCancel={() => {
           setRoomModalVisible(false);
@@ -1830,11 +1755,14 @@ const HotelInformation = () => {
           setRoomRows([{ name: "", status: "available" }]);
         }}
         footer={null}
-        width="95%"
-        style={{ maxWidth: "600px" }}
+        width={640}
+        centered
+        destroyOnClose
       >
         <Form
           layout="vertical"
+          className="hs-bf"
+          requiredMark="optional"
           onFinish={(e) => {
             e?.preventDefault?.();
             if (isEditingRoom) {
@@ -1844,170 +1772,352 @@ const HotelInformation = () => {
             }
           }}
         >
-          {isEditingRoom ? (
-            <>
-              <Form.Item label="Room Name" required>
-                <Input
-                  name="name"
-                  value={roomFormik.values.name}
-                  onChange={roomFormik.handleChange}
-                  placeholder="Room name / number"
-                />
-              </Form.Item>
-              <Form.Item label="Status">
-                <Select
-                  value={roomFormik.values.status}
-                  onChange={(value) => roomFormik.setFieldValue("status", value)}
-                  style={{ width: "100%" }}
-                >
-                  <Option value="available">Available</Option>
-                  <Option value="maintenance">Maintenance</Option>
-                </Select>
-              </Form.Item>
-            </>
-          ) : (
-            <>
-              {roomRows.map((row, index) => (
-                <div key={index} className="flex flex-wrap items-start gap-2 mb-3 p-3 border border-gray-200 rounded">
-                  <div className="flex-1 min-w-[120px]">
-                    <Form.Item label={index === 0 ? "Room Name" : null} required>
-                      <Input
-                        value={row.name}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setRoomRows((prev) =>
-                            prev.map((r, i) => (i === index ? { ...r, name: v } : r))
-                          );
-                        }}
-                        placeholder="Room name / number"
-                      />
-                    </Form.Item>
-                  </div>
-                  <div className="flex-1 min-w-[120px]">
-                    <Form.Item label={index === 0 ? "Status" : null}>
-                      <Select
-                        value={row.status}
-                        onChange={(value) => {
-                          setRoomRows((prev) =>
-                            prev.map((r, i) => (i === index ? { ...r, status: value } : r))
-                          );
-                        }}
-                        style={{ width: "100%" }}
-                      >
-                        <Option value="available">Available</Option>
-                        <Option value="maintenance">Maintenance</Option>
-                      </Select>
-                    </Form.Item>
-                  </div>
-                  {roomRows.length > 1 && (
-                    <Button
-                      type="text"
-                      danger
-                      icon={<MinusCircleOutlined />}
-                      onClick={() =>
-                        setRoomRows((prev) => prev.filter((_, i) => i !== index))
-                      }
-                      className="mt-6"
-                    />
-                  )}
-                </div>
-              ))}
-              <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={() =>
-                  setRoomRows((prev) => [...prev, { name: "", status: "available" }])
-                }
-                block
-                className="mb-4"
-              >
-                Add another room
-              </Button>
-            </>
-          )}
-          {/*
-          <Row gutter={16}>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Room ID">
-                <Input
-                  name="roomId"
-                  value={roomFormik.values.roomId}
-                  onChange={roomFormik.handleChange}
-                  placeholder="Enter room ID"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Price">
-                <InputNumber
-                  name="price"
-                  value={roomFormik.values.price}
-                  onChange={(value) => roomFormik.setFieldValue("price", value || 0)}
-                  style={{ width: "100%" }}
-                  min={0}
-                  placeholder="Room price"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Adults Capacity">
-                <InputNumber
-                  value={roomFormik.values.capacity.adults}
-                  onChange={(value) =>
-                    roomFormik.setFieldValue("capacity.adults", value || 2)
-                  }
-                  style={{ width: "100%" }}
-                  min={1}
-                  placeholder="Adults"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item label="Children Capacity">
-                <InputNumber
-                  value={roomFormik.values.capacity.children}
-                  onChange={(value) =>
-                    roomFormik.setFieldValue("capacity.children", value || 0)
-                  }
-                  style={{ width: "100%" }}
-                  min={0}
-                  placeholder="Children"
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item label="Description">
-            <TextArea
-              name="description"
-              value={roomFormik.values.description}
-              onChange={roomFormik.handleChange}
-              rows={3}
-              placeholder="Enter room description"
-            />
-          </Form.Item>
-          */}
-          <Form.Item>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button type="primary" htmlType="submit" loading={submitting} className="w-full sm:w-auto">
-                {isEditingRoom ? "Update" : "Add Room(s)"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setRoomModalVisible(false);
-                  setIsEditingRoom(false);
-                  setEditingRoomId(null);
-                  setSelectedCategoryId(null);
-                  roomFormik.resetForm();
-                  setRoomImages([]);
-                  setRoomRows([{ name: "", status: "available" }]);
-                }}
-                className="w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">
+                {isEditingRoom ? "Room details" : "Room list"}
+              </h3>
+              <p className="hs-bf__section-hint">
+                {isEditingRoom
+                  ? "Identity and availability"
+                  : "Enter room names, then save together"}
+              </p>
             </div>
-          </Form.Item>
+            <div className="hs-bf__section-body">
+              {isEditingRoom ? (
+                <div className="hs-bf__grid-2">
+                  <Form.Item label="Room name" required>
+                    <Input
+                      name="name"
+                      value={roomFormik.values.name}
+                      onChange={roomFormik.handleChange}
+                      placeholder="Room name / number"
+                    />
+                  </Form.Item>
+                  <Form.Item label="Status">
+                    <Select
+                      value={roomFormik.values.status}
+                      onChange={(value) => roomFormik.setFieldValue("status", value)}
+                    >
+                      <Option value="available">Available</Option>
+                      <Option value="maintenance">Maintenance</Option>
+                    </Select>
+                  </Form.Item>
+                </div>
+              ) : (
+                <>
+                  {roomRows.map((row, index) => (
+                    <div className="hs-bf__pay-row" key={index} style={{ gridTemplateColumns: "1.4fr 1fr auto" }}>
+                      <Form.Item label={index === 0 ? "Room name" : " "}>
+                        <Input
+                          value={row.name}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setRoomRows((prev) =>
+                              prev.map((r, i) => (i === index ? { ...r, name: v } : r))
+                            );
+                          }}
+                          placeholder="Room name / number"
+                        />
+                      </Form.Item>
+                      <Form.Item label={index === 0 ? "Status" : " "}>
+                        <Select
+                          value={row.status}
+                          onChange={(value) => {
+                            setRoomRows((prev) =>
+                              prev.map((r, i) =>
+                                i === index ? { ...r, status: value } : r
+                              )
+                            );
+                          }}
+                        >
+                          <Option value="available">Available</Option>
+                          <Option value="maintenance">Maintenance</Option>
+                        </Select>
+                      </Form.Item>
+                      <div className="hs-bf__pay-actions">
+                        {roomRows.length > 1 ? (
+                          <Button
+                            type="text"
+                            danger
+                            icon={<MinusCircleOutlined />}
+                            onClick={() =>
+                              setRoomRows((prev) => prev.filter((_, i) => i !== index))
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="dashed"
+                    block
+                    icon={<PlusOutlined />}
+                    className="hs-bf__add-pay"
+                    onClick={() =>
+                      setRoomRows((prev) => [
+                        ...prev,
+                        { name: "", status: "available" },
+                      ])
+                    }
+                  >
+                    Add another room
+                  </Button>
+                </>
+              )}
+            </div>
+          </section>
+          <div className="hs-bf__footer">
+            <Button
+              icon={<CloseOutlined />}
+              onClick={() => {
+                setRoomModalVisible(false);
+                setIsEditingRoom(false);
+                setEditingRoomId(null);
+                setSelectedCategoryId(null);
+                roomFormik.resetForm();
+                setRoomImages([]);
+                setRoomRows([{ name: "", status: "available" }]);
+              }}
+            >
+              Hide
+            </Button>
+            <Button type="primary" htmlType="submit" loading={submitting}>
+              {isEditingRoom ? "Save Changes" : "Add Room(s)"}
+            </Button>
+          </div>
         </Form>
+      </Modal>
+
+      {/* Hotel Details Modal */}
+      <Modal
+        className="hs-booking-modal hs-hi-details"
+        wrapClassName="hs-hi-details-wrap"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">Quick preview</p>
+            <h2 className="hs-booking-modal__title">
+              {selectedHotelForDetails?.hotelName || "Hotel details"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              {selectedHotelForDetails
+                ? `ID ${selectedHotelForDetails.hotelID} · Smart overview`
+                : "Loading hotel profile…"}
+            </p>
+          </div>
+        }
+        open={detailsModalVisible}
+        onCancel={() => {
+          setDetailsModalVisible(false);
+          setSelectedHotelForDetails(null);
+        }}
+        footer={
+          <div className="hs-hi-details__footer">
+            <Button
+              onClick={() => {
+                setDetailsModalVisible(false);
+                setSelectedHotelForDetails(null);
+              }}
+            >
+              Close
+            </Button>
+            {selectedHotelForDetails && (
+              <>
+                <Button
+                  icon={<HomeOutlined />}
+                  onClick={() => {
+                    setSelectedHotelId(selectedHotelForDetails.hotelID);
+                    fetchHotelData(selectedHotelForDetails.hotelID);
+                    setDetailsModalVisible(false);
+                    setSelectedHotelForDetails(null);
+                  }}
+                >
+                  Open workspace
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    const hotel = selectedHotelForDetails;
+                    setDetailsModalVisible(false);
+                    setSelectedHotelForDetails(null);
+                    handleEditHotel(hotel);
+                  }}
+                >
+                  Edit
+                </Button>
+              </>
+            )}
+          </div>
+        }
+        width={860}
+        centered
+        destroyOnClose
+      >
+        {detailsLoading ? (
+          <div className="hs-hi-details__loading">
+            <Skeleton active paragraph={{ rows: 8 }} />
+          </div>
+        ) : selectedHotelForDetails ? (
+          <div className="hs-hi-details__body">
+            <div className="hs-hi-details__hero">
+              <div className="hs-hi-details__hero-main">
+                <div className="hs-hi-details__status-row">
+                  {getStatusTag(selectedHotelForDetails.status)}
+                  <span className="hs-hi-details__id">
+                    Hotel ID {selectedHotelForDetails.hotelID}
+                  </span>
+                </div>
+                <h3 className="hs-hi-details__name">
+                  {selectedHotelForDetails.hotelName}
+                </h3>
+                <p className="hs-hi-details__desc">
+                  {selectedHotelForDetails.hotelDescription ||
+                    "No description provided for this property."}
+                </p>
+              </div>
+              {(selectedHotelForDetails.logo ||
+                (selectedHotelForDetails.images &&
+                  selectedHotelForDetails.images[0])) && (
+                <div className="hs-hi-details__logo">
+                  <Image
+                    src={
+                      selectedHotelForDetails.logo ||
+                      selectedHotelForDetails.images[0]
+                    }
+                    alt="Hotel"
+                    preview
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="hs-hi__kpi-row hs-hi-details__kpis">
+              <div className="hs-hi__kpi">
+                <p className="hs-hi__kpi-label">Total rooms</p>
+                <p className="hs-hi__kpi-value">
+                  {selectedHotelForDetails.totalRooms ||
+                    (selectedHotelForDetails.roomCategories || []).reduce(
+                      (s, c) => s + (c.roomNumbers?.length || 0),
+                      0
+                    ) ||
+                    0}
+                </p>
+              </div>
+              <div className="hs-hi__kpi hs-hi__kpi--soft">
+                <p className="hs-hi__kpi-label">Available</p>
+                <p className="hs-hi__kpi-value">
+                  {selectedHotelForDetails.availableRooms ?? "—"}
+                </p>
+              </div>
+              <div className="hs-hi__kpi hs-hi__kpi--sand">
+                <p className="hs-hi__kpi-label">Categories</p>
+                <p className="hs-hi__kpi-value">
+                  {(selectedHotelForDetails.roomCategories || []).length}
+                </p>
+              </div>
+              <div className="hs-hi__kpi hs-hi__kpi--deep">
+                <p className="hs-hi__kpi-label">Check-in / out</p>
+                <p className="hs-hi__kpi-value hs-hi-details__kpi-time">
+                  {selectedHotelForDetails.checkInTime || "14:00"} ·{" "}
+                  {selectedHotelForDetails.checkOutTime || "11:00"}
+                </p>
+              </div>
+            </div>
+
+            <div className="hs-hi__attrs hs-hi-details__attrs">
+              <div className="hs-hi__attr">
+                <label>Address</label>
+                <p>{addressLine(selectedHotelForDetails)}</p>
+              </div>
+              <div className="hs-hi__attr">
+                <label>Contact</label>
+                <p>
+                  {[
+                    selectedHotelForDetails.contact?.phone,
+                    selectedHotelForDetails.contact?.email,
+                    selectedHotelForDetails.contact?.website,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "—"}
+                </p>
+              </div>
+            </div>
+
+            {(selectedHotelForDetails.roomCategories || []).length > 0 && (
+              <div className="hs-hi-details__section">
+                <div className="hs-hi-details__section-head">
+                  <h4>Room categories</h4>
+                  <span>
+                    {(selectedHotelForDetails.roomCategories || []).length} groups
+                  </span>
+                </div>
+                <div className="hs-hi-details__cats">
+                  {(selectedHotelForDetails.roomCategories || []).map((cat) => (
+                    <div key={cat._id || cat.name} className="hs-hi-details__cat">
+                      <div className="hs-hi-details__cat-top">
+                        <strong>{cat.name}</strong>
+                        {!cat.isActive && getStatusTag("inactive")}
+                      </div>
+                      <div className="hs-hi-details__cat-meta">
+                        <span>{cat.roomNumbers?.length || 0} rooms</span>
+                        <span>
+                          ৳{Number(cat.basePrice || 0).toLocaleString()}
+                        </span>
+                        <span>
+                          {cat.maxOccupancy?.adults || 0}A /{" "}
+                          {cat.maxOccupancy?.children || 0}C
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {Array.isArray(selectedHotelForDetails.termsAndConditions) &&
+              selectedHotelForDetails.termsAndConditions.filter(Boolean).length >
+                0 && (
+                <div className="hs-hi-details__section">
+                  <div className="hs-hi-details__section-head">
+                    <h4>Terms & conditions</h4>
+                  </div>
+                  <ul className="hs-hi-details__terms">
+                    {selectedHotelForDetails.termsAndConditions
+                      .filter(Boolean)
+                      .map((t, idx) => (
+                        <li key={idx}>{t}</li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+
+            {selectedHotelForDetails.images &&
+              selectedHotelForDetails.images.length > 0 && (
+                <div className="hs-hi-details__section">
+                  <div className="hs-hi-details__section-head">
+                    <h4>Gallery</h4>
+                    <span>{selectedHotelForDetails.images.length} images</span>
+                  </div>
+                  <Image.PreviewGroup>
+                    <div className="hs-hi-details__gallery">
+                      {selectedHotelForDetails.images.map((img, index) => (
+                        <Image
+                          key={index}
+                          src={img}
+                          alt={`Hotel ${index + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </Image.PreviewGroup>
+                </div>
+              )}
+          </div>
+        ) : (
+          <div className="hs-hi__empty">
+            <p className="hs-hi__empty-title">No details available</p>
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -13,7 +13,7 @@ const TransactionMessage = ({ message }) => {
         damping: 25,
         duration: 15, // Duration of the animation (in seconds)
       }}
-      className="fixed top-10 lg:top-16 right-0 p-4 bg-blue-500 text-white rounded-lg shadow-lg w-max">
+      className="fixed top-10 lg:top-16 right-0 p-4 bg-teal-500 text-white rounded-lg shadow-lg w-max">
       {message}
     </motion.div>
   );

@@ -10,14 +10,9 @@ import {
   Popconfirm,
   DatePicker,
   Modal,
-  Tag,
-  Space,
   Form,
   Input,
   Switch,
-  Card,
-  Row,
-  Col,
   Skeleton,
 } from "antd";
 import {
@@ -38,6 +33,8 @@ import { useFormik } from "formik";
 import coreAxios from "@/utils/axiosInstance";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
 import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
+import "./Calender.css";
+import "./Booking/BookingForm.css";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -110,8 +107,8 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       const today = dayjs();
       const todayIdx = dates.findIndex((d) => d.isSame(today, "day"));
 
-      // Date columns width is configured as `width: 80` in getColumns()
-      const cellWidth = 80;
+      // Date columns width is configured as `width: 76` in getColumns()
+      const cellWidth = 76;
       const target = todayIdx >= 0 ? todayIdx * cellWidth : 0;
       body.scrollLeft = Math.max(0, target);
     } catch (_) {}
@@ -170,12 +167,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
         return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
       })
       .reduce((sum, booking) => sum + (Number(booking.duePayment) || 0), 0);
-  };
-
-  // Get booking color - green for all bookings
-  const getBookingColor = (value) => {
-    if (!value) return "#ffffff";
-    return "linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)";
   };
 
   // Open booking modal for Add or Edit
@@ -334,171 +325,102 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     setBookingModalVisible(true);
   };
 
-  // Show booking history modal
+  // Show booking history modal for a room + date
   const handleCellClick = async (roomKey, dateStr) => {
     setSelectedRoomKey(roomKey);
     setSelectedDateStr(dateStr);
-    
-    // Extract roomNumberID from roomKey (format: "room-{roomNumberID}")
+
     const roomNumberId = roomKey.replace("room-", "");
-    
-    // Fetch booking history for this room and date from actual bookings
-    const relevantBookings = allBookings.filter(booking => {
-      // Check if booking is for this room
+
+    const relevantBookings = allBookings.filter((booking) => {
       if (booking.roomNumberID !== roomNumberId) return false;
-      
-      // Check if date falls within booking range
       const checkIn = dayjs(booking.checkInDate);
       const checkOut = dayjs(booking.checkOutDate);
       const selectedDate = dayjs(dateStr);
-      
-      // Date is within booking range (inclusive of check-in, exclusive of check-out)
-      return selectedDate.isSameOrAfter(checkIn, "day") && selectedDate.isBefore(checkOut, "day");
+      return (
+        selectedDate.isSameOrAfter(checkIn, "day") &&
+        selectedDate.isBefore(checkOut, "day")
+      );
     });
-    
+
     setBookingHistory(relevantBookings);
     setHistoryModalVisible(true);
   };
 
-  // Build category rowSpan info: for each row index, { categoryName, rowSpan } (rowSpan 0 = merged into above)
-  const getCategoryRowSpans = () => {
-    const result = [];
-    let i = 0;
-    while (i < roomList.length) {
-      const cat = roomList[i].category || "N/A";
-      let count = 0;
-      while (i + count < roomList.length && (roomList[i + count].category || "N/A") === cat) count++;
-      result.push({ categoryName: cat, rowSpan: count });
-      for (let j = 1; j < count; j++) result.push({ categoryName: cat, rowSpan: 0 });
-      i += count;
-    }
-    return result;
+  // Day column overview — all rooms for that date
+  const handleDayHeaderClick = (dateStr) => {
+    setSelectedRoomKey(null);
+    setSelectedDateStr(dateStr);
+    const selectedDate = dayjs(dateStr);
+    const relevantBookings = allBookings.filter((booking) => {
+      if (booking.statusID === 255) return false;
+      const checkIn = dayjs(booking.checkInDate);
+      const checkOut = dayjs(booking.checkOutDate);
+      return (
+        selectedDate.isSameOrAfter(checkIn, "day") &&
+        selectedDate.isBefore(checkOut, "day")
+      );
+    });
+    setBookingHistory(relevantBookings);
+    setHistoryModalVisible(true);
   };
+
+  const closeHistoryModal = () => {
+    setHistoryModalVisible(false);
+    setSelectedRoomKey(null);
+    setSelectedDateStr(null);
+    setBookingHistory([]);
+  };
+
+  const selectedRoom = selectedRoomKey
+    ? roomList.find((r) => r.key === selectedRoomKey)
+    : null;
+  const isRoomAvailable =
+    (selectedRoom?.roomStatus || "available") === "available";
+  const isDayOverview = historyModalVisible && !selectedRoomKey;
 
   // Main columns configuration
   const getColumns = () => {
     const dates = generateDateColumns();
-    const categoryRowSpans = getCategoryRowSpans();
-
-    const categoryColumnBg = '#15803d'; // green-700
-    const categoryColumn = {
-      title: '',
-      key: '_category',
-      width: 28,
-      fixed: 'left',
-      className: 'category-merge-column',
-      onHeaderCell: () => ({
-        style: { 
-          background: categoryColumnBg, 
-          borderColor: 'rgba(255,255,255,0.2)', 
-          padding: 0, 
-          lineHeight: 0,
-          position: 'sticky',
-          left: 0,
-          zIndex: 20
-        },
-      }),
-      onCell: (_, rowIndex) => {
-        const info = categoryRowSpans[rowIndex];
-        return {
-          rowSpan: info?.rowSpan ?? 0,
-          style: {
-            background: categoryColumnBg,
-            borderColor: 'rgba(255,255,255,0.2)',
-            padding: 0,
-            verticalAlign: 'middle',
-            lineHeight: 1,
-            position: 'sticky',
-            left: 0,
-            zIndex: 15,
-            backgroundColor: categoryColumnBg
-          },
-        };
-      },
-      render: (_, __, rowIndex) => {
-        const info = categoryRowSpans[rowIndex];
-        if (!info || info.rowSpan === 0) return null;
-        return (
-          <div
-            className="flex items-center justify-center h-full"
-            style={{ height: '100%', padding: '0 4px' }}
-          >
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#ffffff',
-                transform: 'rotate(-90deg)',
-                transformOrigin: 'center center',
-                whiteSpace: 'nowrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              {info.categoryName}
-            </div>
-          </div>
-        );
-      },
-    };
-
-    const roomNoColumnBg = '#2563eb'; // blue-600
+    const roomNoColumnBg = "#04343a";
 
     const roomNoColumn = {
       title: (
-        <div className="text-center text-white font-bold">
-          <div className="font-bold text-xs sm:text-sm">Room</div>
-          <div className="text-xs text-white/90">No.</div>
+        <div className="hs-cal__room-head">
+          Room
+          <span>No.</span>
         </div>
       ),
-      dataIndex: 'flatNo',
-      key: 'flatNo',
-      fixed: 'left',
-      width: 72,
+      dataIndex: "flatNo",
+      key: "flatNo",
+      fixed: "left",
+      width: 76,
       onHeaderCell: () => ({
-        style: { 
-          background: roomNoColumnBg, 
-          color: 'white', 
-          borderColor: 'rgba(255,255,255,0.2)',
-          position: 'sticky',
+        style: {
+          background: roomNoColumnBg,
+          color: "white",
+          borderColor: "rgba(255,255,255,0.12)",
+          position: "sticky",
           left: 0,
-          zIndex: 19
+          zIndex: 19,
         },
       }),
-      onCell: () => ({ 
-        style: { 
+      onCell: () => ({
+        style: {
           background: roomNoColumnBg,
-          position: 'sticky',
+          position: "sticky",
           left: 0,
           zIndex: 14,
-          backgroundColor: roomNoColumnBg
-        } 
+          padding: 0,
+        },
       }),
       render: (text, record) => (
-        <div
-          className="h-full min-h-[60px] flex flex-col justify-center py-1 text-center"
-          style={{ background: roomNoColumnBg, color: "white" }}
-        >
-          <div className="font-bold text-xs sm:text-sm text-white">{text}</div>
+        <div className="hs-cal__room-cell">
+          <div className="hs-cal__room-no">{text}</div>
           {record?.category && (
-            <div
-              className="text-white/85"
-              style={{
-                marginTop: 1,
-                fontSize: "6px",
-                fontWeight: 600,
-                lineHeight: 1.0,
-                letterSpacing: 0,
-                textAlign: "center",
-                width: "100%",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {record.category}
-            </div>
+            <div className="hs-cal__room-cat">{record.category}</div>
           )}
-          <div className="text-xs text-white/90">
+          <div className="hs-cal__room-ratio">
             {calculateTotalBooked(record.key)}/{generateDateColumns().length}
           </div>
         </div>
@@ -509,44 +431,49 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       const dateStr = date.format("YYYY-MM-DD");
       const dayOfWeek = date.format("ddd");
       const dayNum = date.format("D");
-      const isToday = date.isSame(dayjs(), 'day');
-      const isHoliday = dayOfWeek === 'Fri' || dayOfWeek === 'Sat';
-      
+      const isToday = date.isSame(dayjs(), "day");
+      const isWeekend = dayOfWeek === "Fri" || dayOfWeek === "Sat";
+
       return {
         title: (
-          <div className="text-center p-0 m-0 text-white" style={{ minWidth: '80px' }}>
-            <div 
-              className={isToday ? 'font-bold text-amber-200' : 'font-bold'}
-              style={{ fontSize: '9px', lineHeight: '1.2' }}
-            >
-              {dayOfWeek.toUpperCase()}
-              {isHoliday && <span className="text-xs ml-1">🏛️</span>}
-            </div>
-            <div 
-              className={isToday ? 'font-extrabold text-amber-200' : 'font-extrabold'}
-              style={{ fontSize: '12px', lineHeight: '1.2' }}
-            >
-              {dayNum}
-            </div>
-          </div>
+          <button
+            type="button"
+            className={[
+              "hs-cal__day-head",
+              "hs-cal__day-head--btn",
+              isToday ? "hs-cal__day-head--today" : "",
+              isWeekend ? "hs-cal__day-head--weekend" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDayHeaderClick(dateStr);
+            }}
+            title={`View ${date.format("DD MMM YYYY")}`}
+          >
+            <span className="hs-cal__day-dow">{dayOfWeek.toUpperCase()}</span>
+            <span className="hs-cal__day-num">{dayNum}</span>
+            <EyeOutlined className="hs-cal__day-eye" />
+          </button>
         ),
         key: dateStr,
-        width: 80,
-        align: 'center',
+        width: 76,
+        align: "center",
         onHeaderCell: () => ({
-          style: {
-            background: isHoliday ? '#dc2626' : '#2563eb',
-            color: 'white',
-            borderColor: 'rgba(255,255,255,0.2)',
-          },
+          className: [
+            isToday ? "hs-cal__th--today" : "",
+            isWeekend ? "hs-cal__th--weekend" : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
         }),
         render: (_, record) => {
           const bookingKey = `${record.key}-${dateStr}`;
           const bookingInfo = bookingData[bookingKey];
           const roomStatus = record.roomStatus || "available";
           const isRoomAvailable = roomStatus === "available";
-          
-          // Extract customer name from bookingInfo
+
           let customerName = "";
           let bookingNo = "";
           if (bookingInfo) {
@@ -558,93 +485,71 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
               customerName = bookingInfo;
             }
           }
-          
-          const cellColor = getBookingColor(bookingInfo || '');
-          const isGradient = cellColor.includes('gradient');
-          
+
           return (
             <div
-              className={`flex items-center justify-center p-1 relative calendar-cell ${bookingInfo ? 'booked-cell' : ''}`}
-              style={{
-                height: '100%',
-                minHeight: '52px',
-                maxHeight: '60px',
-                boxSizing: 'border-box',
-                ...(isGradient 
-                  ? { backgroundImage: cellColor, backgroundColor: '#10b981' }
-                  : { backgroundColor: cellColor }
-                ),
-                cursor: 'pointer',
-                border: '1px solid #e8e8e8',
-                fontSize: '9px',
-                padding: '4px',
-                borderRadius: '6px',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
-                transition: bookingInfo ? 'transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out, z-index 0.3s ease-in-out' : 'none',
-                zIndex: 1,
-              }}
+              className={[
+                "hs-cal__cell",
+                bookingInfo ? "hs-cal__cell--booked" : "hs-cal__cell--available",
+                isWeekend ? "hs-cal__cell--weekend" : "",
+                isToday ? "hs-cal__cell--today" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               onClick={() => handleCellClick(record.key, dateStr)}
             >
-              {bookingInfo ? (
-                <div className="w-full h-full flex flex-col justify-between">
-                  <div className="flex-grow overflow-hidden text-center">
+              <div className="hs-cal__cell-inner">
+                {bookingInfo ? (
+                  <>
                     {customerName && (
-                      <div className="font-semibold text-white mb-1" style={{ fontSize: '9px', lineHeight: '1.3', wordBreak: 'break-word' }}>
-                        {customerName}
-                      </div>
+                      <div className="hs-cal__guest">{customerName}</div>
                     )}
                     {bookingNo && (
-                      <div className="text-white font-medium" style={{ fontSize: '8px', lineHeight: '1.2' }}>
-                        {bookingNo}
-                      </div>
+                      <div className="hs-cal__booking-no">{bookingNo}</div>
                     )}
-                  </div>
-                  {canEdit && isRoomAvailable && (
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<EditOutlined style={{ fontSize: '8px', color: '#ffffff' }} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditClick(record.key, dateStr, bookingInfo, e);
-                      }}
-                      className="p-0 m-0"
-                      style={{ fontSize: '8px', height: '16px', marginTop: '2px', color: '#ffffff' }}
-                    >
-                      Edit
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center">
-                  <div className="text-gray-500 text-[8px] mb-0.5 capitalize">{roomStatus}</div>
-                  {canInsert && isRoomAvailable && (
-                    <>
-                      <div className="text-gray-400 text-xs mb-1">+</div>
+                    {canEdit && isRoomAvailable && (
                       <Button
                         type="link"
                         size="small"
-                        icon={<PlusOutlined style={{ fontSize: '8px' }} />}
+                        icon={<EditOutlined style={{ fontSize: 8 }} />}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleEditClick(record.key, dateStr, null, e);
+                          handleEditClick(record.key, dateStr, bookingInfo, e);
                         }}
-                        className="p-0 m-0"
-                        style={{ fontSize: '8px', height: '16px' }}
+                        className="hs-cal__edit-btn"
                       >
-                        Add
+                        Edit
                       </Button>
-                    </>
-                  )}
-                </div>
-              )}
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="hs-cal__status">{roomStatus}</div>
+                    {canInsert && isRoomAvailable && (
+                      <>
+                        <div className="hs-cal__plus">+</div>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<PlusOutlined style={{ fontSize: 8 }} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClick(record.key, dateStr, null, e);
+                          }}
+                          className="hs-cal__add-btn"
+                        >
+                          Add
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           );
         },
       };
     });
-
-    const totalColSpan = 1 + dateColumns.length;
 
     return [roomNoColumn, ...dateColumns];
   };
@@ -1060,514 +965,497 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
   }
 
   return (
-    <div className="bg-gray-50 p-2">
-      <div className="mx-auto">
-        {/* Header */}
-        <div 
-          className="bg-white rounded-lg shadow-sm mb-2 calendar-header-container"
-          style={{ 
-            padding: '12px',
-            paddingTop: '8px'
-          }}
-        >
-          <div className="flex flex-row items-center justify-between gap-2 sm:gap-3">
-            <div 
-              className="flex-1 min-w-0 calendar-title-container"
-              style={{ paddingTop: '0', paddingBottom: '0' }}
-            >
-              <h1 className="text-sm sm:text-lg md:text-xl lg:text-xl font-bold text-gray-800 truncate">
-                <span className="hidden sm:inline">Booking Calendar </span>
-                ({dateRange[0].format("MMM D")} - {dateRange[1].format("D MMM")})
-              </h1>
+    <div className="hs-cal">
+      <div className="hs-cal__toolbar">
+        <div className="hs-cal__toolbar-row">
+          <div className="hs-cal__title-block">
+            <div className="hs-cal__title-line">
+              <p className="hs-cal__eyebrow">Operations</p>
+              {selectedHotel && (
+                <span className="hs-cal__hotel-chip">{selectedHotel}</span>
+              )}
             </div>
-            
-            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" style={{ paddingTop: '0' }}>
-              <Button
-                icon={<LeftOutlined className="text-[10px] sm:text-xs" />}
-                onClick={goToPreviousMonth}
-                size="small"
-                className="text-[8px] sm:text-[10px]"
-                style={{ 
-                  minHeight: '24px',
-                  minWidth: '28px',
-                  padding: '2px 4px',
-                  fontSize: '8px'
-                }}
-              >
-                <span className="hidden sm:inline text-[10px]">Prev</span>
-                <span className="sm:hidden text-[10px]">‹</span>
-              </Button>
-              
-              <Button
-                onClick={goToToday}
-                size="small"
-                className="text-[8px] sm:text-[10px]"
-                style={{ 
-                  minHeight: '24px',
-                  minWidth: '32px',
-                  padding: '2px 4px',
-                  fontSize: '8px'
-                }}
-              >
-                <span className="text-[8px] sm:text-[10px]">Today</span>
-              </Button>
-              
-              <Button
-                icon={<RightOutlined className="text-[10px] sm:text-xs" />}
-                onClick={goToNextMonth}
-                size="small"
-                className="text-[8px] sm:text-[10px]"
-                style={{ 
-                  minHeight: '24px',
-                  minWidth: '28px',
-                  padding: '2px 4px',
-                  fontSize: '8px'
-                }}
-              >
-                <span className="hidden sm:inline text-[10px]">Next</span>
-                <span className="sm:hidden text-[10px]">›</span>
-              </Button>
-              
-              <Button
-                type={showDateRange ? "primary" : "default"}
-                icon={<CalendarOutlined className="text-xs" />}
-                onClick={() => setShowDateRange(!showDateRange)}
-                size="small"
-                className="text-[10px] hidden sm:flex"
-                style={{ 
-                  minHeight: '28px', 
-                  padding: '2px 6px',
-                  fontSize: '10px'
-                }}
-              >
-                <span className="hidden md:inline text-[10px]">Custom Range</span>
-                <span className="sm:inline md:hidden text-[10px]">Range</span>
-              </Button>
-            </div>
+            <h1 className="hs-cal__title">
+              <span className="hidden sm:inline">Booking Calendar · </span>
+              {dateRange[0].format("MMM D")} – {dateRange[1].format("D MMM, YYYY")}
+            </h1>
           </div>
 
-          {/* Date Range Picker */}
-          {showDateRange && (
-            <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-blue-50 rounded-lg">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-                <span className="font-semibold text-xs sm:text-sm">Select Date Range:</span>
-                <RangePicker
-                  value={dateRange}
-                  onChange={handleDateRangeChange}
-                  format="DD/MM/YYYY"
-                  allowClear={false}
-                  size="small"
-                  className="w-full sm:w-auto"
-                />
-                <Button
-                  type="link"
-                  size="small"
-                  onClick={() => {
-                    const today = dayjs();
-                    setDateRange([
-                      today.startOf('month'),
-                      today.endOf('month'),
-                    ]);
-                  }}
-                  className="text-xs p-0"
-                >
-                  Reset
-                </Button>
-              </div>
-            </div>
-          )}
+          <div className="hs-cal__nav">
+            <Button icon={<LeftOutlined />} onClick={goToPreviousMonth} size="small">
+              <span className="hidden sm:inline">Prev</span>
+            </Button>
+            <Button onClick={goToToday} size="small" type="primary">
+              Today
+            </Button>
+            <Button icon={<RightOutlined />} onClick={goToNextMonth} size="small">
+              <span className="hidden sm:inline">Next</span>
+            </Button>
+            <Button
+              type={showDateRange ? "primary" : "default"}
+              icon={<CalendarOutlined />}
+              onClick={() => setShowDateRange(!showDateRange)}
+              size="small"
+              className="hidden sm:inline-flex"
+            >
+              Range
+            </Button>
+          </div>
         </div>
 
-        {/* Calendar Table */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="p-2">
-              <div className="overflow-x-auto">
-                <table className="w-full" style={{ fontSize: '10px' }}>
-                  <thead>
-                    <tr>
-                      <th className="px-2 py-2 text-center bg-gray-100 border">
-                        <Skeleton.Input active size="small" style={{ width: 60, height: 20 }} />
-                      </th>
-                      {Array.from({ length: 15 }).map((_, idx) => (
-                        <th key={idx} className="px-1 py-2 text-center bg-gray-100 border">
-                          <Skeleton.Input active size="small" style={{ width: 40, height: 20 }} />
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: 10 }).map((_, rowIdx) => (
-                      <tr key={rowIdx}>
-                        <td className="px-2 py-2 text-center border">
-                          <Skeleton.Input active size="small" style={{ width: 50, height: 16 }} />
-                        </td>
-                        {Array.from({ length: 15 }).map((_, colIdx) => (
-                          <td key={colIdx} className="px-1 py-2 text-center border" style={{ minHeight: '50px' }}>
-                            <Skeleton.Input active size="small" style={{ width: 35, height: 40 }} />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div ref={calendarWrapperRef} className="overflow-x-auto -mx-2 sm:mx-0">
-                <Table
-                  columns={getColumns()}
-                  dataSource={roomList}
-                  pagination={false}
-                  bordered
-                  size="small"
-                  rowKey="key"
-                  scroll={{ 
-                    x: 1200,
-                    y: 550,
-                    scrollToFirstRowOnChange: true
-                  }}
-                  className="calendar-table"
-                  style={{ fontSize: '10px' }}
-                  sticky={{ offsetHeader: 0 }}
-                  components={{
-                    body: {
-                      cell: (props) => (
-                        <td {...props} style={{ padding: '0 !important' }} />
-                      ),
-                      wrapper: (props) => {
-                        const dates = generateDateColumns();
-                        return (
-                          <>
-                            <tbody {...props} />
-                            <tfoot>
-                              <tr>
-                                <td 
-                                  className="text-center bg-gray-100 font-semibold border"
-                                  style={{ 
-                                    padding: '8px 4px', 
-                                    fontSize: '10px', 
-                                    position: 'sticky', 
-                                    left: 0, 
-                                    zIndex: 14, 
-                                    background: '#f3f4f6' 
-                                  }}
-                                >
-                                  Ratio
-                                </td>
-                                {dates.map((date) => {
-                                  const dateStr = date.format("YYYY-MM-DD");
-                                  const bookedQty = calculateDayTotal(dateStr);
-                                  const totalRooms = roomList.length;
-                                  const ratio = totalRooms > 0 ? `${bookedQty}/${totalRooms}` : '0/0';
-                                  return (
-                                    <td
-                                      key={`ratio-${dateStr}`}
-                                      className="text-center bg-gray-50 border"
-                                      style={{ padding: '8px 4px', fontSize: '10px' }}
-                                    >
-                                      <div className="font-semibold text-gray-800">{ratio}</div>
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            </tfoot>
-                          </>
-                        );
-                      },
-                    },
-                  }}
-                />
-              </div>
-            </>
-          )}
-        </div>
+        {showDateRange && (
+          <div className="hs-cal__range">
+            <span className="hs-cal__range-label">Custom range</span>
+            <RangePicker
+              value={dateRange}
+              onChange={handleDateRangeChange}
+              format="DD/MM/YYYY"
+              allowClear={false}
+              size="small"
+              className="w-full sm:w-auto"
+            />
+            <Button
+              type="link"
+              size="small"
+              onClick={() => {
+                const today = dayjs();
+                setDateRange([today.startOf("month"), today.endOf("month")]);
+              }}
+            >
+              Reset
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Booking History Modal */}
-      <Modal
-        title={
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-semibold text-base flex items-center gap-2">
-                <CalendarOutlined className="text-blue-600" />
-                Booking History
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {selectedRoomKey && roomList.find(r => r.key === selectedRoomKey)?.flatNo} • {selectedDateStr && dayjs(selectedDateStr).format("DD/MM/YYYY")}
-              </div>
+      <div className="hs-cal__legend">
+        <span className="hs-cal__legend-item">
+          <span className="hs-cal__swatch hs-cal__swatch--booked" /> Booked
+        </span>
+        <span className="hs-cal__legend-item">
+          <span className="hs-cal__swatch hs-cal__swatch--available" /> Available
+        </span>
+        <span className="hs-cal__legend-item">
+          <span className="hs-cal__swatch hs-cal__swatch--today" /> Today
+        </span>
+        <span className="hs-cal__legend-item">
+          <span className="hs-cal__swatch hs-cal__swatch--weekend" /> Weekend
+        </span>
+      </div>
+
+      <div className="hs-cal__panel">
+        {loading ? (
+          <div className="p-3">
+            <div className="overflow-x-auto">
+              <table className="w-full" style={{ fontSize: 10 }}>
+                <thead>
+                  <tr>
+                    <th className="px-2 py-2 text-center border" style={{ background: "#f3f8f8" }}>
+                      <Skeleton.Input active size="small" style={{ width: 60, height: 20 }} />
+                    </th>
+                    {Array.from({ length: 12 }).map((_, idx) => (
+                      <th key={idx} className="px-1 py-2 text-center border" style={{ background: "#f3f8f8" }}>
+                        <Skeleton.Input active size="small" style={{ width: 36, height: 20 }} />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 8 }).map((_, rowIdx) => (
+                    <tr key={rowIdx}>
+                      <td className="px-2 py-2 text-center border">
+                        <Skeleton.Input active size="small" style={{ width: 50, height: 16 }} />
+                      </td>
+                      {Array.from({ length: 12 }).map((_, colIdx) => (
+                        <td key={colIdx} className="px-1 py-2 text-center border" style={{ minHeight: 48 }}>
+                          <Skeleton.Input active size="small" style={{ width: 32, height: 36 }} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            {bookingHistory.length > 0 && (
-              <Tag color="blue" className="text-xs">
-                {bookingHistory.length} {bookingHistory.length === 1 ? 'Booking' : 'Bookings'}
-              </Tag>
-            )}
+          </div>
+        ) : (
+          <div ref={calendarWrapperRef} className="hs-cal__scroll">
+            <Table
+              columns={getColumns()}
+              dataSource={roomList}
+              pagination={false}
+              bordered
+              size="small"
+              rowKey="key"
+              scroll={{
+                x: 1200,
+                y: 550,
+                scrollToFirstRowOnChange: true,
+              }}
+              className="calendar-table"
+              sticky={{ offsetHeader: 0 }}
+              summary={() => {
+                const dates = generateDateColumns();
+                return (
+                  <Table.Summary fixed="bottom">
+                    <Table.Summary.Row className="hs-cal__occ-row">
+                      <Table.Summary.Cell
+                        index={0}
+                        className="hs-cal__foot-label hs-cal__occ-label"
+                      >
+                        Occupancy
+                      </Table.Summary.Cell>
+                      {dates.map((date, idx) => {
+                        const dateStr = date.format("YYYY-MM-DD");
+                        const bookedQty = calculateDayTotal(dateStr);
+                        const totalRooms = roomList.length;
+                        const ratio =
+                          totalRooms > 0
+                            ? `${bookedQty}/${totalRooms}`
+                            : "0/0";
+                        const dayOfWeek = date.format("ddd");
+                        const isWeekend =
+                          dayOfWeek === "Fri" || dayOfWeek === "Sat";
+                        const isToday = date.isSame(dayjs(), "day");
+                        const pct =
+                          totalRooms > 0
+                            ? Math.round((bookedQty / totalRooms) * 100)
+                            : 0;
+                        return (
+                          <Table.Summary.Cell
+                            key={`occ-${dateStr}`}
+                            index={idx + 1}
+                            className={[
+                              "hs-cal__foot-cell",
+                              "hs-cal__occ-cell",
+                              isWeekend ? "hs-cal__occ-cell--weekend" : "",
+                              isToday ? "hs-cal__occ-cell--today" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                          >
+                            <div className="hs-cal__foot-ratio">{ratio}</div>
+                            <div className="hs-cal__occ-pct">{pct}%</div>
+                          </Table.Summary.Cell>
+                        );
+                      })}
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                );
+              }}
+              components={{
+                body: {
+                  cell: (props) => (
+                    <td {...props} style={{ padding: 0 }} />
+                  ),
+                },
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Day / room booking view */}
+      <Modal
+        className="hs-booking-modal hs-cal-dayview"
+        wrapClassName="hs-cal-dayview-wrap"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">
+              {isDayOverview ? "Day overview" : "Room · date view"}
+            </p>
+            <h2 className="hs-booking-modal__title">
+              {selectedDateStr
+                ? dayjs(selectedDateStr).format("dddd, D MMMM YYYY")
+                : "Booking view"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              {isDayOverview
+                ? `${bookingHistory.length} booking${bookingHistory.length === 1 ? "" : "s"} across rooms`
+                : `${selectedRoom?.flatNo || "Room"}${
+                    selectedRoom?.category ? ` · ${selectedRoom.category}` : ""
+                  } · ${bookingHistory.length} record${
+                    bookingHistory.length === 1 ? "" : "s"
+                  }`}
+            </p>
           </div>
         }
         open={historyModalVisible}
-        onCancel={() => {
-          setHistoryModalVisible(false);
-          setSelectedRoomKey(null);
-          setSelectedDateStr(null);
-          setBookingHistory([]);
-        }}
-        footer={[
-          <Button key="close" size="small" onClick={() => {
-            setHistoryModalVisible(false);
-            setSelectedRoomKey(null);
-            setSelectedDateStr(null);
-            setBookingHistory([]);
-          }}>
-            Close
-          </Button>,
-          ...(canInsert && (roomList.find(r => r.key === selectedRoomKey)?.roomStatus || "available") === "available" ? [
-            <Button 
-              key="add" 
-              type="primary" 
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                if (selectedRoomKey && selectedDateStr) {
-                  handleEditClick(selectedRoomKey, selectedDateStr, null);
-                }
-              }}
-            >
-              Add Booking
-            </Button>
-          ] : []),
-        ]}
-        width={700}
-        className="booking-history-modal"
-      >
-        <div className="mt-2">
-          {bookingHistory.length > 0 ? (
-            <div className="space-y-3">
-              {bookingHistory.map((booking) => (
-                <div
-                  key={booking._id}
-                  className="bg-white border rounded-lg p-3 hover:shadow-md transition-shadow"
-                  style={{
-                    borderLeft: `4px solid ${booking.statusID === 1 ? '#10b981' : '#ef4444'}`
-                  }}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-semibold text-sm text-gray-900">{booking.bookingNo}</span>
-                        <Tag 
-                          color={booking.statusID === 1 ? "green" : "red"} 
-                          className="text-xs"
-                        >
-                          {booking.statusID === 1 ? "Active" : "Cancelled"}
-                        </Tag>
-                      </div>
-                      {(booking.hotelName || booking.roomNumberName) && (
-                        <div className="text-xs text-gray-600 mb-1.5">
-                          {booking.hotelName && <span className="font-medium">{booking.hotelName}</span>}
-                          {booking.hotelName && booking.roomNumberName && <span className="mx-1">•</span>}
-                          {booking.roomNumberName && <span>{booking.roomNumberName}</span>}
-                          {booking.roomCategoryName && <span className="text-gray-500"> ({booking.roomCategoryName})</span>}
-                        </div>
-                      )}
-                      <div className="text-sm font-medium text-gray-900 flex items-center gap-1.5 mb-1">
-                        <UserOutlined className="text-gray-400 text-xs" />
-                        {booking.fullName}
-                      </div>
-                      <div className="text-xs text-gray-600 flex items-center gap-1.5">
-                        <PhoneOutlined className="text-gray-400" />
-                        {booking.phone}
-                      </div>
-                      {booking.email && (
-                        <div className="text-xs text-gray-600 flex items-center gap-1.5 mt-0.5">
-                          <span className="text-gray-400">📧</span>
-                          {booking.email}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-100 pt-2 mb-2">
-                    <div className="text-xs font-semibold text-gray-700 mb-1.5">Guest Information</div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {booking.nidPassport && (
-                        <div>
-                          <span className="text-gray-500">NID/Passport:</span>{" "}
-                          <span className="font-medium text-gray-900">{booking.nidPassport}</span>
-                        </div>
-                      )}
-                      {booking.address && (
-                        <div className="col-span-2">
-                          <span className="text-gray-500">Address:</span>{" "}
-                          <span className="font-medium text-gray-900">{booking.address}</span>
-                        </div>
-                      )}
-                      <div>
-                        <span className="text-gray-500">Adults:</span>{" "}
-                        <span className="font-medium text-gray-900">{booking.adults || 1}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Children:</span>{" "}
-                        <span className="font-medium text-gray-900">{booking.children || 0}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-100 pt-2 mb-2">
-                    <div className="text-xs font-semibold text-gray-700 mb-1.5">Booking Details</div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-gray-500">Check-in:</span>{" "}
-                        <span className="font-medium text-gray-900">
-                          {booking.checkInDate ? dayjs(booking.checkInDate).format("DD/MM/YYYY") : "N/A"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Check-out:</span>{" "}
-                        <span className="font-medium text-gray-900">
-                          {booking.checkOutDate ? dayjs(booking.checkOutDate).format("DD/MM/YYYY") : "N/A"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Nights:</span>{" "}
-                        <span className="font-medium text-gray-900">{booking.nights || 1}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Room Price:</span>{" "}
-                        <span className="font-medium text-gray-900">
-                          ৳{booking.roomPrice ? booking.roomPrice.toLocaleString() : "0"}/night
-                        </span>
-                      </div>
-                      {booking.bookedBy && (
-                        <div className="col-span-2">
-                          <span className="text-gray-500">Booked By:</span>{" "}
-                          <span className="font-medium text-gray-900">{booking.bookedBy}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {(booking.breakfastTotalBill ||
-                    booking.kitchenTotalBill ||
-                    booking.extraBedTotalBill) && (
-                    <div className="border-t border-gray-100 pt-2 mb-2">
-                      <div className="text-xs font-semibold text-gray-700 mb-1.5">
-                        Additional Services
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-gray-500">Breakfast:</span>{" "}
-                          <span className="font-medium text-green-600">
-                            ৳
-                            {(
-                              booking.breakfastTotalBill ??
-                              ((Number(booking.kitchenTotalBill) || 0) +
-                                (Number(booking.extraBedTotalBill) || 0))
-                            ).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="border-t border-gray-100 pt-2 mb-2">
-                    <div className="text-xs font-semibold text-gray-700 mb-1.5">Payment Information</div>
-                    <div className="grid grid-cols-2 gap-2 text-xs mb-1">
-                      <div>
-                        <span className="text-gray-500">Total Bill:</span>{" "}
-                        <span className="font-semibold text-gray-900">
-                          ৳{booking.totalBill ? booking.totalBill.toLocaleString() : "0"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Paid:</span>{" "}
-                        <span className="font-semibold text-green-600">
-                          ৳{booking.advancePayment ? booking.advancePayment.toLocaleString() : "0"}
-                        </span>
-                      </div>
-                      {booking.duePayment > 0 && (
-                        <div>
-                          <span className="text-gray-500">Due:</span>{" "}
-                          <span className="font-semibold text-orange-600">
-                            ৳{booking.duePayment ? booking.duePayment.toLocaleString() : "0"}
-                          </span>
-                        </div>
-                      )}
-                      {booking.paymentMethod && (
-                        <div>
-                          <span className="text-gray-500">Method:</span>{" "}
-                          <span className="font-medium text-gray-900">{booking.paymentMethod}</span>
-                        </div>
-                      )}
-                      {booking.transactionId && (
-                        <div className="col-span-2">
-                          <span className="text-gray-500">Transaction ID:</span>{" "}
-                          <span className="font-medium text-gray-900">{booking.transactionId}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {(booking.note || booking.reference) && (
-                    <div className="border-t border-gray-100 pt-2 mb-2">
-                      <div className="text-xs font-semibold text-gray-700 mb-1.5">Additional Information</div>
-                      <div className="text-xs">
-                        {booking.note && (
-                          <div className="mb-1">
-                            <span className="text-gray-500">Note:</span>{" "}
-                            <span className="font-medium text-gray-900">{booking.note}</span>
-                          </div>
-                        )}
-                        {booking.reference && (
-                          <div>
-                            <span className="text-gray-500">Reference:</span>{" "}
-                            <span className="font-medium text-gray-900">{booking.reference}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end pt-2 border-t border-gray-100">
-                    {canEdit && (roomList.find(r => r.key === selectedRoomKey)?.roomStatus || "available") === "available" && (
-                      <Button
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => {
-                          setHistoryModalVisible(false);
-                          handleEditClick(selectedRoomKey, selectedDateStr, booking, null);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <CalendarOutlined className="text-3xl text-gray-300 mb-3" />
-              <div className="text-sm font-medium text-gray-600 mb-1">No Booking Found</div>
-              <div className="text-xs text-gray-500 mb-4">
-                {(roomList.find(r => r.key === selectedRoomKey)?.roomStatus || "available") === "available"
-                  ? "This room is available for this date"
-                  : "Add/Edit disabled for this room status"}
-              </div>
-              {canInsert && (roomList.find(r => r.key === selectedRoomKey)?.roomStatus || "available") === "available" && (
-                <Button 
+        onCancel={closeHistoryModal}
+        footer={
+          <div className="hs-cal-dayview__footer">
+            <Button onClick={closeHistoryModal}>Close</Button>
+            {canInsert &&
+              !isDayOverview &&
+              isRoomAvailable &&
+              selectedRoomKey &&
+              selectedDateStr && (
+                <Button
                   type="primary"
-                  size="small"
                   icon={<PlusOutlined />}
-                  onClick={() => {
-                    if (selectedRoomKey && selectedDateStr) {
-                      handleEditClick(selectedRoomKey, selectedDateStr, null);
-                    }
-                  }}
+                  onClick={() =>
+                    handleEditClick(selectedRoomKey, selectedDateStr, null)
+                  }
                 >
-                  Create New Booking
+                  Add booking
                 </Button>
               )}
+          </div>
+        }
+        width={720}
+        centered
+        destroyOnClose
+      >
+        <div className="hs-cal-dayview__body">
+          <div className="hs-cal-dayview__kpis">
+            <div className="hs-cal-dayview__kpi">
+              <p className="hs-cal-dayview__kpi-label">
+                {isDayOverview ? "Rooms booked" : "Status"}
+              </p>
+              <p className="hs-cal-dayview__kpi-value">
+                {isDayOverview
+                  ? bookingHistory.length
+                  : bookingHistory.length > 0
+                    ? "Occupied"
+                    : isRoomAvailable
+                      ? "Available"
+                      : selectedRoom?.roomStatus || "—"}
+              </p>
+            </div>
+            <div className="hs-cal-dayview__kpi hs-cal-dayview__kpi--soft">
+              <p className="hs-cal-dayview__kpi-label">Active</p>
+              <p className="hs-cal-dayview__kpi-value">
+                {bookingHistory.filter((b) => b.statusID === 1).length}
+              </p>
+            </div>
+            <div className="hs-cal-dayview__kpi hs-cal-dayview__kpi--sand">
+              <p className="hs-cal-dayview__kpi-label">Total bill</p>
+              <p className="hs-cal-dayview__kpi-value">
+                ৳
+                {bookingHistory
+                  .reduce((s, b) => s + (Number(b.totalBill) || 0), 0)
+                  .toLocaleString()}
+              </p>
+            </div>
+            <div className="hs-cal-dayview__kpi hs-cal-dayview__kpi--due">
+              <p className="hs-cal-dayview__kpi-label">Due</p>
+              <p className="hs-cal-dayview__kpi-value is-due">
+                ৳
+                {bookingHistory
+                  .reduce((s, b) => s + (Number(b.duePayment) || 0), 0)
+                  .toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {bookingHistory.length > 0 ? (
+            <div className="hs-cal-dayview__list">
+              {bookingHistory.map((booking) => {
+                const isActive = booking.statusID === 1;
+                const paid =
+                  Number(booking.advancePayment) ||
+                  (Array.isArray(booking.payments)
+                    ? booking.payments.reduce(
+                        (s, p) => s + (Number(p.amount) || 0),
+                        0
+                      )
+                    : 0);
+                return (
+                  <article
+                    key={booking._id}
+                    className={`hs-cal-dayview__card${
+                      isActive ? "" : " hs-cal-dayview__card--cancelled"
+                    }`}
+                  >
+                    <div className="hs-cal-dayview__card-top">
+                      <div className="hs-cal-dayview__identity">
+                        <div className="hs-cal-dayview__invoice-row">
+                          <span className="hs-cal-dayview__invoice">
+                            {booking.bookingNo || "—"}
+                          </span>
+                          <span
+                            className={`hs-cal-dayview__badge${
+                              isActive
+                                ? " hs-cal-dayview__badge--ok"
+                                : " hs-cal-dayview__badge--bad"
+                            }`}
+                          >
+                            {isActive ? "Active" : "Cancelled"}
+                          </span>
+                        </div>
+                        <h4 className="hs-cal-dayview__guest">
+                          <UserOutlined /> {booking.fullName || "Guest"}
+                        </h4>
+                        <p className="hs-cal-dayview__contact">
+                          <PhoneOutlined /> {booking.phone || "—"}
+                          {booking.email ? ` · ${booking.email}` : ""}
+                        </p>
+                        {(isDayOverview ||
+                          booking.roomNumberName ||
+                          booking.roomCategoryName) && (
+                          <p className="hs-cal-dayview__roomline">
+                            {[
+                              booking.roomNumberName,
+                              booking.roomCategoryName,
+                              booking.hotelName,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                      {canEdit &&
+                        !isDayOverview &&
+                        isRoomAvailable &&
+                        selectedRoomKey && (
+                          <Button
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => {
+                              closeHistoryModal();
+                              handleEditClick(
+                                selectedRoomKey,
+                                selectedDateStr,
+                                booking,
+                                null
+                              );
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                    </div>
+
+                    <div className="hs-cal-dayview__attrs">
+                      <div className="hs-cal-dayview__attr">
+                        <label>Check-in</label>
+                        <p>
+                          {booking.checkInDate
+                            ? dayjs(booking.checkInDate).format("DD MMM YYYY")
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="hs-cal-dayview__attr">
+                        <label>Check-out</label>
+                        <p>
+                          {booking.checkOutDate
+                            ? dayjs(booking.checkOutDate).format("DD MMM YYYY")
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="hs-cal-dayview__attr">
+                        <label>Nights</label>
+                        <p>{booking.nights || 1}</p>
+                      </div>
+                      <div className="hs-cal-dayview__attr">
+                        <label>Guests</label>
+                        <p>
+                          {booking.adults || 1}A / {booking.children || 0}C
+                        </p>
+                      </div>
+                      <div className="hs-cal-dayview__attr">
+                        <label>Total</label>
+                        <p className="is-money">
+                          ৳{(Number(booking.totalBill) || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="hs-cal-dayview__attr">
+                        <label>Paid</label>
+                        <p className="is-paid">৳{paid.toLocaleString()}</p>
+                      </div>
+                      <div className="hs-cal-dayview__attr">
+                        <label>Due</label>
+                        <p className="is-due">
+                          ৳{(Number(booking.duePayment) || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="hs-cal-dayview__attr">
+                        <label>Method</label>
+                        <p>{booking.paymentMethod || "—"}</p>
+                      </div>
+                    </div>
+
+                    {(booking.nidPassport ||
+                      booking.address ||
+                      booking.bookedBy ||
+                      booking.note ||
+                      booking.reference ||
+                      booking.breakfastTotalBill ||
+                      booking.transactionId) && (
+                      <div className="hs-cal-dayview__extra">
+                        {booking.nidPassport && (
+                          <span>
+                            <em>ID</em> {booking.nidPassport}
+                          </span>
+                        )}
+                        {booking.bookedBy && (
+                          <span>
+                            <em>Booked by</em> {booking.bookedBy}
+                          </span>
+                        )}
+                        {booking.transactionId && (
+                          <span>
+                            <em>Trx</em> {booking.transactionId}
+                          </span>
+                        )}
+                        {(booking.breakfastTotalBill ||
+                          booking.kitchenTotalBill ||
+                          booking.extraBedTotalBill) && (
+                          <span>
+                            <em>Extras</em> ৳
+                            {(
+                              booking.breakfastTotalBill ??
+                              (Number(booking.kitchenTotalBill) || 0) +
+                                (Number(booking.extraBedTotalBill) || 0)
+                            ).toLocaleString()}
+                          </span>
+                        )}
+                        {booking.address && (
+                          <span className="is-full">
+                            <em>Address</em> {booking.address}
+                          </span>
+                        )}
+                        {booking.note && (
+                          <span className="is-full">
+                            <em>Note</em> {booking.note}
+                          </span>
+                        )}
+                        {booking.reference && (
+                          <span className="is-full">
+                            <em>Ref</em> {booking.reference}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="hs-cal-dayview__empty">
+              <CalendarOutlined />
+              <p className="hs-cal-dayview__empty-title">No booking found</p>
+              <p className="hs-cal-dayview__empty-sub">
+                {isDayOverview
+                  ? "No rooms are occupied on this date"
+                  : isRoomAvailable
+                    ? "This room is free for the selected date"
+                    : "Add / edit is disabled for this room status"}
+              </p>
+              {canInsert &&
+                !isDayOverview &&
+                isRoomAvailable &&
+                selectedRoomKey &&
+                selectedDateStr && (
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() =>
+                      handleEditClick(selectedRoomKey, selectedDateStr, null)
+                    }
+                  >
+                    Create booking
+                  </Button>
+                )}
             </div>
           )}
         </div>
@@ -1575,7 +1463,22 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
 
       {/* Booking Create/Edit Modal */}
       <Modal
-        title={isEditingBooking ? "Edit Booking" : "Create New Booking"}
+        className="hs-booking-modal"
+        title={
+          <div className="hs-booking-modal__head">
+            <p className="hs-booking-modal__eyebrow">
+              {isEditingBooking ? "Update record" : "New reservation"}
+            </p>
+            <h2 className="hs-booking-modal__title">
+              {isEditingBooking ? "Edit Booking" : "Create Booking"}
+            </h2>
+            <p className="hs-booking-modal__sub">
+              {formik.values.roomNumberName
+                ? `${formik.values.roomNumberName} · ${formik.values.roomCategoryName || "Room"}`
+                : "Guest, stay dates and payment"}
+            </p>
+          </div>
+        }
         open={bookingModalVisible}
         onCancel={() => {
           setBookingModalVisible(false);
@@ -1584,316 +1487,338 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           formik.resetForm();
         }}
         footer={null}
-        width={1000}
+        width={960}
+        centered
         destroyOnClose
       >
-        <Form onFinish={formik.handleSubmit} layout="vertical">
-          <Row gutter={[16, 0]}>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Full Name" required>
-                <Input
-                  value={formik.values.fullName}
-                  onChange={formik.handleChange}
-                  name="fullName"
-                  placeholder="Enter full name"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Phone" required>
-                <Input
-                  value={formik.values.phone}
-                  onChange={formik.handleChange}
-                  name="phone"
-                  placeholder="Enter phone"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Email">
-                <Input
-                  value={formik.values.email}
-                  onChange={formik.handleChange}
-                  name="email"
-                  type="email"
-                  placeholder="Enter email"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Check In Date" required>
-                <DatePicker
-                  value={formik.values.checkInDate}
-                  onChange={(date) => {
-                    formik.setFieldValue("checkInDate", date);
-                    calculateNights(date, formik.values.checkOutDate);
-                  }}
-                  format="DD/MM/YYYY"
-                  className="w-full"
-                  style={{ width: "100%", height: "40px" }}
-                  disabledDate={(current) => current && current < dayjs().startOf("day")}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Check Out Date" required>
-                <DatePicker
-                  value={formik.values.checkOutDate}
-                  onChange={(date) => {
-                    formik.setFieldValue("checkOutDate", date);
-                    calculateNights(formik.values.checkInDate, date);
-                  }}
-                  format="DD/MM/YYYY"
-                  className="w-full"
-                  style={{ width: "100%", height: "40px" }}
-                  disabledDate={(current) => current && current <= formik.values.checkInDate}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Nights">
-                <Input
-                  value={formik.values.nights}
-                  readOnly
-                  className="bg-gray-50"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Room Price (per night)" required>
-                <Input
-                  type="number"
-                  value={formik.values.roomPrice}
-                  onChange={(e) => {
-                    formik.setFieldValue("roomPrice", e.target.value);
-                    calculateNights(formik.values.checkInDate, formik.values.checkOutDate);
-                  }}
-                  name="roomPrice"
-                  placeholder="Price per night"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24}>
-              <div className="text-sm font-semibold text-gray-800 mb-3">Payment Information</div>
-              <Row gutter={[16, 12]} className="mb-3">
-                <Col xs={24} sm={8}>
-                  <Form.Item label="Total Bill" required style={{ marginBottom: "12px" }}>
-                    <Input
-                      value={formik.values.totalBill}
-                      readOnly
-                      className="bg-gray-50"
-                      style={{ height: "40px" }}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={8}>
-                  <Form.Item label="Advance (total)" style={{ marginBottom: "12px" }}>
-                    <Input
-                      type="number"
-                      value={
-                        Array.isArray(formik.values.payments)
-                          ? formik.values.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
-                          : formik.values.advancePayment
-                      }
-                      readOnly
-                      className="bg-gray-50"
-                      style={{ height: "40px" }}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={8}>
-                  <Form.Item label="Due Payment" style={{ marginBottom: "12px" }}>
-                    <Input
-                      value={formik.values.duePayment}
-                      readOnly
-                      className="bg-gray-50"
-                      style={{ height: "40px" }}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
+        <Form onFinish={formik.handleSubmit} layout="vertical" className="hs-bf booking-form" requiredMark="optional">
+          <div className="hs-bf__summary">
+            <div className="hs-bf__kpi">
+              <p className="hs-bf__kpi-label">Total bill</p>
+              <p className="hs-bf__kpi-value">
+                ৳{Number(formik.values.totalBill || 0).toLocaleString()}
+              </p>
+            </div>
+            <div className="hs-bf__kpi hs-bf__kpi--paid">
+              <p className="hs-bf__kpi-label">Advance paid</p>
+              <p className="hs-bf__kpi-value">
+                ৳
+                {Number(
+                  Array.isArray(formik.values.payments)
+                    ? formik.values.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                    : formik.values.advancePayment || 0
+                ).toLocaleString()}
+              </p>
+            </div>
+            <div className="hs-bf__kpi hs-bf__kpi--due">
+              <p className="hs-bf__kpi-label">Due</p>
+              <p className="hs-bf__kpi-value">
+                ৳{Number(formik.values.duePayment || 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Guest information</h3>
+              <p className="hs-bf__section-hint">Primary guest contact</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__guest-grid">
+                <Form.Item label="Full name" required>
+                  <Input
+                    value={formik.values.fullName}
+                    onChange={formik.handleChange}
+                    name="fullName"
+                    placeholder="Guest full name"
+                  />
+                </Form.Item>
+                <Form.Item label="Phone" required>
+                  <Input
+                    value={formik.values.phone}
+                    onChange={formik.handleChange}
+                    name="phone"
+                    placeholder="01XXXXXXXXX"
+                  />
+                </Form.Item>
+                <Form.Item label="Email">
+                  <Input
+                    value={formik.values.email}
+                    onChange={formik.handleChange}
+                    name="email"
+                    type="email"
+                    placeholder="Optional email"
+                  />
+                </Form.Item>
+                <Form.Item label="Room">
+                  <Input
+                    value={
+                      [formik.values.roomNumberName, formik.values.roomCategoryName]
+                        .filter(Boolean)
+                        .join(" · ") || "—"
+                    }
+                    disabled
+                  />
+                </Form.Item>
+              </div>
+            </div>
+          </section>
+
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Stay details</h3>
+              <p className="hs-bf__section-hint">Dates · nights · rate</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__dates-grid">
+                <Form.Item label="Check-in" required>
+                  <DatePicker
+                    value={formik.values.checkInDate}
+                    onChange={(date) => {
+                      formik.setFieldValue("checkInDate", date);
+                      calculateNights(date, formik.values.checkOutDate);
+                    }}
+                    format="DD/MM/YYYY"
+                    className="w-full"
+                    disabledDate={(current) => current && current < dayjs().startOf("day")}
+                  />
+                </Form.Item>
+                <Form.Item label="Check-out" required>
+                  <DatePicker
+                    value={formik.values.checkOutDate}
+                    onChange={(date) => {
+                      formik.setFieldValue("checkOutDate", date);
+                      calculateNights(formik.values.checkInDate, date);
+                    }}
+                    format="DD/MM/YYYY"
+                    className="w-full"
+                    disabledDate={(current) => current && current <= formik.values.checkInDate}
+                  />
+                </Form.Item>
+                <Form.Item label="Nights">
+                  <Input value={formik.values.nights} readOnly />
+                </Form.Item>
+                <Form.Item label="Room price / night" required>
+                  <Input
+                    type="number"
+                    value={formik.values.roomPrice}
+                    onChange={(e) => {
+                      formik.setFieldValue("roomPrice", e.target.value);
+                      calculateNights(formik.values.checkInDate, formik.values.checkOutDate);
+                    }}
+                    name="roomPrice"
+                    placeholder="Price per night"
+                    prefix="৳"
+                  />
+                </Form.Item>
+              </div>
+              <div className="hs-bf__dates-grid" style={{ marginTop: 4 }}>
+                <Form.Item label="Adults">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={formik.values.adults}
+                    onChange={formik.handleChange}
+                    name="adults"
+                    placeholder="Adults"
+                  />
+                </Form.Item>
+                <Form.Item label="Children">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={formik.values.children}
+                    onChange={formik.handleChange}
+                    name="children"
+                    placeholder="Children"
+                  />
+                </Form.Item>
+              </div>
+            </div>
+          </section>
+
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Payment</h3>
+              <p className="hs-bf__section-hint">Totals update from payment rows</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__pay-totals">
+                <Form.Item label="Total bill" required>
+                  <Input value={formik.values.totalBill} readOnly prefix="৳" />
+                </Form.Item>
+                <Form.Item label="Advance (total)">
+                  <Input
+                    type="number"
+                    value={
+                      Array.isArray(formik.values.payments)
+                        ? formik.values.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                        : formik.values.advancePayment
+                    }
+                    readOnly
+                    prefix="৳"
+                  />
+                </Form.Item>
+                <Form.Item label="Due payment">
+                  <Input value={formik.values.duePayment} readOnly prefix="৳" />
+                </Form.Item>
+              </div>
+
               {(Array.isArray(formik.values.payments) ? formik.values.payments : []).map((_, index) => {
                 const isExistingPayment = isEditingBooking && index < initialPaymentCount;
                 const usedMethods = !isEditingBooking
                   ? (formik.values.payments || [])
-                      .map((p, i) => (i !== index && (p.paymentMethod || "").trim() ? p.paymentMethod : null))
+                      .map((p, i) =>
+                        i !== index && (p.paymentMethod || "").trim() ? p.paymentMethod : null
+                      )
                       .filter(Boolean)
                   : [];
                 return (
-                  <Row key={index} gutter={[12, 12]} align="middle" className="mb-2">
-                    <Col xs={24} sm={8} md={6}>
-                      <Form.Item label={index === 0 ? "Method" : ""} style={{ marginBottom: "12px" }}>
-                        <Select
-                          value={formik.values.payments[index]?.paymentMethod ?? ""}
-                          onChange={(value) => {
-                            const next = [...(formik.values.payments || [])];
-                            if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
-                            next[index].paymentMethod = value ?? "";
-                            formik.setFieldValue("payments", next);
-                            syncAdvanceFromPayments(next);
-                          }}
-                          placeholder="Method"
-                          style={{ width: "100%", minWidth: 90 }}
-                          disabled={isExistingPayment}
-                          allowClear
-                        >
-                          <Select.Option value="BKASH" disabled={usedMethods.includes("BKASH")}>BKASH</Select.Option>
-                          <Select.Option value="NAGAD" disabled={usedMethods.includes("NAGAD")}>NAGAD</Select.Option>
-                          <Select.Option value="BANK" disabled={usedMethods.includes("BANK")}>BANK</Select.Option>
-                          <Select.Option value="CASH" disabled={usedMethods.includes("CASH")}>CASH</Select.Option>
-                        </Select>
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={8} md={6}>
-                      <Form.Item label={index === 0 ? "Amount" : ""} style={{ marginBottom: "12px" }}>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={formik.values.payments[index]?.amount ?? ""}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            const totalBill = Number(formik.values.totalBill) || 0;
-                            const next = [...(formik.values.payments || [])];
-                            if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
-                            next[index].amount = val > totalBill ? totalBill : val;
-                            formik.setFieldValue("payments", next);
-                            syncAdvanceFromPayments(next);
-                          }}
-                          placeholder="Amount"
-                          style={{ width: "100%", ...(isExistingPayment ? { backgroundColor: "#f5f5f5" } : {}) }}
-                          disabled={isExistingPayment}
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={6} md={8}>
-                      <Form.Item label={index === 0 ? "Transaction ID" : ""} style={{ marginBottom: "12px" }}>
-                        <Input
-                          value={formik.values.payments[index]?.transactionId ?? ""}
-                          onChange={(e) => {
-                            const next = [...(formik.values.payments || [])];
-                            if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
-                            next[index].transactionId = e.target.value;
-                            formik.setFieldValue("payments", next);
-                          }}
-                          placeholder="Trx ID (optional)"
-                          style={{ width: "100%", ...(isExistingPayment ? { backgroundColor: "#f5f5f5" } : {}) }}
-                          disabled={isExistingPayment}
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} sm={2} md={4}>
-                      {formik.values.payments.length > 1 && (!isEditingBooking || index >= initialPaymentCount) ? (
+                  <div className="hs-bf__pay-row" key={index} style={{ gridTemplateColumns: "1.2fr 1fr 1.4fr auto" }}>
+                    <Form.Item label={index === 0 ? "Method" : " "}>
+                      <Select
+                        value={formik.values.payments[index]?.paymentMethod ?? ""}
+                        onChange={(value) => {
+                          const next = [...(formik.values.payments || [])];
+                          if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
+                          next[index].paymentMethod = value ?? "";
+                          formik.setFieldValue("payments", next);
+                          syncAdvanceFromPayments(next);
+                        }}
+                        placeholder="Method"
+                        disabled={isExistingPayment}
+                        allowClear
+                      >
+                        <Select.Option value="BKASH" disabled={usedMethods.includes("BKASH")}>BKASH</Select.Option>
+                        <Select.Option value="NAGAD" disabled={usedMethods.includes("NAGAD")}>NAGAD</Select.Option>
+                        <Select.Option value="BANK" disabled={usedMethods.includes("BANK")}>BANK</Select.Option>
+                        <Select.Option value="CASH" disabled={usedMethods.includes("CASH")}>CASH</Select.Option>
+                      </Select>
+                    </Form.Item>
+                    <Form.Item label={index === 0 ? "Amount" : " "}>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={formik.values.payments[index]?.amount ?? ""}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          const totalBill = Number(formik.values.totalBill) || 0;
+                          const next = [...(formik.values.payments || [])];
+                          if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
+                          next[index].amount = val > totalBill ? totalBill : val;
+                          formik.setFieldValue("payments", next);
+                          syncAdvanceFromPayments(next);
+                        }}
+                        placeholder="Amount"
+                        prefix="৳"
+                        disabled={isExistingPayment}
+                      />
+                    </Form.Item>
+                    <Form.Item label={index === 0 ? "Transaction ID" : " "}>
+                      <Input
+                        value={formik.values.payments[index]?.transactionId ?? ""}
+                        onChange={(e) => {
+                          const next = [...(formik.values.payments || [])];
+                          if (!next[index]) next[index] = { paymentMethod: "", amount: 0, transactionId: "" };
+                          next[index].transactionId = e.target.value;
+                          formik.setFieldValue("payments", next);
+                        }}
+                        placeholder="Optional"
+                        disabled={isExistingPayment}
+                      />
+                    </Form.Item>
+                    <div className="hs-bf__pay-actions">
+                      {formik.values.payments.length > 1 &&
+                      (!isEditingBooking || index >= initialPaymentCount) ? (
                         <Button
                           type="text"
                           danger
                           icon={<MinusCircleOutlined />}
                           onClick={() => {
                             const next = (formik.values.payments || []).filter((_, i) => i !== index);
-                            if (next.length === 0) next.push({ paymentMethod: "", amount: 0, transactionId: "" });
+                            if (next.length === 0)
+                              next.push({ paymentMethod: "", amount: 0, transactionId: "" });
                             formik.setFieldValue("payments", next);
                             syncAdvanceFromPayments(next);
                           }}
-                          style={{ marginTop: index === 0 ? "30px" : 0 }}
                         />
                       ) : null}
-                    </Col>
-                  </Row>
+                    </div>
+                  </div>
                 );
               })}
               <Button
                 type="dashed"
+                block
                 icon={<PlusOutlined />}
+                className="hs-bf__add-pay"
                 onClick={() => {
-                  const next = [...(formik.values.payments || []), { paymentMethod: "", amount: 0, transactionId: "" }];
+                  const next = [
+                    ...(formik.values.payments || []),
+                    { paymentMethod: "", amount: 0, transactionId: "" },
+                  ];
                   formik.setFieldValue("payments", next);
                 }}
-                style={{ marginTop: 4 }}
               >
-                Add another payment
+                Add payment method
               </Button>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Adults">
-                <Input
-                  type="number"
-                  min={1}
-                  value={formik.values.adults}
-                  onChange={formik.handleChange}
-                  name="adults"
-                  placeholder="Adults"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Children">
-                <Input
-                  type="number"
-                  min={0}
-                  value={formik.values.children}
-                  onChange={formik.handleChange}
-                  name="children"
-                  placeholder="Children"
-                  style={{ height: "40px" }}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item label="Breakfast">
-                <Switch
-                  checked={formik.values.isBreakfast}
-                  onChange={(checked) => {
-                    formik.setFieldValue("isBreakfast", checked);
-                    if (!checked) {
-                      formik.setFieldValue("breakfastTotalBill", 0);
-                      calculateNights(
-                        formik.values.checkInDate,
-                        formik.values.checkOutDate
-                      );
-                    }
-                  }}
-                />
-              </Form.Item>
-              {formik.values.isBreakfast && (
-                <Form.Item label="Breakfast Bill">
-                  <Input
-                    type="number"
-                    min={0}
-                    value={formik.values.breakfastTotalBill || ""}
-                    onChange={(e) => {
-                      formik.setFieldValue(
-                        "breakfastTotalBill",
-                        e.target.value
-                      );
-                      calculateNights(
-                        formik.values.checkInDate,
-                        formik.values.checkOutDate
-                      );
-                    }}
-                    placeholder="Enter breakfast bill"
-                    style={{ height: "40px" }}
+            </div>
+          </section>
+
+          <section className="hs-bf__section">
+            <div className="hs-bf__section-head">
+              <h3 className="hs-bf__section-title">Extras & notes</h3>
+              <p className="hs-bf__section-hint">Optional services</p>
+            </div>
+            <div className="hs-bf__section-body">
+              <div className="hs-bf__extra-grid">
+                <div className="hs-bf__breakfast">
+                  <div className="hs-bf__breakfast-top">
+                    <div>
+                      <div className="hs-bf__breakfast-label">Breakfast</div>
+                      <div className="hs-bf__breakfast-hint">Include breakfast with this stay</div>
+                    </div>
+                    <Switch
+                      checked={formik.values.isBreakfast}
+                      onChange={(checked) => {
+                        formik.setFieldValue("isBreakfast", checked);
+                        if (!checked) {
+                          formik.setFieldValue("breakfastTotalBill", 0);
+                          calculateNights(formik.values.checkInDate, formik.values.checkOutDate);
+                        }
+                      }}
+                    />
+                  </div>
+                  {formik.values.isBreakfast && (
+                    <Form.Item label="Breakfast bill" style={{ marginBottom: 0 }}>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={formik.values.breakfastTotalBill || ""}
+                        onChange={(e) => {
+                          formik.setFieldValue("breakfastTotalBill", e.target.value);
+                          calculateNights(formik.values.checkInDate, formik.values.checkOutDate);
+                        }}
+                        placeholder="Breakfast amount"
+                        prefix="৳"
+                      />
+                    </Form.Item>
+                  )}
+                </div>
+                <Form.Item label="Internal note">
+                  <Input.TextArea
+                    value={formik.values.note}
+                    onChange={formik.handleChange}
+                    name="note"
+                    placeholder="Special requests, arrival time, remarks…"
+                    rows={4}
                   />
                 </Form.Item>
-              )}
-            </Col>
-            <Col xs={24}>
-              <Form.Item label="Note">
-                <Input.TextArea
-                  value={formik.values.note}
-                  onChange={formik.handleChange}
-                  name="note"
-                  placeholder="Enter any additional notes..."
-                  rows={3}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <div className="flex justify-end gap-3 pt-4 border-t mt-4">
+              </div>
+            </div>
+          </section>
+
+          <div className="hs-bf__footer">
             <Button
               onClick={() => {
                 setBookingModalVisible(false);
@@ -1902,184 +1827,15 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                 setInitialPaymentCount(0);
                 formik.resetForm();
               }}
-              style={{ height: "40px", padding: "0 24px" }}
             >
               Cancel
             </Button>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={submitLoading}
-              style={{ height: "40px", padding: "0 32px" }}
-            >
+            <Button type="primary" htmlType="submit" loading={submitLoading}>
               {isEditingBooking ? "Update Booking" : "Create Booking"}
             </Button>
           </div>
         </Form>
       </Modal>
-
-      <style jsx global>{`
-        .calendar-table .ant-table-thead > tr > th {
-          padding: 4px 2px !important;
-          text-align: center;
-          color: white !important;
-          border-bottom: 1px solid #e8e8e8 !important;
-          border-color: rgba(255,255,255,0.2) !important;
-          position: sticky !important;
-          top: 0 !important;
-          z-index: 10;
-        }
-        
-        .calendar-table .ant-table-tbody > tr > td {
-          padding: 0 !important;
-          vertical-align: middle;
-          height: 60px;
-        }
-        
-        .calendar-table .ant-table-tbody > tr {
-          position: relative;
-          height: 60px;
-        }
-        
-        .calendar-table-right .ant-table-tbody > tr > td {
-          overflow: hidden !important;
-        }
-        
-        .calendar-table-left .ant-table-tbody > tr > td {
-          overflow: hidden !important;
-        }
-        
-        .calendar-table .ant-table-cell {
-          border-right: 1px solid #f0f0f0;
-          border-bottom: 1px solid #f0f0f0;
-        }
-        
-        .calendar-table .ant-table-row:hover td {
-          background: #fafafa !important;
-        }
-        
-        .calendar-table .ant-table-thead > tr > th:first-child {
-          z-index: 20;
-          background: #2563eb !important;
-        }
-        
-        .calendar-table .ant-table-tbody > tr > td:first-child {
-          position: sticky !important;
-          left: 0 !important;
-          z-index: 15;
-          background: #2563eb !important;
-        }
-        
-        .calendar-table .ant-table-body {
-          overflow-x: auto !important;
-          overflow-y: visible !important;
-          -webkit-overflow-scrolling: touch;
-        }
-        
-        .calendar-table .ant-table-body > table {
-          overflow: visible !important;
-        }
-        
-        .calendar-table .ant-table-container {
-          position: relative;
-        }
-        
-        .calendar-table .ant-table-content {
-          overflow-x: auto !important;
-          overflow-y: hidden !important;
-        }
-        
-        .calendar-table .ant-table-header {
-          overflow: hidden !important;
-        }
-        
-        @media (max-width: 640px) {
-          .calendar-table .ant-table-thead > tr > th {
-            padding: 2px 1px !important;
-            font-size: 9px !important;
-          }
-          
-          .calendar-table .ant-table-tbody > tr > td {
-            font-size: 8px !important;
-          }
-          
-          .calendar-header-container {
-            padding: 8px 12px !important;
-            padding-top: 8px !important;
-          }
-          
-          .calendar-title-container {
-            padding-top: 0 !important;
-          }
-          
-          .calendar-title-container h1 {
-            font-size: 14px !important;
-          }
-          
-          .calendar-header-container .ant-btn {
-            min-height: 24px !important;
-            min-width: 28px !important;
-            padding: 2px 4px !important;
-            font-size: 8px !important;
-          }
-          
-          .calendar-header-container .ant-btn-sm {
-            height: 24px !important;
-            line-height: 22px !important;
-          }
-        }
-        
-        @media (min-width: 640px) {
-          .calendar-header-container {
-            padding: 12px 12px !important;
-            padding-top: 8px !important;
-          }
-          
-          .calendar-title-container {
-            padding-top: 0 !important;
-          }
-        }
-        
-        @media print {
-          .no-print {
-            display: none;
-          }
-        }
-        
-        .calendar-cell {
-          cursor: pointer !important;
-          border-radius: 6px !important;
-          position: relative;
-        }
-        
-        .calendar-cell.booked-cell {
-          border: 1px solid rgba(16, 185, 129, 0.4) !important;
-          background-size: 100% 100% !important;
-          background-position: center !important;
-          background-repeat: no-repeat !important;
-        }
-        
-        .calendar-cell.booked-cell:hover {
-          transform: scale(1.2);
-          z-index: 999 !important;
-          position: relative;
-          box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(16, 185, 129, 0.7) !important;
-          border-radius: 6px !important;
-        }
-        
-        .booking-history-modal .ant-modal-content {
-          border-radius: 8px;
-        }
-        
-        .booking-history-modal .ant-modal-body {
-          padding: 16px;
-        }
-        
-        .booking-history-modal .ant-modal-footer {
-          padding: 12px 16px;
-        }
-      `}</style>
     </div>
   );
 };

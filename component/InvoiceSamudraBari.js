@@ -34,7 +34,7 @@ export default function InvoiceSamudraBari({ data, totals }) {
           <div className="mt-8 text-center">
             <h4
               className={`uppercase ${
-                data?.[0]?.hotelID === 1 ? "text-blue-700" : "text-red-700"
+                data?.[0]?.hotelID === 1 ? "text-hs-ocean" : "text-red-700"
               } font-semibold text-xl`}>
               {data?.[0]?.hotelName} INVOICE
             </h4>
@@ -66,13 +66,13 @@ export default function InvoiceSamudraBari({ data, totals }) {
         <div className="flex justify-between">
           <h3
             className={`font-bold ${
-              data?.[0]?.hotelID === 1 ? "text-blue-700" : "text-red-700"
+              data?.[0]?.hotelID === 1 ? "text-hs-ocean" : "text-red-700"
             } `}>
             Invoice Number: {data?.[0]?.bookingNo || "N/A"}
           </h3>
           <p
             className={`${
-              data?.[0]?.hotelID === 1 ? "text-blue-700" : "text-red-700"
+              data?.[0]?.hotelID === 1 ? "text-hs-ocean" : "text-red-700"
             }  font-bold`}>
             Booking Date:
             {moment(data?.[0]?.createTime).format("D MMM YYYY") ||
@@ -98,7 +98,7 @@ export default function InvoiceSamudraBari({ data, totals }) {
             <thead>
               <tr
                 className={`${
-                  data?.[0]?.hotelID === 1 ? "bg-blue-700" : "bg-red-700"
+                  data?.[0]?.hotelID === 1 ? "bg-hs-deep" : "bg-red-700"
                 } text-white`}>
                 <th className="border border-gray-400 px-2 pb-2 print:pb-0 print:py-1">
                   Room

@@ -1,0 +1,373 @@
+/* Booking Info list — SAP-style professional table */
+
+.hs-bi {
+  --bi-accent: #0b5c66;
+  --bi-accent-soft: #14919b;
+  --bi-border: #d5e0e1;
+  --bi-text: #142a2e;
+  --bi-muted: #5f7478;
+  --bi-surface: #ffffff;
+  --bi-tint: #f3f8f8;
+  --bi-sand: #c9a66b;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  color: var(--bi-text);
+}
+
+.hs-bi__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.hs-bi__title-block {
+  min-width: 0;
+}
+
+.hs-bi__eyebrow {
+  margin: 0 0 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bi-accent-soft);
+}
+
+.hs-bi__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--bi-text);
+  line-height: 1.2;
+}
+
+.hs-bi__meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--bi-muted);
+}
+
+.hs-bi__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.hs-bi__controls .ant-input-affix-wrapper,
+.hs-bi__controls .ant-picker,
+.hs-bi__controls .ant-btn {
+  height: 36px !important;
+  border-radius: 5px !important;
+  border-color: var(--bi-border) !important;
+  box-shadow: none !important;
+}
+
+.hs-bi__controls .ant-input-affix-wrapper {
+  min-width: 200px;
+  padding-inline: 10px !important;
+}
+
+.hs-bi__controls .ant-input-affix-wrapper .ant-input {
+  font-size: 13px;
+}
+
+.hs-bi__controls .ant-picker {
+  min-width: 148px;
+}
+
+.hs-bi__controls .ant-btn-primary {
+  background: var(--bi-accent) !important;
+  border-color: var(--bi-accent) !important;
+  font-weight: 600 !important;
+}
+
+.hs-bi__controls .ant-btn-primary:hover {
+  background: var(--bi-accent-soft) !important;
+  border-color: var(--bi-accent-soft) !important;
+}
+
+.hs-bi__panel {
+  background: var(--bi-surface);
+  border: 1px solid var(--bi-border);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(4, 52, 58, 0.04);
+}
+
+.hs-bi__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hs-bi__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1180px;
+  font-size: 12px;
+}
+
+.hs-bi__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f3f8f8;
+  color: var(--bi-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--bi-border);
+  white-space: nowrap;
+}
+
+.hs-bi__table thead th.is-num,
+.hs-bi__table tbody td.is-num {
+  text-align: right;
+}
+
+.hs-bi__table thead th.is-center,
+.hs-bi__table tbody td.is-center {
+  text-align: center;
+}
+
+.hs-bi__table tbody td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #e8efef;
+  color: var(--bi-text);
+  background: #fff;
+  vertical-align: middle;
+}
+
+.hs-bi__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.hs-bi__table tbody tr:hover td {
+  background: #f7fbfb;
+}
+
+.hs-bi__table tbody tr.is-canceled td {
+  background: #fff8f8;
+}
+
+.hs-bi__table tbody tr.is-canceled:hover td {
+  background: #fff1f1;
+}
+
+.hs-bi__booking-no {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--bi-accent);
+  white-space: nowrap;
+}
+
+.hs-bi__booking-no a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.hs-bi__booking-no a:hover {
+  color: var(--bi-accent-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hs-bi__copy {
+  color: #8aa0a4 !important;
+  font-size: 12px !important;
+  cursor: pointer;
+}
+
+.hs-bi__copy:hover {
+  color: var(--bi-accent) !important;
+}
+
+.hs-bi__guest {
+  font-weight: 600;
+  color: var(--bi-text);
+  white-space: nowrap;
+}
+
+.hs-bi__muted {
+  color: var(--bi-muted);
+  white-space: nowrap;
+}
+
+.hs-bi__money {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hs-bi__money--total {
+  color: var(--bi-accent);
+}
+
+.hs-bi__money--due {
+  color: #9a6b1f;
+}
+
+.hs-bi__money--zero {
+  color: var(--bi-muted);
+  font-weight: 500;
+}
+
+.hs-bi__pay-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 88px;
+}
+
+.hs-bi__pay-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--bi-text);
+  background: var(--bi-tint);
+  border: 1px solid #dce8e8;
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.hs-bi__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.hs-bi__status--ok {
+  background: #e8f6ef;
+  color: #1f7a4d;
+  border-color: #c7e8d5;
+}
+
+.hs-bi__status--cancel {
+  background: #fdecec;
+  color: #b42318;
+  border-color: #f3c4c0;
+}
+
+.hs-bi__audit {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 110px;
+}
+
+.hs-bi__audit-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bi-text);
+  white-space: nowrap;
+}
+
+.hs-bi__audit-time {
+  font-size: 10px;
+  color: var(--bi-muted);
+  white-space: nowrap;
+}
+
+.hs-bi__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.hs-bi__actions .ant-btn {
+  height: 28px !important;
+  padding: 0 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 4px !important;
+  line-height: 1 !important;
+}
+
+.hs-bi__actions .ant-btn-default {
+  border-color: var(--bi-border) !important;
+  color: var(--bi-text) !important;
+}
+
+.hs-bi__actions .ant-btn-link {
+  padding-inline: 6px !important;
+}
+
+.hs-bi__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--bi-border);
+  background: #f7fbfb;
+}
+
+.hs-bi__footer-meta {
+  font-size: 12px;
+  color: var(--bi-muted);
+}
+
+.hs-bi__empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--bi-muted);
+}
+
+.hs-bi__empty-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bi-text);
+}
+
+.hs-bi__empty-sub {
+  margin: 0;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .hs-bi__title {
+    font-size: 18px;
+  }
+
+  .hs-bi__controls {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .hs-bi__controls .ant-input-affix-wrapper,
+  .hs-bi__controls .ant-picker,
+  .hs-bi__controls .ant-btn {
+    flex: 1 1 auto;
+  }
+
+  .hs-bi__controls .ant-input-affix-wrapper {
+    min-width: 0;
+    width: 100%;
+  }
+}

@@ -1,8 +1,29 @@
 // /utils/axiosInstance.js
 import axios from "axios";
 
+function resolveApiBaseUrl() {
+  const configured = process.env.NEXT_PUBLIC_MAIN_URL || "/api/";
+
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    const isHttpApi =
+      configured.startsWith("http://") || configured.startsWith("https://");
+    if (isHttpApi) {
+      try {
+        const apiOrigin = new URL(configured).origin;
+        if (apiOrigin !== window.location.origin) {
+          return "/api/";
+        }
+      } catch {
+        return "/api/";
+      }
+    }
+  }
+
+  return configured.endsWith("/") ? configured : `${configured}/`;
+}
+
 const coreAxios = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_MAIN_URL,
+  baseURL: resolveApiBaseUrl(),
   headers: { "Access-Control-Allow-Origin": "*" },
 });
 

@@ -1,4 +1,5 @@
 import localFont from "next/font/local";
+import AntdThemeProvider from "@/component/AntdThemeProvider";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -13,8 +14,9 @@ const geistMono = localFont({
 });
 
 export const metadata = {
-  title: "Hotel Sea Shore",
-  description: "Hotel Sea Shore",
+  title: "Hotel Sea Shore Starter v2.0",
+  description:
+    "Hotel Sea Shore Starter v2.0 — Management Portal. For Pro version contact Cox Web Solutions.",
   icons: {
     icon: "https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg",
     shortcut: "https://i.ibb.co/7Jt48WLZ/Whats-App-Image-2025-12-29-at-04-33-36.jpg",
@@ -28,7 +30,7 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <AntdThemeProvider>{children}</AntdThemeProvider>
       </body>
     </html>
   );

@@ -1,0 +1,686 @@
+/* Daily Statement / Daily Expense / Daily Summary — SAP-style */
+
+.hs-ds,
+.hs-de,
+.hs-dsum {
+  --ds-accent: #0b5c66;
+  --ds-accent-soft: #14919b;
+  --ds-border: #d5e0e1;
+  --ds-text: #142a2e;
+  --ds-muted: #5f7478;
+  --ds-surface: #ffffff;
+  --ds-tint: #f3f8f8;
+  --ds-sand: #c9a66b;
+  --ds-due: #b42318;
+  --ds-due-bg: #fef3f2;
+  --ds-due-soft: #fff1f0;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  color: var(--ds-text);
+}
+
+/* —— Toolbar —— */
+.hs-ds__toolbar,
+.hs-de__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(4, 52, 58, 0.04);
+}
+
+.hs-ds__title-block,
+.hs-de__title-block {
+  min-width: 0;
+}
+
+.hs-ds__eyebrow,
+.hs-de__eyebrow {
+  margin: 0 0 1px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ds-accent-soft);
+  line-height: 1;
+}
+
+.hs-ds__title,
+.hs-de__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ds-text);
+  line-height: 1.2;
+}
+
+.hs-ds__meta,
+.hs-de__meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--ds-muted);
+}
+
+.hs-ds__controls,
+.hs-de__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.hs-ds__date-nav,
+.hs-de__date-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hs-ds__controls .ant-btn,
+.hs-de__controls .ant-btn,
+.hs-ds__date-nav .ant-btn,
+.hs-de__date-nav .ant-btn {
+  height: 32px !important;
+  border-radius: 5px !important;
+  border-color: var(--ds-border) !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.hs-ds__controls .ant-btn-primary,
+.hs-de__controls .ant-btn-primary {
+  background: var(--ds-accent) !important;
+  border-color: var(--ds-accent) !important;
+}
+
+.hs-ds__controls .ant-btn-primary:hover,
+.hs-de__controls .ant-btn-primary:hover {
+  background: var(--ds-accent-soft) !important;
+  border-color: var(--ds-accent-soft) !important;
+}
+
+.hs-ds__controls .ant-picker,
+.hs-de__controls .ant-picker {
+  height: 32px !important;
+  min-width: 132px;
+  border-radius: 5px !important;
+  border-color: var(--ds-border) !important;
+  box-shadow: none !important;
+}
+
+/* —— KPI strip —— */
+.hs-ds__kpis,
+.hs-de__kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.hs-ds__kpi,
+.hs-de__kpi {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: 6px;
+  border-left: 3px solid var(--ds-accent);
+  padding: 8px 10px;
+  min-height: 56px;
+}
+
+.hs-ds__kpi--soft,
+.hs-de__kpi--soft {
+  border-left-color: var(--ds-accent-soft);
+}
+
+.hs-ds__kpi--sand,
+.hs-de__kpi--sand {
+  border-left-color: var(--ds-sand);
+}
+
+.hs-ds__kpi--due,
+.hs-de__kpi--due {
+  border-left-color: var(--ds-due);
+  background: #fffaf9;
+}
+
+.hs-ds__kpi-label,
+.hs-de__kpi-label {
+  margin: 0 0 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ds-muted);
+}
+
+.hs-ds__kpi-value,
+.hs-de__kpi-value {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ds-text);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.hs-ds__kpi-value.is-due {
+  color: var(--ds-due);
+}
+
+/* —— Panels / tables —— */
+.hs-ds__panel,
+.hs-de__panel {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(4, 52, 58, 0.04);
+}
+
+.hs-ds__panel-head,
+.hs-de__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--ds-tint);
+  border-bottom: 1px solid var(--ds-border);
+}
+
+.hs-ds__panel-head h3,
+.hs-de__panel-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ds-text);
+}
+
+.hs-ds__panel-head span,
+.hs-de__panel-head span {
+  font-size: 11px;
+  color: var(--ds-muted);
+  font-weight: 600;
+}
+
+.hs-ds__scroll,
+.hs-de__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hs-ds__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1100px;
+  font-size: 12px;
+}
+
+.hs-ds__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #eef5f5;
+  color: var(--ds-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ds-border);
+  white-space: nowrap;
+}
+
+.hs-ds__table thead th.is-num,
+.hs-ds__table tbody td.is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hs-ds__table thead th.is-center,
+.hs-ds__table tbody td.is-center {
+  text-align: center;
+}
+
+.hs-ds__table thead th.is-due {
+  color: var(--ds-due);
+  background: #fde8e6;
+}
+
+.hs-ds__table tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #e8efef;
+  color: var(--ds-text);
+  background: #fff;
+  vertical-align: middle;
+}
+
+.hs-ds__table tbody tr:hover td {
+  background: #f7fbfb;
+}
+
+.hs-ds__table tbody tr.is-unpaid td {
+  background: var(--ds-due-soft);
+}
+
+.hs-ds__table tbody tr.is-unpaid:hover td {
+  background: #ffe8e6;
+}
+
+.hs-ds__table tbody td.is-due {
+  background: var(--ds-due-bg) !important;
+  color: var(--ds-due);
+  font-weight: 700;
+}
+
+.hs-ds__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.hs-ds__table tfoot td {
+  padding: 8px 10px;
+  background: #e8f4f3;
+  border-top: 1px solid var(--ds-border);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ds-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.hs-ds__table tfoot td.is-due {
+  background: #fde8e6;
+  color: var(--ds-due);
+}
+
+.hs-ds__invoice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 120px;
+}
+
+.hs-ds__invoice a {
+  color: var(--ds-accent);
+  font-weight: 600;
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hs-ds__invoice a:hover {
+  color: var(--ds-accent-soft);
+}
+
+.hs-ds__invoice .anticon {
+  color: var(--ds-accent-soft);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.hs-ds__guest {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hs-ds__cash-input.ant-input-number {
+  width: 76px !important;
+  height: 28px !important;
+  border-radius: 4px !important;
+  border-color: var(--ds-border) !important;
+  box-shadow: none !important;
+}
+
+.hs-ds__cash-input .ant-input-number-input {
+  height: 26px !important;
+  font-size: 11px !important;
+  text-align: right;
+  padding: 0 6px !important;
+}
+
+.hs-ds__update-btn.ant-btn {
+  height: 26px !important;
+  font-size: 11px !important;
+  padding: 0 10px !important;
+  border-radius: 4px !important;
+  background: var(--ds-accent) !important;
+  border-color: var(--ds-accent) !important;
+  font-weight: 600 !important;
+}
+
+.hs-ds__section-gap td {
+  padding: 4px 10px !important;
+  background: transparent !important;
+  border: none !important;
+  height: 8px;
+}
+
+.hs-ds__empty {
+  text-align: center;
+  padding: 28px 16px !important;
+  color: var(--ds-muted);
+  font-size: 13px;
+}
+
+.hs-ds__bottom {
+  display: grid;
+  grid-template-columns: minmax(260px, 380px) 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+/* —— Daily Expense layout —— */
+.hs-de__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 12px;
+  align-items: start;
+}
+
+.hs-de__main,
+.hs-de__side {
+  min-width: 0;
+}
+
+.hs-de .ant-table-wrapper .ant-table {
+  font-size: 12px;
+}
+
+.hs-de .ant-table-thead > tr > th {
+  background: #eef5f5 !important;
+  color: var(--ds-muted) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--ds-border) !important;
+  padding: 8px 10px !important;
+}
+
+.hs-de .ant-table-tbody > tr > td {
+  padding: 8px 10px !important;
+  border-bottom: 1px solid #e8efef !important;
+}
+
+.hs-de .ant-table-summary > tr > td {
+  background: #e8f4f3 !important;
+  font-weight: 700;
+  border-top: 1px solid var(--ds-border) !important;
+  padding: 8px 10px !important;
+}
+
+.hs-de .ant-table-bordered .ant-table-container,
+.hs-de .ant-table-bordered .ant-table-cell {
+  border-color: var(--ds-border) !important;
+}
+
+.hs-de__amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text);
+}
+
+.hs-de__cat-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #e8f4f3;
+  border: 1px solid #cfe3e4;
+  color: var(--ds-accent);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hs-de__actions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.hs-de__actions .ant-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hs-de__actions .ant-btn-primary {
+  background: var(--ds-accent) !important;
+  border-color: var(--ds-accent) !important;
+}
+
+.hs-de__pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.hs-de__pager .ant-pagination {
+  margin: 0;
+}
+
+.hs-de__side .hs-de__panel-head {
+  flex-wrap: wrap;
+}
+
+.hs-de__lines {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.hs-de__lines thead th {
+  background: #eef5f5;
+  color: var(--ds-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ds-border);
+}
+
+.hs-de__lines tbody td {
+  padding: 8px;
+  border-bottom: 1px solid #e8efef;
+  vertical-align: top;
+}
+
+.hs-de__lines tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Soften category row colors inside SAP panels */
+.hs-de .expense-cat-green,
+.hs-de .expense-cat-purple,
+.hs-de .expense-cat-yellow,
+.hs-de .expense-cat-blue,
+.hs-de .expense-cat-orange,
+.hs-de .expense-cat-default {
+  border-left-width: 3px;
+  box-shadow: none !important;
+}
+
+/* —— Daily Summary —— */
+.hs-dsum {
+  margin: 0;
+}
+
+.hs-dsum__panel {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(4, 52, 58, 0.04);
+}
+
+.hs-dsum__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f8f8 100%);
+  border-bottom: 1px solid var(--ds-border);
+}
+
+.hs-dsum__head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ds-text);
+}
+
+.hs-dsum__head span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ds-accent-soft);
+}
+
+.hs-dsum__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.hs-dsum__table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #e8efef;
+}
+
+.hs-dsum__table tr:last-child td {
+  border-bottom: none;
+}
+
+.hs-dsum__label {
+  color: var(--ds-muted);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.hs-dsum__value {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text);
+}
+
+.hs-dsum__table tr.is-total td {
+  background: #f3f8f8;
+}
+
+.hs-dsum__table tr.is-closing td {
+  background: #e8f4f3;
+}
+
+.hs-dsum__table tr.is-closing .hs-dsum__label,
+.hs-dsum__table tr.is-closing .hs-dsum__value {
+  color: var(--ds-accent);
+  font-size: 13px;
+}
+
+.hs-dsum__table tr.is-expense .hs-dsum__value {
+  color: var(--ds-due);
+}
+
+.hs-dsum__footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--ds-border);
+  background: #fff;
+}
+
+.hs-dsum__footer .ant-btn-primary {
+  background: var(--ds-accent) !important;
+  border-color: var(--ds-accent) !important;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .hs-de__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .hs-ds__bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .hs-ds__kpis,
+  .hs-de__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .hs-ds__toolbar,
+  .hs-de__toolbar {
+    padding: 8px 10px;
+  }
+
+  .hs-ds__title,
+  .hs-de__title {
+    font-size: 15px;
+  }
+
+  .hs-ds__controls,
+  .hs-de__controls {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .hs-ds__date-nav,
+  .hs-de__date-nav {
+    flex: 1;
+  }
+
+  .hs-ds__controls .ant-picker,
+  .hs-de__controls .ant-picker {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .hs-ds__kpis,
+  .hs-de__kpis {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .hs-ds__kpi-value,
+  .hs-de__kpi-value {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 380px) {
+  .hs-ds__kpis,
+  .hs-de__kpis {
+    grid-template-columns: 1fr;
+  }
+}
