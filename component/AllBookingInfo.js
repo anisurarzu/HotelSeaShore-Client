@@ -120,32 +120,39 @@ const AllBookingInfo = ({ hotelID }) => {
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      const response = await coreAxios.get("bookings");
+      const { buildBookingsPath, unwrapBookings } = await import("@/utils/bookingsApi");
+      const dateRange = Array.isArray(dates) && dates.length >= 2 ? dates : [];
+      const startDate = dateRange[0]
+        ? dayjs(dateRange[0]).format("YYYY-MM-DD")
+        : dayjs().subtract(3, "month").format("YYYY-MM-DD");
+      const endDate = dateRange[1]
+        ? dayjs(dateRange[1]).format("YYYY-MM-DD")
+        : dayjs().add(1, "month").format("YYYY-MM-DD");
+
+      const response = await coreAxios.get(
+        buildBookingsPath({
+          hotelID: selectedHotel || hotelID || undefined,
+          startDate,
+          endDate,
+          mode: "checkIn",
+          excludeCancelled: 1,
+          fields: "light",
+          bookedByID: selectedUser || undefined,
+          page: 1,
+          limit: 1000,
+        })
+      );
 
       if (response?.status !== 200) {
         setFilteredBookings([]);
         return;
       }
 
-      const raw = toArray(response.data);
-      const filtered = raw.filter((b) => b && b.statusID !== 255);
+      const filtered = unwrapBookings(response.data).filter(
+        (b) => b && b.statusID !== 255
+      );
 
-      const dateRange = Array.isArray(dates) && dates.length >= 2 ? dates : [];
-      const startDate = dateRange[0] ? dayjs(dateRange[0]).format("YYYY-MM-DD") : null;
-      const endDate = dateRange[1] ? dayjs(dateRange[1]).format("YYYY-MM-DD") : null;
-
-      const filteredByCriteria = filtered.filter((booking) => {
-        const matchHotel = selectedHotel ? booking.hotelID === selectedHotel : true;
-        const matchUser = selectedUser ? booking.bookedByID === selectedUser : true;
-        const matchDate =
-          startDate && endDate
-            ? dayjs(booking.checkInDate).isBetween(startDate, endDate, "day", "[]")
-            : true;
-
-        return matchHotel && matchUser && matchDate;
-      });
-
-      const sorted = [...filteredByCriteria].sort((a, b) =>
+      const sorted = [...filtered].sort((a, b) =>
         dayjs(a.checkInDate).isBefore(dayjs(b.checkInDate)) ? -1 : 1
       );
 

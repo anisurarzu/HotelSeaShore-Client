@@ -9,16 +9,7 @@ import {
 import coreAxios from "@/utils/axiosInstance";
 import { filterVisibleUsers } from "@/utils/systemUsers";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
-import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
-import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import "./DashboardHome.css";
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
-dayjs.extend(isSameOrAfter);
-dayjs.extend(isSameOrBefore);
 
 function resolveDashboardHotelId(urlHotelID, userInfo) {
   const fromUrl =
@@ -31,66 +22,29 @@ function resolveDashboardHotelId(urlHotelID, userInfo) {
   return null;
 }
 
-function getBookingRoomKey(booking) {
-  if (!booking) return null;
-  const candidates = [
-    booking.roomNumberID,
-    booking.roomNumberId,
-    booking.roomID,
-    booking.roomId,
-    booking.roomNumberName,
-    booking.roomNumber,
-  ];
-  for (const c of candidates) {
-    if (c === undefined || c === null) continue;
-    const s = String(c).trim();
-    if (s !== "") return s;
-  }
-  return null;
-}
-
 const DashboardHome = ({ hotelID = 1 }) => {
   const [loading, setLoading] = useState(true);
-  const [bookings, setBookings] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [users, setUsers] = useState([]);
-  const [totalRooms, setTotalRooms] = useState(0);
 
-  // Fetch bookings data
   const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      const userRole = userInfo?.role?.value;
       const userHotelID = resolveDashboardHotelId(hotelID, userInfo);
 
-      const [response, hotelsResponse, hotelByIdResponse, usersResponse] = await Promise.all([
-        coreAxios.get("/bookings"),
-        // Use the real hotel source that includes roomCategories/roomNumbers.
-        // (Backend route: GET /hotel)
-        coreAxios.get(`/hotel?page=1&limit=200`).catch(() => null),
-        // Fallback: in case the /hotel list doesn't include the current hotel in its first page.
-        userHotelID != null
-          ? coreAxios.get(`/hotels/${userHotelID}`).catch(() => null)
-          : Promise.resolve(null),
+      const params = new URLSearchParams();
+      if (userHotelID != null) params.set("hotelID", String(userHotelID));
+
+      const [summaryResponse, usersResponse] = await Promise.all([
+        coreAxios.get(`/bookings/dashboard?${params.toString()}`),
         coreAxios.get("/users").catch(() => null),
       ]);
 
-      let bookingsData = [];
-      if (response.status === 200) {
-        bookingsData = Array.isArray(response.data) ? response.data : [];
-
-        // Filter bookings if the role is "hoteladmin"
-        if (userRole === "hoteladmin" && userHotelID != null) {
-          bookingsData = bookingsData.filter(
-            (booking) =>
-              booking && Number(booking.hotelID) === userHotelID
-          );
-        }
-
-        // Filter out cancelled bookings (statusID 255)
-        bookingsData = bookingsData.filter((booking) => booking.statusID !== 255);
-
-        setBookings(bookingsData);
+      if (summaryResponse.status === 200) {
+        setSummary(summaryResponse.data || null);
+      } else {
+        setSummary(null);
       }
 
       if (usersResponse?.status === 200) {
@@ -103,83 +57,10 @@ const DashboardHome = ({ hotelID = 1 }) => {
       } else {
         setUsers([]);
       }
-
-      // Compute room capacity from the real hotel data (used for occupancy rate)
-      const hotelsList =
-        hotelsResponse?.data?.data?.hotels ||
-        hotelsResponse?.data?.hotels ||
-        [];
-
-      const hotel =
-        hotelsList.find((h) => Number(h?.hotelID) === userHotelID) ||
-        hotelsList.find((h) => String(h?._id) === String(userHotelID)) ||
-        hotelByIdResponse?.data?.data ||
-        null;
-
-      const categories = hotel?.roomCategories || hotel?.categories || [];
-      const fallbackCount = Array.isArray(categories)
-        ? categories.reduce((sum, c) => {
-            const roomNumbers = Array.isArray(c?.roomNumbers)
-              ? c.roomNumbers
-              : Array.isArray(c?.rooms)
-                ? c.rooms
-                : [];
-            return sum + roomNumbers.length;
-          }, 0)
-        : 0;
-
-      // Prefer backend-provided totalRooms when available.
-      const totalRoomsFromHotel = Number(hotel?.totalRooms) || 0;
-
-      // Unique room count (prevents wrong occupancy when API duplicates/overlaps)
-      const uniqueRoomIds = new Set();
-      if (Array.isArray(categories)) {
-        categories.forEach((c) => {
-          const roomNumbers = Array.isArray(c?.roomNumbers)
-            ? c.roomNumbers
-            : Array.isArray(c?.rooms)
-              ? c.rooms
-              : [];
-          (roomNumbers || []).forEach((r) => {
-            const id =
-              r?._id ??
-              r?.roomId ??
-              r?.id ??
-              r?.name ??
-              r?.roomNumberID ??
-              r?.roomNumber ??
-              null;
-            if (id !== null && id !== undefined && String(id).trim() !== "") {
-              uniqueRoomIds.add(String(id));
-            }
-          });
-        });
-      }
-
-      const distinctRoomsFromBookings = new Set();
-      bookingsData.forEach((b) => {
-        const rk = getBookingRoomKey(b);
-        if (rk) distinctRoomsFromBookings.add(rk);
-      });
-
-      const totalRoomsSafe =
-        Number.isFinite(totalRoomsFromHotel) && totalRoomsFromHotel > 0
-          ? totalRoomsFromHotel
-          : 0;
-
-      const finalRoomsCount = Math.max(
-        totalRoomsSafe,
-        uniqueRoomIds.size,
-        fallbackCount,
-        distinctRoomsFromBookings.size
-      );
-
-      setTotalRooms(finalRoomsCount);
     } catch (error) {
-      console.error("Error fetching bookings:", error);
-      setBookings([]);
+      console.error("Error fetching dashboard summary:", error);
+      setSummary(null);
       setUsers([]);
-      setTotalRooms(0);
     } finally {
       setLoading(false);
     }
@@ -189,251 +70,61 @@ const DashboardHome = ({ hotelID = 1 }) => {
     fetchBookings();
   }, [fetchBookings]);
 
-  // Calculate dashboard statistics
-  const calculateStats = () => {
-    if (!bookings || bookings.length === 0) {
-      return {
-        todayBookingAmount: 0,
-        currentMonthBookingAmount: 0,
-        todayCheckIns: 0,
-        todayCheckOuts: 0,
-        todayOccupancyRate: 0,
-        todayOccupiedRoomsCount: 0,
-        todayOccupiedRoomNames: [],
-        tomorrowOccupancyRate: 0,
-        tomorrowOccupiedRoomsCount: 0,
-        tomorrowOccupiedRoomNames: [],
-        currentMonthOccupancyRate: 0,
-      };
-    }
-
-    const today = dayjs().tz("Asia/Dhaka");
-    const todayStart = today.startOf("day");
-    const todayEnd = today.endOf("day");
-    const monthStart = today.startOf("month");
-    const monthEnd = today.endOf("month");
-
-    let todayBookingAmount = 0;
-    let currentMonthBookingAmount = 0;
-    let todayCheckIns = 0;
-    let todayCheckOuts = 0;
-    let todayActiveRoomsCount = 0;
-    const todayActiveRoomsSet = new Set();
-    const todayActiveRoomNamesSet = new Set();
-
-    const daysCount = monthEnd.diff(monthStart, "day") + 1;
-    const monthActiveRoomsSets =
-      daysCount > 0
-        ? Array.from({ length: daysCount }, () => new Set())
-        : [];
-
-    const tomorrowStart = todayStart.add(1, "day");
-    const tomorrowActiveRoomsSet = new Set();
-    const tomorrowActiveRoomNamesSet = new Set();
-
-    bookings.forEach((booking) => {
-      const checkInDate = dayjs(booking.checkInDate).tz("Asia/Dhaka");
-      const checkOutDate = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
-      if (!checkInDate.isValid() || !checkOutDate.isValid()) return;
-      const totalBill = parseFloat(booking.totalBill) || 0;
-      const roomKey = getBookingRoomKey(booking) || "";
-      const roomNameKey = booking.roomNumberName || booking.roomNumber || "";
-
-      // Today's Booking Amount (bookings with check-in date today)
-      if (checkInDate.isSame(todayStart, "day")) {
-        todayBookingAmount += totalBill;
-        todayCheckIns++;
-      }
-
-      // Current Month Booking Amount (bookings with check-in date in current month)
-      if (checkInDate.isSameOrAfter(monthStart, "day") && 
-          checkInDate.isSameOrBefore(monthEnd, "day")) {
-        currentMonthBookingAmount += totalBill;
-      }
-
-      // Today's Check-outs
-      if (checkOutDate.isSame(todayStart, "day")) {
-        todayCheckOuts++;
-      }
-
-      // Today's Occupancy (exclusive checkout):
-      // room active on "day" if check-in <= day AND check-out > day
-      const isActiveToday =
-        checkInDate.startOf("day").isSameOrBefore(todayStart, "day") &&
-        checkOutDate.startOf("day").isAfter(todayStart, "day");
-      if (isActiveToday && roomKey) {
-        todayActiveRoomsSet.add(roomKey);
-        if (roomNameKey) todayActiveRoomNamesSet.add(String(roomNameKey));
-      }
-
-      // Used for month occupancy: count active rooms per day (exclusive checkout)
-      const isActiveInMonth =
-        checkInDate.startOf("day").isSameOrBefore(monthEnd, "day") &&
-        checkOutDate.startOf("day").isAfter(monthStart, "day");
-      if (!isActiveInMonth) return;
-      if (!roomKey) return;
-
-      // Tomorrow occupancy (exclusive checkout)
-      const isActiveTomorrow =
-        checkInDate.startOf("day").isSameOrBefore(tomorrowStart, "day") &&
-        checkOutDate.startOf("day").isAfter(tomorrowStart, "day");
-      if (isActiveTomorrow) {
-        tomorrowActiveRoomsSet.add(roomKey);
-        if (roomNameKey) tomorrowActiveRoomNamesSet.add(String(roomNameKey));
-      }
-
-      const startIndex = Math.max(
-        0,
-        checkInDate.startOf("day").diff(monthStart, "day")
-      );
-      // End at checkoutDayIndex - 1 (room not active on checkout date)
-      const endIndex = Math.min(
-        daysCount - 1,
-        checkOutDate.startOf("day").diff(monthStart, "day") - 1
-      );
-      for (let i = startIndex; i <= endIndex; i++) {
-        monthActiveRoomsSets[i].add(roomKey);
-      }
-    });
-
-    const maxRooms = Number(totalRooms) || 0;
-    todayActiveRoomsCount = todayActiveRoomsSet.size;
-    const todayOccupiedRoomsCount = todayActiveRoomsCount;
-    const todayOccupiedRoomNames = [...todayActiveRoomNamesSet];
-    const tomorrowOccupiedRoomsCount = tomorrowActiveRoomsSet.size;
-    const tomorrowOccupiedRoomNames = [...tomorrowActiveRoomNamesSet];
-    const todayOccupancyRate =
-      maxRooms > 0
-        ? Math.min(100, Math.round((todayActiveRoomsCount / maxRooms) * 100))
-        : 0;
-
-    // Current Month Occupancy (average daily occupancy across the whole month)
-    let sumActiveRoomsByDay = 0;
-    if (maxRooms > 0 && daysCount > 0 && monthActiveRoomsSets.length > 0) {
-      for (let i = 0; i < daysCount; i++) {
-        sumActiveRoomsByDay += monthActiveRoomsSets[i]?.size || 0;
-      }
-    }
-    const currentMonthOccupancyRate =
-      maxRooms > 0 && daysCount > 0
-        ? Math.min(
-            100,
-            Math.round(
-              (sumActiveRoomsByDay / (maxRooms * daysCount)) * 100
-            )
-          )
-        : 0;
-
-    const tomorrowOccupancyRate =
-      maxRooms > 0
-        ? Math.min(
-            100,
-            Math.round((tomorrowOccupiedRoomsCount / maxRooms) * 100)
-          )
-        : 0;
-
-    return {
-      todayBookingAmount,
-      currentMonthBookingAmount,
-      todayCheckIns,
-      todayCheckOuts,
-      todayOccupancyRate,
-      todayOccupiedRoomsCount,
-      todayOccupiedRoomNames,
-      tomorrowOccupancyRate,
-      tomorrowOccupiedRoomsCount,
-      tomorrowOccupiedRoomNames,
-      currentMonthOccupancyRate,
-    };
-  };
-
-  const statsData = calculateStats();
+  const kpis = summary?.kpis || {};
+  const period = summary?.periodSummary || {};
+  const totalRooms = summary?.totalRooms || 0;
   const currentMonthName = dayjs().format("MMMM");
-
-  const bdNow = dayjs().tz("Asia/Dhaka");
-  const bdTodayStart = bdNow.startOf("day");
-  const bd7DaysStart = bdTodayStart.subtract(6, "day");
-  const bd30DaysStart = bdTodayStart.subtract(29, "day");
-
-  const getBookedById = (booking) =>
-    String(booking?.bookedByID || booking?.bookedBy || "UNKNOWN").trim();
-
-  const isFtbUser = (booking) => /FTB/i.test(getBookedById(booking));
-
-  const getCheckInDay = (booking) =>
-    dayjs(booking?.checkInDate).tz("Asia/Dhaka").startOf("day");
-
-  const inToday = (booking) => getCheckInDay(booking).isSame(bdTodayStart, "day");
-  const inLast7Days = (booking) => {
-    const d = getCheckInDay(booking);
-    return d.isSameOrAfter(bd7DaysStart, "day") && d.isSameOrBefore(bdTodayStart, "day");
-  };
-  const inLast30Days = (booking) => {
-    const d = getCheckInDay(booking);
-    return d.isSameOrAfter(bd30DaysStart, "day") && d.isSameOrBefore(bdTodayStart, "day");
-  };
-
-  const sumTotalBill = (list) =>
-    list.reduce((sum, b) => sum + (Number(b?.totalBill) || 0), 0);
-
-  const todayAllBookings = bookings.filter(inToday);
-  const todayFtbBookings = todayAllBookings.filter(isFtbUser);
-  const last30AllBookings = bookings.filter(inLast30Days);
-  const last30FtbBookings = last30AllBookings.filter(isFtbUser);
 
   const summaryCards = [
     {
       title: "Today's FTB Bookings",
-      amount: sumTotalBill(todayFtbBookings),
-      count: todayFtbBookings.length,
+      amount: period.todayFtb?.amount || 0,
+      count: period.todayFtb?.count || 0,
       accent: "lagoon",
     },
     {
       title: "Today's All Bookings",
-      amount: sumTotalBill(todayAllBookings),
-      count: todayAllBookings.length,
+      amount: period.todayAll?.amount || 0,
+      count: period.todayAll?.count || 0,
       accent: "green",
     },
     {
       title: "30 Days FTB Bookings",
-      amount: sumTotalBill(last30FtbBookings),
-      count: last30FtbBookings.length,
+      amount: period.last30Ftb?.amount || 0,
+      count: period.last30Ftb?.count || 0,
       accent: "sand",
     },
     {
       title: "30 Days All Bookings",
-      amount: sumTotalBill(last30AllBookings),
-      count: last30AllBookings.length,
+      amount: period.last30?.amount || 0,
+      count: period.last30?.count || 0,
       accent: "ocean",
     },
   ];
 
-  const bookingUsersMap = {};
-  bookings.forEach((booking) => {
-    const userId = getBookedById(booking);
-    if (!bookingUsersMap[userId]) bookingUsersMap[userId] = [];
-    bookingUsersMap[userId].push(booking);
-  });
-
+  const summaryUserRows = Array.isArray(summary?.userBreakdown)
+    ? summary.userBreakdown
+    : [];
   const usersFromApi = Array.isArray(users) ? users : [];
-  const baseUsers = usersFromApi.map((u) => String(u?.loginID || u?.username || u?._id || ""));
+  const baseUsers = usersFromApi.map((u) =>
+    String(u?.loginID || u?.username || u?._id || "")
+  );
+  const userRowMap = Object.fromEntries(
+    summaryUserRows.map((r) => [String(r.userId), r])
+  );
   const mergedUserIds = Array.from(
-    new Set([...baseUsers.filter(Boolean), ...Object.keys(bookingUsersMap)])
+    new Set([...baseUsers.filter(Boolean), ...Object.keys(userRowMap)])
   );
 
   const userBookingRows = mergedUserIds
     .map((userId) => {
-      const userBookings = bookingUsersMap[userId] || [];
-      const today = userBookings.filter(inToday);
-      const seven = userBookings.filter(inLast7Days);
-      const thirty = userBookings.filter(inLast30Days);
-      const overall = userBookings;
+      const row = userRowMap[userId] || {};
       return {
         userId,
-        todayAmount: sumTotalBill(today),
-        sevenAmount: sumTotalBill(seven),
-        thirtyAmount: sumTotalBill(thirty),
-        overallAmount: sumTotalBill(overall),
+        todayAmount: row.todayAmount || 0,
+        sevenAmount: row.sevenAmount || 0,
+        thirtyAmount: row.thirtyAmount || 0,
+        overallAmount: row.overallAmount || 0,
       };
     })
     .sort((a, b) => b.overallAmount - a.overallAmount);
@@ -441,66 +132,66 @@ const DashboardHome = ({ hotelID = 1 }) => {
   const stats = [
     {
       label: "Today's Booking Amount",
-      value: statsData.todayBookingAmount,
+      value: kpis.todayBookingAmount || 0,
       isCurrency: true,
       icon: DollarOutlined,
       accent: "ocean",
     },
     {
       label: `Month (${currentMonthName}) Booking Amount`,
-      value: statsData.currentMonthBookingAmount,
+      value: kpis.currentMonthBookingAmount || 0,
       isCurrency: true,
       icon: DollarOutlined,
       accent: "lagoon",
     },
     {
       label: "Today's Check-ins",
-      value: statsData.todayCheckIns,
+      value: kpis.todayCheckIns || 0,
       isCurrency: false,
       icon: UserOutlined,
       accent: "soft",
     },
     {
       label: "Today's Check-outs",
-      value: statsData.todayCheckOuts,
+      value: kpis.todayCheckOuts || 0,
       isCurrency: false,
       icon: CalendarOutlined,
       accent: "sand",
     },
     {
-      label: `Today's Occupancy (${statsData.todayOccupiedRoomsCount}/${totalRooms})`,
-      value: statsData.todayOccupancyRate,
+      label: `Today's Occupancy (${kpis.todayOccupiedRoomsCount || 0}/${totalRooms})`,
+      value: kpis.todayOccupancyRate || 0,
       isCurrency: false,
       isPercentage: true,
       icon: HomeOutlined,
       accent: "green",
       footnote:
-        statsData.todayOccupiedRoomNames?.length
-          ? `Rooms: ${statsData.todayOccupiedRoomNames
+        kpis.todayOccupiedRoomNames?.length
+          ? `Rooms: ${kpis.todayOccupiedRoomNames
               .slice(0, 8)
-              .join(", ")}${statsData.todayOccupiedRoomNames.length > 8 ? "..." : ""}`
+              .join(", ")}${kpis.todayOccupiedRoomNames.length > 8 ? "..." : ""}`
           : "No rooms occupied today",
     },
     {
       label: "Month Occupancy Rate",
-      value: statsData.currentMonthOccupancyRate,
+      value: kpis.currentMonthOccupancyRate || 0,
       isCurrency: false,
       isPercentage: true,
       icon: HomeOutlined,
       accent: "deep",
     },
     {
-      label: `Tomorrow Occupancy (${statsData.tomorrowOccupiedRoomsCount}/${totalRooms})`,
-      value: statsData.tomorrowOccupancyRate,
+      label: `Tomorrow Occupancy (${kpis.tomorrowOccupiedRoomsCount || 0}/${totalRooms})`,
+      value: kpis.tomorrowOccupancyRate || 0,
       isCurrency: false,
       isPercentage: true,
       icon: HomeOutlined,
       accent: "ocean",
       footnote:
-        statsData.tomorrowOccupiedRoomNames?.length
-          ? `Rooms: ${statsData.tomorrowOccupiedRoomNames
+        kpis.tomorrowOccupiedRoomNames?.length
+          ? `Rooms: ${kpis.tomorrowOccupiedRoomNames
               .slice(0, 8)
-              .join(", ")}${statsData.tomorrowOccupiedRoomNames.length > 8 ? "..." : ""}`
+              .join(", ")}${kpis.tomorrowOccupiedRoomNames.length > 8 ? "..." : ""}`
           : "No rooms occupied tomorrow",
     },
   ];

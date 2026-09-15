@@ -84,10 +84,25 @@ const BookingTable = ({ hotelID }) => {
       const userInfo = JSON.parse(localStorage.getItem("userInfo"));
       const userRole = userInfo?.role?.value;
       const userHotelID = hotelID;
+      const { buildBookingsPath, unwrapBookings } = await import("@/utils/bookingsApi");
 
-      const response = await coreAxios.get("bookings");
+      const response = await coreAxios.get(
+        buildBookingsPath({
+          hotelID:
+            userRole === "hoteladmin" && userHotelID
+              ? Number(userHotelID)
+              : undefined,
+          startDate: dayjs().subtract(6, "month").format("YYYY-MM-DD"),
+          endDate: dayjs().add(3, "month").format("YYYY-MM-DD"),
+          mode: "overlap",
+          excludeCancelled: 1,
+          fields: "light",
+          page: 1,
+          limit: 500,
+        })
+      );
       if (response.status === 200) {
-        let bookingsData = response?.data;
+        let bookingsData = unwrapBookings(response?.data);
         if (userRole === "hoteladmin" && userHotelID) {
           bookingsData = bookingsData.filter(
             (booking) => booking.hotelID === Number(userHotelID)

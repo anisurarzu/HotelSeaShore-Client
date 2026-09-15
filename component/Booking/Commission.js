@@ -83,15 +83,33 @@ const CommissionPage = ({ hotelID }) => {
     setLoading(true);
     try {
       const userLoginID = selectedUser;
+      const { buildBookingsPath, unwrapBookings } = await import("@/utils/bookingsApi");
 
-      // Fetch bookings from API
-      const response = await coreAxios.get("bookings");
+      const [startDate, endDate] =
+        Array.isArray(dates) && dates.length >= 2
+          ? dates.map((date) => dayjs(date).format("YYYY-MM-DD"))
+          : [
+              dayjs().subtract(3, "month").format("YYYY-MM-DD"),
+              dayjs().format("YYYY-MM-DD"),
+            ];
+
+      const response = await coreAxios.get(
+        buildBookingsPath({
+          hotelID: selectedHotel || hotelID || undefined,
+          startDate,
+          endDate,
+          mode: "checkIn",
+          excludeCancelled: 1,
+          fields: "light",
+          bookedByID: userLoginID || undefined,
+          page: 1,
+          limit: 1000,
+        })
+      );
 
       if (response.status === 200) {
-        const filtered = response.data.filter((data) => data.statusID !== 255);
-
-        const [startDate, endDate] = dates.map((date) =>
-          dayjs(date).format("YYYY-MM-DD")
+        const filtered = unwrapBookings(response.data).filter(
+          (data) => data.statusID !== 255
         );
 
         // Apply filters based on the provided criteria

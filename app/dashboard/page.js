@@ -333,6 +333,7 @@ const DashboardContent = ({ sliders }) => {
     return 'gradient';
   });
   const [bookings, setBookings] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(null);
   const [users, setUsers] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -385,222 +386,33 @@ const DashboardContent = ({ sliders }) => {
     [allMenuItems, allowedPageKeys]
   );
 
-  // Calculate dashboard statistics from bookings API data
-  const calculateDashboardStats = useCallback((bookingsData, maxRoomsParam) => {
-    const today = dayjs().tz("Asia/Dhaka");
-    const todayStart = today.startOf("day");
-    const todayEnd = today.endOf("day");
-    const monthStart = today.startOf("month");
-    const monthEnd = today.endOf("month");
-
-    // Initialize counters
-    let todayBookingAmount = 0;
-    let currentMonthBookingAmount = 0;
-    let todayCheckIns = 0;
-    let todayCheckOuts = 0;
-    const todayActiveRoomsSet = new Set();
-
-    const daysCount = monthEnd.diff(monthStart, "day") + 1;
-    const monthActiveRoomsSets =
-      daysCount > 0
-        ? Array.from({ length: daysCount }, () => new Set())
-        : [];
-
-    bookingsData.forEach((booking) => {
-      // Parse dates properly
-      const checkInDate = dayjs(booking.checkInDate).tz("Asia/Dhaka");
-      const checkOutDate = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
-      if (!checkInDate.isValid() || !checkOutDate.isValid()) return;
-
-      // Get booking details
-      const totalBill = parseFloat(booking.totalBill) || 0;
-      const roomKey = getBookingRoomKey(booking);
-
-      // Today's Booking Amount (bookings with check-in date today)
-      if (checkInDate.isSame(todayStart, "day")) {
-        todayBookingAmount += totalBill;
-        todayCheckIns++;
-      }
-
-      // Current Month Booking Amount (bookings with check-in date in current month)
-      if (checkInDate.isSameOrAfter(monthStart, "day") && 
-          checkInDate.isSameOrBefore(monthEnd, "day")) {
-        currentMonthBookingAmount += totalBill;
-      }
-
-      // Today's Check-outs
-      if (checkOutDate.isSame(todayStart, "day")) {
-        todayCheckOuts++;
-      }
-
-      // Today's Occupancy (exclusive checkout):
-      // active on "day" if check-in <= day AND check-out > day
-      const isActiveToday =
-        checkInDate.startOf("day").isSameOrBefore(todayStart, "day") &&
-        checkOutDate.startOf("day").isAfter(todayStart, "day");
-      if (isActiveToday && roomKey) todayActiveRoomsSet.add(roomKey);
-
-      // Used for current month occupancy: count active rooms per day (exclusive checkout)
-      const isActiveInMonth =
-        checkInDate.startOf("day").isSameOrBefore(monthEnd, "day") &&
-        checkOutDate.startOf("day").isAfter(monthStart, "day");
-      if (!isActiveInMonth) return;
-      if (!roomKey) return;
-
-      const startIndex = Math.max(
-        0,
-        checkInDate.startOf("day").diff(monthStart, "day")
-      );
-      // End at checkoutDayIndex - 1 (room not active on checkout date)
-      const endIndex = Math.min(
-        daysCount - 1,
-        checkOutDate.startOf("day").diff(monthStart, "day") - 1
-      );
-      for (let i = startIndex; i <= endIndex; i++) {
-        monthActiveRoomsSets[i].add(roomKey);
-      }
-    });
-
-    const maxRooms = Number(maxRoomsParam) || 0;
-    const todayActiveRoomsCount = todayActiveRoomsSet.size;
-
-    const todayOccupancyRate =
-      maxRooms > 0
-        ? Math.min(
-            100,
-            Math.round((todayActiveRoomsCount / maxRooms) * 100)
-          )
-        : 0;
-
-    // Average daily occupancy across the month (room-based)
-    let sumActiveRoomsByDay = 0;
-    if (maxRooms > 0 && daysCount > 0 && monthActiveRoomsSets.length > 0) {
-      for (let i = 0; i < daysCount; i++) {
-        sumActiveRoomsByDay += monthActiveRoomsSets[i]?.size || 0;
-      }
-    }
-
-    const currentMonthOccupancyRate =
-      maxRooms > 0 && daysCount > 0
-        ? Math.min(
-            100,
-            Math.round((sumActiveRoomsByDay / (maxRooms * daysCount)) * 100)
-          )
-        : 0;
-
-    setDashboardStats({
-      todayBookingAmount,
-      currentMonthBookingAmount,
-      todayCheckIns,
-      todayCheckOuts,
-      todayOccupancyRate,
-      currentMonthOccupancyRate,
-    });
-  }, []);
-
-  // Fetch bookings data
+  // Fetch compact dashboard summary (avoids downloading full /bookings history)
   const fetchBookings = useCallback(async () => {
     try {
       setBookingsLoading(true);
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      const userRole = userInfo?.role?.value;
       const userHotelID = resolveDashboardHotelId(hotelID, userInfo);
 
-      const [response, hotelsResponse, hotelByIdResponse, usersResponse] = await Promise.all([
-        coreAxios.get("/bookings"),
-        // Use the real hotel source that includes roomCategories/roomNumbers.
-        // (Backend route: GET /hotel)
-        coreAxios.get(`/hotel?page=1&limit=200`).catch(() => null),
-        // Fallback: if the /hotel list doesn't include the current hotel in its first page.
-        userHotelID != null
-          ? coreAxios.get(`/hotels/${userHotelID}`).catch(() => null)
-          : Promise.resolve(null),
+      const params = new URLSearchParams();
+      if (userHotelID != null) params.set("hotelID", String(userHotelID));
+
+      const [summaryResponse, usersResponse] = await Promise.all([
+        coreAxios.get(`/bookings/dashboard?${params.toString()}`),
         coreAxios.get("/users").catch(() => null),
       ]);
 
-      if (response.status === 200) {
-        let bookingsData = Array.isArray(response.data) ? response.data : [];
-
-        // Filter bookings if the role is "hoteladmin"
-        if (userRole === "hoteladmin" && userHotelID != null) {
-          bookingsData = bookingsData.filter(
-            (booking) =>
-              booking && Number(booking.hotelID) === userHotelID
-          );
-        }
-
-        // Filter out cancelled bookings (statusID 255)
-        bookingsData = bookingsData.filter((booking) => booking.statusID !== 255);
-
-        // Compute room capacity from real hotel data (used for occupancy rate)
-        const hotelsList =
-          hotelsResponse?.data?.data?.hotels ||
-          hotelsResponse?.data?.hotels ||
-          [];
-
-        const hotel =
-          hotelsList.find((h) => Number(h?.hotelID) === userHotelID) ||
-          hotelsList.find((h) => String(h?._id) === String(userHotelID)) ||
-          hotelByIdResponse?.data?.data ||
-          null;
-
-        const categories = hotel?.roomCategories || hotel?.categories || [];
-
-        const fallbackCount = Array.isArray(categories)
-          ? categories.reduce((sum, c) => {
-              const roomNumbers = Array.isArray(c?.roomNumbers)
-                ? c.roomNumbers
-                : Array.isArray(c?.rooms)
-                  ? c.rooms
-                  : [];
-              return sum + roomNumbers.length;
-            }, 0)
-          : 0;
-
-        // Prefer backend-provided totalRooms. If missing, compute unique rooms.
-        const uniqueRoomIds = new Set();
-        if (Array.isArray(categories)) {
-          categories.forEach((c) => {
-            const roomNumbers = Array.isArray(c?.roomNumbers)
-              ? c.roomNumbers
-              : Array.isArray(c?.rooms)
-                ? c.rooms
-                : [];
-            (roomNumbers || []).forEach((r) => {
-              const id =
-                r?._id ??
-                r?.roomId ??
-                r?.id ??
-                r?.name ??
-                r?.roomNumberID ??
-                r?.roomNumber ??
-                null;
-              if (id !== null && id !== undefined && String(id).trim() !== "") {
-                uniqueRoomIds.add(String(id));
-              }
-            });
-          });
-        }
-
-        const distinctRoomsFromBookings = new Set();
-        bookingsData.forEach((b) => {
-          const rk = getBookingRoomKey(b);
-          if (rk) distinctRoomsFromBookings.add(rk);
+      if (summaryResponse.status === 200 && summaryResponse.data) {
+        const summary = summaryResponse.data;
+        setDashboardSummary(summary);
+        setDashboardStats({
+          todayBookingAmount: summary.kpis?.todayBookingAmount || 0,
+          currentMonthBookingAmount: summary.kpis?.currentMonthBookingAmount || 0,
+          todayCheckIns: summary.kpis?.todayCheckIns || 0,
+          todayCheckOuts: summary.kpis?.todayCheckOuts || 0,
+          todayOccupancyRate: summary.kpis?.todayOccupancyRate || 0,
+          currentMonthOccupancyRate: summary.kpis?.currentMonthOccupancyRate || 0,
         });
-
-        const totalRoomsNum = Number(hotel?.totalRooms);
-        const totalRoomsSafe =
-          Number.isFinite(totalRoomsNum) && totalRoomsNum > 0 ? totalRoomsNum : 0;
-
-        const roomsCount = Math.max(
-          totalRoomsSafe,
-          uniqueRoomIds.size,
-          fallbackCount,
-          distinctRoomsFromBookings.size
-        );
-
-        setBookings(bookingsData);
-        calculateDashboardStats(bookingsData, roomsCount);
+        setBookings([]);
       }
 
       if (usersResponse?.status === 200) {
@@ -614,13 +426,14 @@ const DashboardContent = ({ sliders }) => {
         setUsers([]);
       }
     } catch (error) {
-      console.error("Error fetching bookings:", error);
+      console.error("Error fetching dashboard summary:", error);
+      setDashboardSummary(null);
       setBookings([]);
       setUsers([]);
     } finally {
       setBookingsLoading(false);
     }
-  }, [hotelID, calculateDashboardStats]);
+  }, [hotelID]);
 
   // Handle window resize for responsive layout
   useEffect(() => {
@@ -1081,62 +894,43 @@ const DashboardContent = ({ sliders }) => {
 
       const dashboardCards = isRestaurant ? restaurantDashboardCards : hotelDashboardCards;
 
-      const today = dayjs().tz("Asia/Dhaka").startOf("day");
-      const last7Start = today.subtract(6, "day");
-      const last30Start = today.subtract(29, "day");
-      const getCheckInDay = (b) => dayjs(b?.checkInDate).tz("Asia/Dhaka").startOf("day");
-      const getBookedById = (b) => String(b?.bookedByID || b?.bookedBy || "Unknown").trim();
-      const inToday = (b) => getCheckInDay(b).isSame(today, "day");
-      const inLast30 = (b) => {
-        const d = getCheckInDay(b);
-        return d.isSameOrAfter(last30Start, "day") && d.isSameOrBefore(today, "day");
-      };
-      const inLast7 = (b) => {
-        const d = getCheckInDay(b);
-        return d.isSameOrAfter(last7Start, "day") && d.isSameOrBefore(today, "day");
-      };
-      const sumBill = (arr) => arr.reduce((s, b) => s + (Number(b?.totalBill) || 0), 0);
-
-      const todayAll = bookings.filter(inToday);
-      const monthAll = bookings.filter(inLast30);
-      const weekAll = bookings.filter(inLast7);
-
+      const period = dashboardSummary?.periodSummary || {};
       const overviewCards = [
         {
           title: "Last 7 Days Bookings",
-          amount: sumBill(weekAll),
-          count: weekAll.length,
+          amount: period.last7?.amount || 0,
+          count: period.last7?.count || 0,
           accent: "lagoon",
         },
         {
           title: "Last 30 Days Bookings",
-          amount: sumBill(monthAll),
-          count: monthAll.length,
+          amount: period.last30?.amount || 0,
+          count: period.last30?.count || 0,
           accent: "ocean",
         },
       ];
 
-      const bookingUsersMap = {};
-      bookings.forEach((b) => {
-        const uid = getBookedById(b);
-        if (!bookingUsersMap[uid]) bookingUsersMap[uid] = [];
-        bookingUsersMap[uid].push(b);
-      });
+      const summaryUserRows = Array.isArray(dashboardSummary?.userBreakdown)
+        ? dashboardSummary.userBreakdown
+        : [];
       const apiUserIds = (Array.isArray(users) ? users : []).map((u) =>
         String(u?.loginID || u?.username || u?._id || "")
       );
+      const userRowMap = Object.fromEntries(
+        summaryUserRows.map((r) => [String(r.userId), r])
+      );
       const mergedUserIds = Array.from(
-        new Set([...apiUserIds.filter(Boolean), ...Object.keys(bookingUsersMap)])
+        new Set([...apiUserIds.filter(Boolean), ...Object.keys(userRowMap)])
       );
       const userRows = mergedUserIds
         .map((uid) => {
-          const rows = bookingUsersMap[uid] || [];
+          const row = userRowMap[uid] || {};
           return {
             id: uid,
-            today: sumBill(rows.filter(inToday)),
-            seven: sumBill(rows.filter(inLast7)),
-            thirty: sumBill(rows.filter(inLast30)),
-            overall: sumBill(rows),
+            today: row.todayAmount || 0,
+            seven: row.sevenAmount || 0,
+            thirty: row.thirtyAmount || 0,
+            overall: row.overallAmount || 0,
           };
         })
         .sort((a, b) => b.overall - a.overall);
@@ -1564,27 +1358,11 @@ const DashboardContent = ({ sliders }) => {
 
               {/* Booking Statistics Pie Chart */}
               {(() => {
-                const today = dayjs().tz("Asia/Dhaka");
-                const todayStart = today.startOf("day");
-                const todayEnd = today.endOf("day");
-                
-                const activeBookings = bookings.filter(booking => {
-                  const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka");
-                  const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
-                  return checkIn.isSameOrBefore(todayEnd, "day") && checkOut.isSameOrAfter(todayStart, "day");
-                }).length;
-                
-                const upcomingBookings = bookings.filter(booking => {
-                  const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka");
-                  return checkIn.isAfter(todayEnd, "day");
-                }).length;
-                
-                const completedBookings = bookings.filter(booking => {
-                  const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
-                  return checkOut.isBefore(todayStart, "day");
-                }).length;
-                
-                const totalBookings = bookings.length;
+                const totals = dashboardSummary?.totals || {};
+                const activeBookings = totals.active || 0;
+                const upcomingBookings = totals.upcoming || 0;
+                const completedBookings = totals.completed || 0;
+                const totalBookings = totals.totalBookings || 0;
                 
                 const pieData = [
                   { type: 'Active', value: activeBookings, color: '#14919b' },
@@ -1677,10 +1455,11 @@ const DashboardContent = ({ sliders }) => {
 
               {/* Booking Statistics */}
               {(() => {
-                const totalRevenue = bookings.reduce((sum, b) => sum + (Number(b.totalBill) || 0), 0);
-                const totalAdvance = bookings.reduce((sum, b) => sum + (Number(b.advancePayment) || 0), 0);
-                const totalDue = bookings.reduce((sum, b) => sum + (Number(b.duePayment) || 0), 0);
-                const totalNights = bookings.reduce((sum, b) => sum + (Number(b.nights) || 1), 0);
+                const totals = dashboardSummary?.totals || {};
+                const totalRevenue = totals.totalRevenue || 0;
+                const totalAdvance = totals.totalAdvance || 0;
+                const totalDue = totals.totalDue || 0;
+                const totalNights = totals.totalNights || 0;
                 
                 return (
               <div 
@@ -1712,7 +1491,7 @@ const DashboardContent = ({ sliders }) => {
                         <div className="flex items-center justify-between">
                           <Text className={`text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Bookings</Text>
                           <Text className={`text-[10px] font-bold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                            {bookings.length}
+                            {(dashboardSummary?.totals?.totalBookings) || 0}
                           </Text>
               </div>
                         <div className="flex items-center justify-between">
@@ -1747,24 +1526,15 @@ const DashboardContent = ({ sliders }) => {
 
               {/* BookedBy Users Details */}
               {(() => {
-                const userBookingsMap = {};
-                bookings.forEach(booking => {
-                  const userId = booking.bookedByID || booking.bookedBy || 'Unknown';
-                  const userName = booking.bookedByName || booking.bookedBy || `User ${userId}`;
-                  
-                  if (!userBookingsMap[userId]) {
-                    userBookingsMap[userId] = {
-                      name: userName,
-                      count: 0,
-                      revenue: 0,
-                    };
-                  }
-                  
-                  userBookingsMap[userId].count++;
-                  userBookingsMap[userId].revenue += Number(booking.totalBill) || 0;
-                });
-                
-                const userStats = Object.values(userBookingsMap)
+                const userStats = (Array.isArray(dashboardSummary?.userBreakdown)
+                  ? dashboardSummary.userBreakdown
+                  : []
+                )
+                  .map((u) => ({
+                    name: u.userId || "Unknown",
+                    count: u.overallCount || 0,
+                    revenue: u.overallAmount || 0,
+                  }))
                   .sort((a, b) => b.count - a.count)
                   .slice(0, 5);
                 
@@ -1883,27 +1653,11 @@ const DashboardContent = ({ sliders }) => {
 
           {/* Booking Statistics Pie Chart - Same as desktop */}
           {(() => {
-            const today = dayjs().tz("Asia/Dhaka");
-            const todayStart = today.startOf("day");
-            const todayEnd = today.endOf("day");
-            
-            const activeBookings = bookings.filter(booking => {
-              const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka");
-              const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
-              return checkIn.isSameOrBefore(todayEnd, "day") && checkOut.isSameOrAfter(todayStart, "day");
-            }).length;
-            
-            const upcomingBookings = bookings.filter(booking => {
-              const checkIn = dayjs(booking.checkInDate).tz("Asia/Dhaka");
-              return checkIn.isAfter(todayEnd, "day");
-            }).length;
-            
-            const completedBookings = bookings.filter(booking => {
-              const checkOut = dayjs(booking.checkOutDate).tz("Asia/Dhaka");
-              return checkOut.isBefore(todayStart, "day");
-            }).length;
-            
-            const totalBookings = bookings.length;
+            const totals = dashboardSummary?.totals || {};
+            const activeBookings = totals.active || 0;
+            const upcomingBookings = totals.upcoming || 0;
+            const completedBookings = totals.completed || 0;
+            const totalBookings = totals.totalBookings || 0;
             
             const pieData = [
               { type: 'Active', value: activeBookings, color: '#14919b' },
@@ -1996,10 +1750,11 @@ const DashboardContent = ({ sliders }) => {
 
           {/* Booking Statistics - Same as desktop */}
           {(() => {
-            const totalRevenue = bookings.reduce((sum, b) => sum + (Number(b.totalBill) || 0), 0);
-            const totalAdvance = bookings.reduce((sum, b) => sum + (Number(b.advancePayment) || 0), 0);
-            const totalDue = bookings.reduce((sum, b) => sum + (Number(b.duePayment) || 0), 0);
-            const totalNights = bookings.reduce((sum, b) => sum + (Number(b.nights) || 1), 0);
+            const totals = dashboardSummary?.totals || {};
+            const totalRevenue = totals.totalRevenue || 0;
+            const totalAdvance = totals.totalAdvance || 0;
+            const totalDue = totals.totalDue || 0;
+            const totalNights = totals.totalNights || 0;
             
             return (
               <div 
@@ -2031,7 +1786,7 @@ const DashboardContent = ({ sliders }) => {
                     <div className="flex items-center justify-between">
                       <Text className={`text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Bookings</Text>
                       <Text className={`text-[10px] font-bold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                        {bookings.length}
+                        {(dashboardSummary?.totals?.totalBookings) || 0}
                       </Text>
                     </div>
                     <div className="flex items-center justify-between">
@@ -2066,24 +1821,15 @@ const DashboardContent = ({ sliders }) => {
 
           {/* BookedBy Users Details - Same as desktop */}
           {(() => {
-            const userBookingsMap = {};
-            bookings.forEach(booking => {
-              const userId = booking.bookedByID || booking.bookedBy || 'Unknown';
-              const userName = booking.bookedByName || booking.bookedBy || `User ${userId}`;
-              
-              if (!userBookingsMap[userId]) {
-                userBookingsMap[userId] = {
-                  name: userName,
-                  count: 0,
-                  revenue: 0,
-                };
-              }
-              
-              userBookingsMap[userId].count++;
-              userBookingsMap[userId].revenue += Number(booking.totalBill) || 0;
-            });
-            
-            const userStats = Object.values(userBookingsMap)
+            const userStats = (Array.isArray(dashboardSummary?.userBreakdown)
+              ? dashboardSummary.userBreakdown
+              : []
+            )
+              .map((u) => ({
+                name: u.userId || "Unknown",
+                count: u.overallCount || 0,
+                revenue: u.overallAmount || 0,
+              }))
               .sort((a, b) => b.count - a.count)
               .slice(0, 5);
             

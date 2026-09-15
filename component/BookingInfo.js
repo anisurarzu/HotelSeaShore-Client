@@ -48,6 +48,7 @@ const toDhIsoSafeForUtcDate = (dateLike) => {
 };
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
+import { buildBookingsPath, unwrapBookings } from "@/utils/bookingsApi";
 import { CopyOutlined, ReloadOutlined, PlusOutlined, SearchOutlined, MinusCircleOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -570,11 +571,28 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const userRole = userInfo?.role?.value;
       const userHotelID = hotelID;
+      // Recent window + light fields — avoids full history dump on every open
+      const startDate = dayjs().subtract(6, "month").format("YYYY-MM-DD");
+      const endDate = dayjs().add(3, "month").format("YYYY-MM-DD");
 
-      const response = await coreAxios.get("/bookings");
+      const response = await coreAxios.get(
+        buildBookingsPath({
+          hotelID:
+            userRole === "hoteladmin" && userHotelID
+              ? Number(userHotelID)
+              : undefined,
+          startDate,
+          endDate,
+          mode: "overlap",
+          excludeCancelled: 1,
+          fields: "light",
+          page: 1,
+          limit: 500,
+        })
+      );
 
       if (response.status === 200) {
-        let bookingsData = Array.isArray(response.data) ? response.data : [];
+        let bookingsData = unwrapBookings(response.data);
 
         if (userRole === "hoteladmin" && userHotelID) {
           bookingsData = bookingsData.filter(

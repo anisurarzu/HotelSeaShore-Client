@@ -209,117 +209,143 @@ const DailyStatement = ({ contentPermissions: contentPermissionsFromProps }) => 
   const fetchBookingsByDate = async (date) => {
     setLoading(true);
     try {
-      const response = await coreAxios.get("/bookings");
-
-      if (response.status === 200) {
-        let allBookings = Array.isArray(response.data) ? response.data : [];
-
-        // Filter out cancelled
-        allBookings = allBookings.filter((b) => b && b.statusID !== 255);
-
-        // Optional: filter by hotel for hoteladmin (same as dashboard)
-        try {
-          const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-          const userRole = userInfo?.role?.value;
-          const userHotelID = Number(userInfo?.hotelID);
-          if (userRole === "hoteladmin" && userHotelID) {
-            allBookings = allBookings.filter(
-              (b) => b && Number(b.hotelID) === userHotelID
-            );
-          }
-        } catch (_) {}
-
-        // Use selected date (from date picker) for "today" so lists and form reflect that day
-        const selectedDay = toDhakaDayjs(date)?.startOf("day");
-        if (!selectedDay) {
-          setBookings({ regularInvoice: [], unPaidInvoice: [] });
-          setLoading(false);
-          return;
-        }
-
-        // Precompute due-cleared day per booking (first day when totalPaid >= totalBill)
-        const dueClearedCache = new Map();
-        const getDueClearedDayCached = (booking) => {
-          const id = booking?._id || booking?.id;
-          if (!id) return getDueClearedDate(booking);
-          if (dueClearedCache.has(id)) return dueClearedCache.get(id);
-          const d = getDueClearedDate(booking);
-          dueClearedCache.set(id, d);
-          return d;
-        };
-
-        // Regular list (upper list):
-        // - active during stay EXCLUDING checkout day: checkIn <= selected < checkOut
-        // - show only up to due-cleared day (inclusive); after that hide from both lists
-        const regularInvoice = allBookings.filter((booking) => {
-          if (!booking.checkInDate || !booking.checkOutDate) return false;
-          const checkIn = toDhakaDayjs(booking.checkInDate)?.startOf("day");
-          const checkOut = toDhakaDayjs(booking.checkOutDate)?.startOf("day");
-          if (!checkIn || !checkOut) return false;
-          if (selectedDay.isBefore(checkIn, "day")) return false;
-          if (!selectedDay.isBefore(checkOut, "day")) return false; // checkout day excluded
-          // IMPORTANT: even if due clears on day-1/day-1st, still show until checkout previous day.
-          return true;
-        });
-
-        // Unpaid list (history list):
-        // - show starting from checkout day (selected >= checkOut)
-        // - show only until due-cleared day (inclusive); after that hide
-        const unPaidInvoice = allBookings.filter((booking) => {
-          if (!booking.checkOutDate) return false;
-          const checkOut = toDhakaDayjs(booking.checkOutDate)?.startOf("day");
-          if (!checkOut) return false;
-          if (selectedDay.isBefore(checkOut, "day")) return false; // checkout day excluded from regular
-
-          // Show unpaid from checkout day only when due still exists at checkout day.
-          const totalBill = Number(booking.totalBill) || 0;
-          const paidUptoCheckout = getTotalPaidUpToDate(booking, checkOut);
-          if (Math.max(0, totalBill - paidUptoCheckout) <= 0) return false;
-
-          const dueClearedDay = getDueClearedDayCached(booking);
-          if (dueClearedDay) {
-            if (selectedDay.isAfter(dueClearedDay, "day")) return false;
-          }
-          return true;
-        });
-
-        setBookings({
-          regularInvoice: regularInvoice,
-          unPaidInvoice: unPaidInvoice,
-        });
-
-        const initialValues = {};
-
-        [...regularInvoice, ...unPaidInvoice].forEach((booking) => {
-          const id = booking._id || booking.id;
-          if (!id) return;
-          const byDate = getPaymentsByDate(booking, date);
-          const totals = getCumulativeTotals(booking, date);
-          initialValues[id] = {
-            totalPaid: totals.totalPaid || 0,
-            dailyAmount: byDate.cash ?? 0,
-            bkash: (byDate.bkash || 0) + (byDate.nagad || 0),
-            bank: byDate.bank ?? 0,
-          };
-        });
-
-        formik.setValues(initialValues, false);
-
-        const calculatedDailyIncome = [...regularInvoice, ...unPaidInvoice].reduce(
-          (sum, booking) => {
-            const byDate = getPaymentsByDate(booking, date);
-            // For Daily Summary, Daily Income should reflect only daily CASH
-            return sum + (byDate.cash || 0);
-          },
-          0
-        );
-        setDailyIncome(calculatedDailyIncome);
-        try {
-          const dateKey = selectedDay.format("YYYY-MM-DD");
-          const payload = { dailyIncome: calculatedDailyIncome };
-          localStorage.setItem(`dailySummary:${dateKey}`, JSON.stringify(payload));
-        } catch (_) {}
+      const { buildBookingsPath, unwrapBookings } = await import("@/utils/bookingsApi");
+      const selectedDay = toDhakaDayjs(date)?.startOf("day");
+      if (!selectedDay) {
+        setBookings({ regularInvoice: [], unPaidInvoice: [] });
+        setLoading(false);
+        return;
       }
+
+      const dayStr = selectedDay.format("YYYY-MM-DD");
+      // Unpaid history window: last 120 days of checkouts that still have due
+      const unpaidStart = selectedDay.subtract(120, "day").format("YYYY-MM-DD");
+
+      let hotelFilter;
+      try {
+        const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+        const userRole = userInfo?.role?.value;
+        const userHotelID = Number(userInfo?.hotelID);
+        if (userRole === "hoteladmin" && userHotelID) hotelFilter = userHotelID;
+      } catch (_) {}
+
+      const [activeRes, unpaidRes] = await Promise.all([
+        coreAxios.get(
+          buildBookingsPath({
+            hotelID: hotelFilter,
+            startDate: dayStr,
+            endDate: dayStr,
+            mode: "overlap",
+            excludeCancelled: 1,
+            fields: "light",
+          })
+        ),
+        coreAxios.get(
+          buildBookingsPath({
+            hotelID: hotelFilter,
+            startDate: unpaidStart,
+            endDate: dayStr,
+            mode: "checkOut",
+            excludeCancelled: 1,
+            fields: "light",
+            minDue: 0,
+          })
+        ),
+      ]);
+
+      const byId = new Map();
+      for (const b of [
+        ...unwrapBookings(activeRes?.data),
+        ...unwrapBookings(unpaidRes?.data),
+      ]) {
+        if (b && b._id) byId.set(String(b._id), b);
+      }
+      let allBookings = Array.from(byId.values()).filter(
+        (b) => b && b.statusID !== 255
+      );
+
+      // Precompute due-cleared day per booking (first day when totalPaid >= totalBill)
+      const dueClearedCache = new Map();
+      const getDueClearedDayCached = (booking) => {
+        const id = booking?._id || booking?.id;
+        if (!id) return getDueClearedDate(booking);
+        if (dueClearedCache.has(id)) return dueClearedCache.get(id);
+        const d = getDueClearedDate(booking);
+        dueClearedCache.set(id, d);
+        return d;
+      };
+
+      // Regular list (upper list):
+      // - active during stay EXCLUDING checkout day: checkIn <= selected < checkOut
+      // - show only up to due-cleared day (inclusive); after that hide from both lists
+      const regularInvoice = allBookings.filter((booking) => {
+        if (!booking.checkInDate || !booking.checkOutDate) return false;
+        const checkIn = toDhakaDayjs(booking.checkInDate)?.startOf("day");
+        const checkOut = toDhakaDayjs(booking.checkOutDate)?.startOf("day");
+        if (!checkIn || !checkOut) return false;
+        if (selectedDay.isBefore(checkIn, "day")) return false;
+        if (!selectedDay.isBefore(checkOut, "day")) return false; // checkout day excluded
+        // IMPORTANT: even if due clears on day-1/day-1st, still show until checkout previous day.
+        return true;
+      });
+
+      // Unpaid list (history list):
+      // - show starting from checkout day (selected >= checkOut)
+      // - show only until due-cleared day (inclusive); after that hide
+      const unPaidInvoice = allBookings.filter((booking) => {
+        if (!booking.checkOutDate) return false;
+        const checkOut = toDhakaDayjs(booking.checkOutDate)?.startOf("day");
+        if (!checkOut) return false;
+        if (selectedDay.isBefore(checkOut, "day")) return false; // checkout day excluded from regular
+
+        // Show unpaid from checkout day only when due still exists at checkout day.
+        const totalBill = Number(booking.totalBill) || 0;
+        const paidUptoCheckout = getTotalPaidUpToDate(booking, checkOut);
+        if (Math.max(0, totalBill - paidUptoCheckout) <= 0) return false;
+
+        const dueClearedDay = getDueClearedDayCached(booking);
+        if (dueClearedDay) {
+          if (selectedDay.isAfter(dueClearedDay, "day")) return false;
+        }
+        return true;
+      });
+
+      setBookings({
+        regularInvoice: regularInvoice,
+        unPaidInvoice: unPaidInvoice,
+      });
+
+      const initialValues = {};
+
+      [...regularInvoice, ...unPaidInvoice].forEach((booking) => {
+        const id = booking._id || booking.id;
+        if (!id) return;
+        const byDate = getPaymentsByDate(booking, date);
+        const totals = getCumulativeTotals(booking, date);
+        initialValues[id] = {
+          totalPaid: totals.totalPaid || 0,
+          dailyAmount: byDate.cash ?? 0,
+          bkash: (byDate.bkash || 0) + (byDate.nagad || 0),
+          bank: byDate.bank ?? 0,
+        };
+      });
+
+      formik.setValues(initialValues, false);
+
+      const calculatedDailyIncome = [...regularInvoice, ...unPaidInvoice].reduce(
+        (sum, booking) => {
+          const byDate = getPaymentsByDate(booking, date);
+          // For Daily Summary, Daily Income should reflect only daily CASH
+          return sum + (byDate.cash || 0);
+        },
+        0
+      );
+      setDailyIncome(calculatedDailyIncome);
+      try {
+        const dateKey = selectedDay.format("YYYY-MM-DD");
+        const payload = { dailyIncome: calculatedDailyIncome };
+        localStorage.setItem(`dailySummary:${dateKey}`, JSON.stringify(payload));
+      } catch (_) {}
     } catch (error) {
       console.error("Error fetching bookings:", error);
       message.error(

@@ -167,27 +167,58 @@ const ExpenseInfo = ({ contentPermissions: contentPermissionsFromProps }) => {
   /** Daily cash total for summary — same booking sets + cash sum as DailyStatement.js */
   const fetchDailyIncomeFromBookings = async (date) => {
     try {
-      const response = await coreAxios.get("/bookings");
-      if (response.status !== 200) {
-        setDailyIncomeForSummary(0);
-        return;
-      }
-      let allBookings = Array.isArray(response.data) ? response.data : [];
-      allBookings = allBookings.filter((b) => b && b.statusID !== 255);
-      try {
-        const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-        const userRole = userInfo?.role?.value;
-        const userHotelID = Number(userInfo?.hotelID);
-        if (userRole === "hoteladmin" && userHotelID) {
-          allBookings = allBookings.filter((b) => b && Number(b.hotelID) === userHotelID);
-        }
-      } catch (_) {}
-
+      const { buildBookingsPath, unwrapBookings } = await import("@/utils/bookingsApi");
       const selectedDay = toDhakaDayjs(date)?.startOf("day");
       if (!selectedDay) {
         setDailyIncomeForSummary(0);
         return;
       }
+
+      const dayStr = selectedDay.format("YYYY-MM-DD");
+      const unpaidStart = selectedDay.subtract(120, "day").format("YYYY-MM-DD");
+
+      let hotelFilter;
+      try {
+        const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+        const userRole = userInfo?.role?.value;
+        const userHotelID = Number(userInfo?.hotelID);
+        if (userRole === "hoteladmin" && userHotelID) hotelFilter = userHotelID;
+      } catch (_) {}
+
+      const [activeRes, unpaidRes] = await Promise.all([
+        coreAxios.get(
+          buildBookingsPath({
+            hotelID: hotelFilter,
+            startDate: dayStr,
+            endDate: dayStr,
+            mode: "overlap",
+            excludeCancelled: 1,
+            fields: "light",
+          })
+        ),
+        coreAxios.get(
+          buildBookingsPath({
+            hotelID: hotelFilter,
+            startDate: unpaidStart,
+            endDate: dayStr,
+            mode: "checkOut",
+            excludeCancelled: 1,
+            fields: "light",
+            minDue: 0,
+          })
+        ),
+      ]);
+
+      const byId = new Map();
+      for (const b of [
+        ...unwrapBookings(activeRes?.data),
+        ...unwrapBookings(unpaidRes?.data),
+      ]) {
+        if (b && b._id) byId.set(String(b._id), b);
+      }
+      let allBookings = Array.from(byId.values()).filter(
+        (b) => b && b.statusID !== 255
+      );
 
       const dueClearedCache = new Map();
       const getDueClearedDayCached = (booking) => {

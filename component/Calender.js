@@ -31,6 +31,7 @@ import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import { useFormik } from "formik";
 import coreAxios from "@/utils/axiosInstance";
+import { buildBookingsPath, unwrapBookings } from "@/utils/bookingsApi";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
 import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
 import "./Calender.css";
@@ -623,17 +624,33 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     }
   };
 
-  // Fetch bookings from API
+  // Fetch bookings from API (only stays overlapping visible calendar range)
   const fetchBookings = async (hotelId) => {
     try {
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
       const userRole = userInfo?.role?.value;
       const userHotelID = Number(hotelID);
 
-      const response = await coreAxios.get("/bookings");
+      const start = (dateRange[0] || dayjs().startOf("month")).format("YYYY-MM-DD");
+      const end = (dateRange[1] || dayjs().endOf("month")).format("YYYY-MM-DD");
+      const effectiveHotel =
+        userRole === "hoteladmin" && userHotelID
+          ? userHotelID
+          : hotelId || undefined;
+
+      const response = await coreAxios.get(
+        buildBookingsPath({
+          hotelID: effectiveHotel,
+          startDate: start,
+          endDate: end,
+          mode: "overlap",
+          excludeCancelled: 1,
+          fields: "light",
+        })
+      );
 
       if (response.status === 200) {
-        let bookingsData = Array.isArray(response.data) ? response.data : [];
+        let bookingsData = unwrapBookings(response.data);
 
         if (userRole === "hoteladmin" && userHotelID) {
           bookingsData = bookingsData.filter(
