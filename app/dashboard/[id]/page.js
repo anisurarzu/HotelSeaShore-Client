@@ -5,6 +5,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { Button, Spin, message, Space } from "antd";
 import { useRouter } from "next/navigation";
 import coreAxios from "@/utils/axiosInstance";
+import { downloadElementPdf, printInvoicePage } from "@/utils/invoiceExport";
 import moment from "moment";
 
 const INVOICE_PAGE_MARGIN_IN = 0.22;
@@ -89,6 +90,7 @@ function collectPaymentRows(invoices) {
 const Invoice = ({ params }) => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [data, setData] = useState([]);
   const [totals, setTotals] = useState({
     extraBedTotalBill: 0,
@@ -122,25 +124,36 @@ const Invoice = ({ params }) => {
     fetchInvoiceInfo();
   }, []);
 
-  const print = () => window.print();
+  const print = () => printInvoicePage();
 
   const downloadPDF = async () => {
-    if (!document) return;
-    const html2pdf = (await import("html2pdf.js")).default;
+    if (typeof document === "undefined") return;
     const element = document.getElementById("invoice-card");
-    const options = {
-      margin: [
-        INVOICE_PAGE_MARGIN_IN,
-        INVOICE_PAGE_MARGIN_IN,
-        INVOICE_PAGE_MARGIN_IN,
-        INVOICE_PAGE_MARGIN_IN,
-      ],
-      filename: `Invoice-${data?.[0]?.bookingNo}.pdf`,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true, allowTaint: true },
-      jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
-    };
-    html2pdf().from(element).set(options).save();
+    if (!element) {
+      message.error("Invoice not ready. Please wait and try again.");
+      return;
+    }
+    if (!data?.[0]?.bookingNo) {
+      message.error("Invoice data is still loading.");
+      return;
+    }
+
+    setDownloading(true);
+    const hide = message.loading("Preparing PDF…", 0);
+    try {
+      const filename = `Invoice-${data[0].bookingNo}.pdf`;
+      await downloadElementPdf(element, filename);
+      message.success("Invoice downloaded");
+    } catch (error) {
+      console.error("Invoice PDF download failed:", error);
+      message.warning(
+        "PDF download failed on this browser. Opening print instead — choose Save as PDF."
+      );
+      printInvoicePage();
+    } finally {
+      hide();
+      setDownloading(false);
+    }
   };
 
   const calculateTotals = (bookings) => {
@@ -294,6 +307,8 @@ const Invoice = ({ params }) => {
             onClick={downloadPDF}
             icon={<DownloadOutlined />}
             size="large"
+            loading={downloading}
+            disabled={loading || !data?.length}
             style={{ background: SEA.tide, borderColor: SEA.tide }}
           >
             Download PDF
@@ -324,6 +339,9 @@ const Invoice = ({ params }) => {
                 <img
                   src={hotelInfo.logo}
                   alt={hotelInfo.name}
+                  crossOrigin={
+                    String(hotelInfo.logo).startsWith("http") ? "anonymous" : undefined
+                  }
                   style={{ height: 52, width: "auto", maxWidth: 72, objectFit: "contain" }}
                 />
               )}
