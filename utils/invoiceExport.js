@@ -1,7 +1,7 @@
 /**
- * Reliable invoice PDF export for desktop + mobile browsers.
- * Uses blob + <a download> instead of html2pdf().save(), which desktop
- * Chrome/Edge often block after an async import breaks the user-gesture chain.
+ * Invoice PDF + print helpers.
+ * Avoid off-screen clones and visibility:hidden print tricks — both cause
+ * blank Chrome/Edge print previews and empty PDFs on desktop.
  */
 
 function waitForImages(root) {
@@ -11,150 +11,125 @@ function waitForImages(root) {
     imgs.map(
       (img) =>
         new Promise((resolve) => {
-          if (img.complete) return resolve();
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-          setTimeout(resolve, 2500);
+          if (img.complete && img.naturalWidth > 0) return resolve();
+          const done = () => resolve();
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+          setTimeout(done, 2000);
         })
     )
   );
 }
 
-function prepareCloneForExport(sourceEl) {
-  const clone = sourceEl.cloneNode(true);
-  clone.querySelectorAll("img").forEach((img) => {
-    const src = img.getAttribute("src") || "";
-    const isRemote =
-      /^https?:\/\//i.test(src) && !src.includes(window.location.host);
-    if (isRemote) {
-      img.setAttribute("crossorigin", "anonymous");
-      img.onerror = () => {
-        img.style.display = "none";
-        img.removeAttribute("src");
-      };
-    }
+function hideForCapture(selectors) {
+  const nodes = [];
+  selectors.forEach((sel) => {
+    document.querySelectorAll(sel).forEach((el) => {
+      nodes.push({ el, display: el.style.display });
+      el.style.display = "none";
+    });
   });
-  return clone;
+  return () => {
+    nodes.forEach(({ el, display }) => {
+      el.style.display = display;
+    });
+  };
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "Invoice.pdf";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 export async function downloadElementPdf(element, filename) {
   if (!element) throw new Error("Invoice element not found");
 
   const html2pdf = (await import("html2pdf.js")).default;
-  await waitForImages(element);
 
-  const clone = prepareCloneForExport(element);
-  clone.style.position = "fixed";
-  clone.style.left = "-10000px";
-  clone.style.top = "0";
-  clone.style.width = element.offsetWidth ? `${element.offsetWidth}px` : "210mm";
-  clone.style.background = "#ffffff";
-  document.body.appendChild(clone);
+  // Prefer same-origin / local logos; remote without CORS blanks canvas
+  element.querySelectorAll("img").forEach((img) => {
+    const src = img.getAttribute("src") || "";
+    if (/^https?:\/\//i.test(src) && !src.includes(window.location.host)) {
+      img.setAttribute("crossorigin", "anonymous");
+    }
+  });
+
+  await waitForImages(element);
+  element.scrollIntoView({ block: "start", behavior: "instant" });
+
+  const restore = hideForCapture([".inv-toolbar", ".print\\:hidden", ".no-print"]);
+
+  const prevOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
 
   try {
-    await waitForImages(clone);
+    // Brief paint so layout settles after hiding toolbar
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     const options = {
-      margin: [0.22, 0.22, 0.22, 0.22],
+      margin: [0.2, 0.2, 0.2, 0.2],
       filename: filename || "Invoice.pdf",
-      image: { type: "jpeg", quality: 0.96 },
+      image: { type: "jpeg", quality: 0.98 },
       html2canvas: {
-        scale: Math.min(2, window.devicePixelRatio > 1 ? 2 : 1.5),
+        scale: 2,
         useCORS: true,
-        allowTaint: false,
+        allowTaint: true,
         logging: false,
         backgroundColor: "#ffffff",
         scrollX: 0,
-        scrollY: -window.scrollY,
-        windowWidth: clone.scrollWidth,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+        windowWidth: document.documentElement.clientWidth,
+        onclone: (doc) => {
+          const card = doc.getElementById("invoice-card");
+          if (card) {
+            card.style.boxShadow = "none";
+            card.style.maxWidth = "210mm";
+            card.style.width = "100%";
+            card.style.margin = "0 auto";
+            card.style.background = "#ffffff";
+          }
+          doc.querySelectorAll(".inv-toolbar, .no-print").forEach((n) => {
+            n.style.display = "none";
+          });
+        },
       },
       jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ["css", "legacy"] },
+      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
 
-    const blob = await html2pdf().set(options).from(clone).outputPdf("blob");
-    if (!blob || blob.size < 500) {
+    // Capture the LIVE visible element (not an off-screen clone)
+    const worker = html2pdf().set(options).from(element);
+    const blob = await worker.outputPdf("blob");
+
+    if (!blob || blob.size < 800) {
       throw new Error("Generated PDF was empty");
     }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename || "Invoice.pdf";
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    triggerBlobDownload(blob, filename || "Invoice.pdf");
     return true;
   } finally {
-    clone.remove();
+    document.body.style.overflow = prevOverflow;
+    restore();
   }
 }
 
-/**
- * Desktop-friendly print via dedicated window (avoids blank pages from
- * visibility:hidden print CSS fighting app chrome on Chrome/Edge).
- */
+/** In-page print — relies on @media print rules (no popup / about:blank). */
 export function printInvoicePage() {
   if (typeof window === "undefined") return;
   const element = document.getElementById("invoice-card");
-  if (!element) {
-    window.print();
-    return;
+  if (element) {
+    element.scrollIntoView({ block: "start", behavior: "instant" });
   }
-
-  const title =
-    document.title ||
-    `Invoice-${element.querySelector("[data-booking-no]")?.textContent || ""}`;
-  const styles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
-    .map((node) => node.outerHTML)
-    .join("\n");
-
-  const win = window.open("", "_blank", "noopener,noreferrer,width=900,height=1000");
-  if (!win) {
-    // Popup blocked — fall back to in-page print
+  window.requestAnimationFrame(() => {
     window.print();
-    return;
-  }
-
-  win.document.open();
-  win.document.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${title.replace(/</g, "")}</title>
-  ${styles}
-  <style>
-    @page { size: A4; margin: 0.22in; }
-    html, body {
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #fff !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    body { padding: 8px !important; }
-    #invoice-card, .invoice-card-export {
-      box-shadow: none !important;
-      margin: 0 auto !important;
-      max-width: 210mm !important;
-      width: 100% !important;
-    }
-    .print\\:hidden, .no-print { display: none !important; }
-  </style>
-</head>
-<body>
-  ${element.outerHTML}
-  <script>
-    window.onload = function () {
-      setTimeout(function () {
-        window.focus();
-        window.print();
-      }, 350);
-    };
-  </script>
-</body>
-</html>`);
-  win.document.close();
+  });
 }

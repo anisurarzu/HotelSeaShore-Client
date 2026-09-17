@@ -294,7 +294,7 @@ const Invoice = ({ params }) => {
 
   return (
     <div className="inv-page min-h-screen py-8 px-4 print:py-0 print:px-0">
-      <div className="max-w-5xl mx-auto mb-6 print:hidden flex items-center justify-between">
+      <div className="inv-toolbar max-w-5xl mx-auto mb-6 flex items-center justify-between">
         <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>
           Back
         </Button>
@@ -720,38 +720,29 @@ const Invoice = ({ params }) => {
             size: A4;
             margin: ${INVOICE_PAGE_MARGIN_IN}in;
           }
+          html, body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           .inv-page {
             background: white !important;
-          }
-          body {
-            background: white !important;
-            margin: 0 !important;
+            min-height: auto !important;
             padding: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
           }
-          body * {
-            visibility: hidden;
-          }
-          #invoice-card,
-          #invoice-card * {
-            visibility: visible;
+          .inv-toolbar {
+            display: none !important;
           }
           #invoice-card {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            max-width: ${INVOICE_WIDTH_A4} !important;
-            margin: 0 !important;
-            padding: 0 !important;
             box-shadow: none !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            margin: 0 auto !important;
             background: white !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-          }
-          .print\\:hidden {
-            display: none !important;
           }
         }
       `}</style>
