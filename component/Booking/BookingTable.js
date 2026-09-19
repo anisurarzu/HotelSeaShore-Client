@@ -22,6 +22,12 @@ import { CopyToClipboard } from "react-copy-to-clipboard";
 import { CopyOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import coreAxios from "@/utils/axiosInstance";
+import { buildBookingsPath, unwrapBookings } from "@/utils/bookingsApi";
+import {
+  isCancelledBooking,
+  isDeletedBooking,
+  isOccupyingBooking,
+} from "@/utils/bookingStatus";
 
 import BookingForm from "./BookingForm";
 import NoPermissionBanner from "../Permission/NoPermissionBanner";
@@ -102,7 +108,9 @@ const BookingTable = ({ hotelID }) => {
         })
       );
       if (response.status === 200) {
-        let bookingsData = unwrapBookings(response?.data);
+        let bookingsData = unwrapBookings(response?.data).filter(
+          (booking) => booking && !isDeletedBooking(booking)
+        );
         if (userRole === "hoteladmin" && userHotelID) {
           bookingsData = bookingsData.filter(
             (booking) => booking.hotelID === Number(userHotelID)
@@ -205,6 +213,26 @@ const BookingTable = ({ hotelID }) => {
         fetchBookings();
         message.success("Booking cancelled successfully.");
         setIsModalVisible(false);
+        setCancellationReason("");
+      }
+    } catch (error) {
+      message.error("Failed to cancel booking.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSoftHideDelete = async (booking) => {
+    if (!booking?._id) return;
+    setLoading(true);
+    try {
+      const deletedBy = userInfo2?.loginID || userInfo2?.username || "admin";
+      const res = await coreAxios.delete(`/booking/${booking._id}`, {
+        data: { deletedBy, reason: "Removed from system by user" },
+      });
+      if (res.status === 200) {
+        fetchBookings();
+        message.success("Booking removed from system.");
       }
     } catch (error) {
       message.error("Failed to delete booking.");
@@ -440,15 +468,16 @@ const BookingTable = ({ hotelID }) => {
 
                       {/* Table Body */}
                       <tbody>
-                        {paginatedBookings?.map((booking, idx) => (
+                        {paginatedBookings?.map((booking, idx) => {
+                          const isCanceled = isCancelledBooking(booking);
+                          return (
                           <tr
                             key={booking._id}
                             className="hover:bg-gray-50 dark:hover:bg-gray-800"
                             style={{
-                              backgroundColor:
-                                booking.statusID === 255
-                                  ? "rgba(255, 99, 99, 0.5)"
-                                  : "",
+                              backgroundColor: isCanceled
+                                ? "rgba(253, 162, 155, 0.55)"
+                                : "",
                             }}
                           >
                             <td className="border border-tableBorder text-center p-2">
@@ -543,19 +572,14 @@ const BookingTable = ({ hotelID }) => {
                             <td
                               className="border border-tableBorder text-center p-2 font-bold"
                               style={{
-                                color:
-                                  booking.statusID === 255 ? "red" : "green", // Inline style for text color
+                                color: isCanceled ? "red" : "green",
                               }}
                             >
-                              {booking.statusID === 255 ? (
-                                <p>Canceled</p>
-                              ) : (
-                                "Confirmed"
-                              )}
+                              {isCanceled ? <p>Cancelled</p> : "Confirmed"}
                             </td>
                             <td className="border border-tableBorder text-center p-2  text-green-900">
                               <p className="font-semibold">
-                                {booking?.statusID === 255
+                                {isCanceled
                                   ? booking?.canceledBy
                                   : booking?.bookedByID}
                               </p>
@@ -576,38 +600,43 @@ const BookingTable = ({ hotelID }) => {
 
                             {/* Actions */}
                             <td className="border border-tableBorder text-center p-2">
-                              {booking?.statusID === 1 && (
-                                <div className="flex">
-                                  {bookingPermissions?.editAccess && (
-                                    <Button onClick={() => handleEdit(booking)}>
-                                      Edit
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                {!isCanceled && bookingPermissions?.editAccess && (
+                                  <Button onClick={() => handleEdit(booking)}>
+                                    Edit
+                                  </Button>
+                                )}
+                                {!isCanceled && (
+                                  <Button
+                                    type="link"
+                                    danger
+                                    onClick={() => handleDelete(booking)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                )}
+                                {bookingPermissions?.deleteAccess && (
+                                  <Popconfirm
+                                    title="Remove from system? It will not show anywhere (kept in DB)."
+                                    onConfirm={() => handleSoftHideDelete(booking)}
+                                  >
+                                    <Button type="link" danger>
+                                      Delete
                                     </Button>
-                                  )}
-                                  {bookingPermissions?.deleteAccess && (
-                                    <Popconfirm
-                                      title="Are you sure to delete this booking?"
-                                      onConfirm={() => handleDelete(booking)}
-                                    >
-                                      <Button type="link" danger>
-                                        Cancel
-                                      </Button>
-                                    </Popconfirm>
-                                  )}
-                                </div>
-                              )}
+                                  </Popconfirm>
+                                )}
+                              </div>
 
                               {/* Cancellation Modal */}
                               <Modal
                                 title="Cancel Booking"
-                                visible={isModalVisible}
+                                open={isModalVisible}
                                 onOk={handleOk}
                                 onCancel={handleCancel}
                                 confirmLoading={loading}
                                 okText="Confirm Cancellation"
-                                cancelText="Cancel"
-                                className="custom-modal"
-                                // Apply backdrop filter to blur the background
-                                destroyOnClose={true} // Optional: Clean up modal on close
+                                cancelText="Close"
+                                destroyOnClose
                               >
                                 <div>
                                   <label
@@ -628,7 +657,8 @@ const BookingTable = ({ hotelID }) => {
                               </Modal>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

@@ -32,6 +32,11 @@ import { useRouter } from "next/navigation";
 import { useFormik } from "formik";
 import coreAxios from "@/utils/axiosInstance";
 import { buildBookingsPath, unwrapBookings } from "@/utils/bookingsApi";
+import {
+  isCancelledBooking,
+  isDeletedBooking,
+  isOccupyingBooking,
+} from "@/utils/bookingStatus";
 import NoPermissionBanner from "./Permission/NoPermissionBanner";
 import { getPagePermissionFromStorage, normalizeContentPermissions } from "@/utils/pagePermission";
 import "./Calender.css";
@@ -354,7 +359,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
     setSelectedDateStr(dateStr);
     const selectedDate = dayjs(dateStr);
     const relevantBookings = allBookings.filter((booking) => {
-      if (booking.statusID === 255) return false;
+      if (isDeletedBooking(booking)) return false;
       const checkIn = dayjs(booking.checkInDate);
       const checkOut = dayjs(booking.checkOutDate);
       return (
@@ -650,7 +655,9 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       );
 
       if (response.status === 200) {
-        let bookingsData = unwrapBookings(response.data);
+        let bookingsData = unwrapBookings(response.data).filter(
+          (booking) => booking && !isDeletedBooking(booking)
+        );
 
         if (userRole === "hoteladmin" && userHotelID) {
           bookingsData = bookingsData.filter(
@@ -661,10 +668,6 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
             (booking) => booking && booking.hotelID === Number(hotelId)
           );
         }
-
-        bookingsData = bookingsData.filter(
-          (booking) => booking.statusID !== 255
-        );
 
         setAllBookings(bookingsData);
         return bookingsData;
@@ -720,6 +723,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
       
       bookings.forEach(booking => {
         if (!booking.checkInDate || !booking.checkOutDate) return;
+        if (!isOccupyingBooking(booking)) return;
         
         const checkIn = dayjs(booking.checkInDate);
         const checkOut = dayjs(booking.checkOutDate);
@@ -1267,7 +1271,8 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
           {bookingHistory.length > 0 ? (
             <div className="hs-cal-dayview__list">
               {bookingHistory.map((booking) => {
-                const isActive = booking.statusID === 1;
+                const isActive = isOccupyingBooking(booking);
+                const isCanceled = isCancelledBooking(booking);
                 const paid =
                   Number(booking.advancePayment) ||
                   (Array.isArray(booking.payments)
@@ -1296,7 +1301,7 @@ const HotelCalendar = ({ hotelID, contentPermissions: contentPermissionsFromProp
                                 : " hs-cal-dayview__badge--bad"
                             }`}
                           >
-                            {isActive ? "Active" : "Cancelled"}
+                            {isActive ? "Active" : isCanceled ? "Cancelled" : "Inactive"}
                           </span>
                         </div>
                         <h4 className="hs-cal-dayview__guest">

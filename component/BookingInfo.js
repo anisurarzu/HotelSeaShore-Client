@@ -49,6 +49,12 @@ const toDhIsoSafeForUtcDate = (dateLike) => {
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import coreAxios from "@/utils/axiosInstance";
 import { buildBookingsPath, unwrapBookings } from "@/utils/bookingsApi";
+import {
+  isCancelledBooking,
+  isDeletedBooking,
+  isOccupyingBooking,
+  bookingStatusLabel,
+} from "@/utils/bookingStatus";
 import { CopyOutlined, ReloadOutlined, PlusOutlined, SearchOutlined, MinusCircleOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -191,7 +197,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     const d = dayjs(date).startOf("day");
     return allBookings.some((booking) => {
       if (isEditing && editingKey && booking._id === editingKey) return false;
-      if (booking.statusID === 255) return false;
+      if (!isOccupyingBooking(booking)) return false;
       if (
         booking.hotelID !== hotelId ||
         booking.roomCategoryID !== categoryId ||
@@ -214,7 +220,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
 
     const conflictingBooking = allBookings.find((booking) => {
       if (excludeBookingId && booking._id === excludeBookingId) return false;
-      if (booking.statusID === 255) return false;
+      if (!isOccupyingBooking(booking)) return false;
 
       if (
         booking.hotelID !== hotelId ||
@@ -332,7 +338,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
 
       const conflictingBooking = allBookings.find((booking) => {
         if (excludeBookingId && booking._id === excludeBookingId) return false;
-        if (booking.statusID === 255) return false;
+        if (!isOccupyingBooking(booking)) return false;
 
         if (
           booking.hotelID !== values.hotelID ||
@@ -592,7 +598,9 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       );
 
       if (response.status === 200) {
-        let bookingsData = unwrapBookings(response.data);
+        let bookingsData = unwrapBookings(response.data).filter(
+          (booking) => booking && !isDeletedBooking(booking)
+        );
 
         if (userRole === "hoteladmin" && userHotelID) {
           bookingsData = bookingsData.filter(
@@ -991,8 +999,8 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     }
   };
 
-  // Soft delete (cancel): DELETE /booking/soft/:id with body { canceledBy, reason }
-  const handleDelete2 = async (key) => {
+  // Cancel booking: statusID 4 — stays visible as Cancelled (red)
+  const handleCancelBooking = async (key) => {
     setSubmitLoading(true);
     try {
       const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
@@ -1019,15 +1027,19 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
     }
   };
 
-  // Hard delete (permanent): DELETE /booking/:id – removes booking from DB
-  const handleHardDelete = async (booking) => {
+  // Soft-hide booking: statusID 255 — hidden from UI, kept in database
+  const handleSoftHideDelete = async (booking) => {
     if (!booking?._id) return;
     setSubmitLoading(true);
     try {
-      const res = await coreAxios.delete(`/booking/${booking._id}`);
+      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+      const deletedBy = userInfo?.username || userInfo?.loginID || "admin";
+      const res = await coreAxios.delete(`/booking/${booking._id}`, {
+        data: { deletedBy, reason: "Removed from system by user" },
+      });
 
       if (res.status === 200) {
-        message.success(res.data?.message || "Booking deleted successfully.");
+        message.success(res.data?.message || "Booking removed from system.");
         fetchBookings();
       } else {
         message.error(res.data?.message || res.data?.error || "Failed to delete booking.");
@@ -1334,7 +1346,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
       return;
     }
 
-    await handleDelete2(currentBooking?._id);
+    await handleCancelBooking(currentBooking?._id);
   };
 
   const handleCancel = () => {
@@ -1500,7 +1512,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                           merged[m] = (merged[m] || 0) + (Number(booking.advancePayment) || 0);
                         }
                         const payEntries = Object.entries(merged).filter(([, amt]) => amt > 0);
-                        const isCanceled = booking.statusID === 255;
+                        const isCanceled = isCancelledBooking(booking);
 
                         return (
                           <tr
@@ -1592,7 +1604,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                   isCanceled ? "hs-bi__status--cancel" : "hs-bi__status--ok"
                                 }`}
                               >
-                                {isCanceled ? "Canceled" : "Confirmed"}
+                                {isCanceled ? "Cancelled" : "Confirmed"}
                               </span>
                             </td>
                             <td>
@@ -1649,25 +1661,27 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                                     View
                                   </Button>
                                 )}
-                                {bookingPermissions?.editAccess && (
+                                {bookingPermissions?.editAccess && !isCanceled && (
                                   <Button size="small" onClick={() => handleEdit(booking)}>
                                     Edit
                                   </Button>
                                 )}
-                                <Popconfirm
-                                  title="Cancel booking? Enter reason in the next step."
-                                  onConfirm={() => handleDelete(booking)}
-                                  okText="Yes"
-                                  cancelText="No"
-                                >
-                                  <Button type="link" danger size="small">
-                                    Cancel
-                                  </Button>
-                                </Popconfirm>
+                                {!isCanceled && (
+                                  <Popconfirm
+                                    title="Cancel booking? Enter reason in the next step."
+                                    onConfirm={() => handleDelete(booking)}
+                                    okText="Yes"
+                                    cancelText="No"
+                                  >
+                                    <Button type="link" danger size="small">
+                                      Cancel
+                                    </Button>
+                                  </Popconfirm>
+                                )}
                                 {bookingPermissions?.deleteAccess && (
                                   <Popconfirm
-                                    title="Are you sure to delete this booking?"
-                                    onConfirm={() => handleHardDelete(booking)}
+                                    title="Remove this booking from the system? It will no longer appear anywhere (kept in database only)."
+                                    onConfirm={() => handleSoftHideDelete(booking)}
                                     okText="Yes"
                                     cancelText="No"
                                   >
@@ -1893,7 +1907,7 @@ const BookingInfo = ({ hotelID, contentPermissions: contentPermissionsFromProps 
                             <p className="font-semibold text-sm">{selectedBookingDetails.bookedBy || selectedBookingDetails.bookedByID || "N/A"}</p>
                           </div>
                         </Col>
-                        {selectedBookingDetails.statusID === 255 && (
+                        {isCancelledBooking(selectedBookingDetails) && (
                           <>
                             <Col span={12}>
                               <div className="bg-red-50 p-3 rounded border border-red-200">
